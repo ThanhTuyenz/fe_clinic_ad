@@ -1,0 +1,79 @@
+/* Màn Đăng ký — bổ sung trên nền reception-home.css */
+.reg-inner-banner {
+  margin: 0.65rem 0.75rem 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 4px;
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  color: #0369a1;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.reg-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0 0.75rem;
+  margin-top: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.reg-tab {
+  border: none;
+  background: none;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.reg-tab:hover {
+  color: #0369a1;
+}
+
+.reg-tab.is-active {
+  color: #0369a1;
+  border-bottom-color: #0284c7;
+}
+
+.reg-tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.reg-history-wrap {
+  margin-top: 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.reg-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.reg-history-table th,
+.reg-history-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+}
+
+.reg-history-table th {
+  background: #f1f5f9;
+  font-weight: 700;
+  color: #475569;
+}
+
+.reg-history-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}

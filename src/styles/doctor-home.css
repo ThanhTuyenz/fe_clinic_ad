@@ -1,0 +1,437 @@
+.dr-landing {
+  min-height: 100vh;
+  background: var(--page-bg);
+}
+
+.dr-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 1.25rem;
+  display: grid;
+  grid-template-columns: 260px 1fr auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+@media (max-width: 980px) {
+  .dr-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
+
+.dr-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 800;
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+}
+
+.dr-brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(13, 148, 136, 0.14);
+  color: var(--clinic-primary-dark);
+  font-weight: 900;
+}
+
+.dr-brand-text {
+  font-size: 1.05rem;
+}
+
+.dr-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.dr-nav-link {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 0.35rem 0.4rem;
+  border-radius: 10px;
+}
+
+.dr-nav-link:hover {
+  color: var(--clinic-primary-dark);
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.dr-nav-link.is-active {
+  color: var(--clinic-primary-dark);
+  background: rgba(13, 148, 136, 0.12);
+}
+
+.dr-user {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.dr-user-greet {
+  font-size: 0.92rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.dr-btn {
+  border-radius: 10px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-heading);
+}
+
+.dr-btn--ghost:hover {
+  border-color: rgba(13, 148, 136, 0.45);
+  color: var(--clinic-primary-dark);
+  background: rgba(13, 148, 136, 0.04);
+}
+
+.dr-btn--solid {
+  border-color: rgba(13, 148, 136, 0.5);
+  background: var(--clinic-primary);
+  color: white;
+}
+
+.dr-btn--solid:hover {
+  background: var(--clinic-primary-dark);
+}
+
+.dr-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 3rem;
+}
+
+.dr-title {
+  margin: 1.25rem 0 1.25rem;
+  font-size: 1.7rem;
+  color: #c2410c;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.dr-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.dr-card-head {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dr-card-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-heading);
+}
+
+.dr-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.dr-select {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.45rem 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 650;
+  font-size: 0.9rem;
+}
+
+.dr-cal {
+  padding: 0.85rem 1rem 1rem;
+}
+
+.dr-banner {
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.85rem;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  background: rgba(254, 226, 226, 0.55);
+  color: #991b1b;
+}
+
+.dr-banner--error code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.85em;
+}
+
+.dr-cal-top {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.dr-cal-month {
+  text-align: center;
+  font-weight: 800;
+  color: var(--text-heading);
+}
+
+.dr-cal-nav {
+  width: 44px;
+  height: 36px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.dr-cal-nav:hover {
+  color: var(--clinic-primary-dark);
+  border-color: rgba(13, 148, 136, 0.4);
+  background: rgba(13, 148, 136, 0.04);
+}
+
+.dr-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dr-cal-dow {
+  padding: 0.5rem 0.6rem;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  font-weight: 800;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.dr-cal-cell {
+  min-height: 86px;
+  border: none;
+  background: white;
+  padding: 0.55rem;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+
+.dr-cal-badge {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 900;
+  background: rgba(13, 148, 136, 0.14);
+  color: var(--clinic-primary-dark);
+  border: 1px solid rgba(13, 148, 136, 0.35);
+}
+
+.dr-cal-cell:nth-child(7n) {
+  border-right: none;
+}
+
+/* Remove last row border bottom visually (still ok if present) */
+.dr-cal-cell.is-empty {
+  background: #fbfdff;
+  cursor: default;
+}
+
+.dr-cal-day {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: var(--text-heading);
+}
+
+.dr-cal-cell:hover:not(.is-empty) {
+  background: rgba(13, 148, 136, 0.04);
+}
+
+.dr-cal-cell.is-today .dr-cal-day {
+  background: rgba(13, 148, 136, 0.14);
+  color: var(--clinic-primary-dark);
+}
+
+.dr-cal-cell.is-selected .dr-cal-day {
+  background: var(--clinic-primary);
+  color: white;
+}
+
+.dr-cal-foot {
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.dr-cal-foot-title {
+  font-weight: 800;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dr-cal-foot-value {
+  font-weight: 800;
+  color: var(--text-heading);
+}
+
+.dr-agenda {
+  margin-top: 1rem;
+  border-top: 1px dashed rgba(100, 116, 139, 0.35);
+  padding-top: 1rem;
+}
+
+.dr-agenda-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.dr-agenda-title {
+  font-size: 1rem;
+  font-weight: 900;
+  color: var(--text-heading);
+}
+
+.dr-agenda-sub {
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.dr-agenda-empty {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafafa;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.dr-agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dr-agenda-row {
+  display: grid;
+  grid-template-columns: 80px 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+@media (max-width: 620px) {
+  .dr-agenda-row {
+    grid-template-columns: 70px 1fr;
+  }
+}
+
+.dr-agenda-time {
+  font-weight: 900;
+  color: var(--clinic-primary-dark);
+}
+
+.dr-agenda-name {
+  font-weight: 850;
+  color: var(--text-heading);
+  margin-bottom: 0.15rem;
+}
+
+.dr-agenda-meta {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.dr-pill {
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+  color: var(--muted);
+  justify-self: end;
+}
+
+.dr-pill.is-ok {
+  background: rgba(13, 148, 136, 0.14);
+  border-color: rgba(13, 148, 136, 0.35);
+  color: var(--clinic-primary-dark);
+}
+
+.dr-pill.is-pending {
+  background: rgba(251, 191, 36, 0.18);
+  border-color: rgba(251, 191, 36, 0.35);
+  color: #b45309;
+}
+
+.dr-pill.is-bad {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #b91c1c;
+}
+

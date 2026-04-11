@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { login as loginApi } from '../api/auth.js'
 import '../styles/auth.css'
 
 export default function Login() {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
@@ -33,6 +35,12 @@ export default function Login() {
         sessionStorage.setItem('user', JSON.stringify(data.user))
       }
       setInfo('Đăng nhập thành công.')
+      const ut = String(data?.user?.userType || '')
+      if (ut === 'receptionist') {
+        navigate('/reception', { replace: true })
+      } else {
+        navigate('/doctor', { replace: true })
+      }
     } catch (err) {
       setError(err?.message || 'Đăng nhập thất bại.')
     } finally {
