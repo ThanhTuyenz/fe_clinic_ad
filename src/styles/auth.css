@@ -65,6 +65,42 @@
   box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.12);
 }
 
+.auth-password-wrap {
+  position: relative;
+  display: block;
+}
+
+.auth-password-wrap input {
+  padding-right: 3.25rem;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.06);
+  color: rgba(15, 23, 42, 0.75);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.auth-password-toggle:hover:not(:disabled) {
+  background: rgba(13, 148, 136, 0.12);
+  color: var(--clinic-primary);
+}
+
+.auth-password-toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .auth-row {
   display: flex;
   align-items: center;
@@ -249,6 +285,10 @@
 
 .auth-field input::placeholder {
   color: #94a3b8;
+}
+
+.auth-field .auth-password-wrap input {
+  padding-right: 3.25rem;
 }
 
 .auth-row {

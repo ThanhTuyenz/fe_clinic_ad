@@ -29,6 +29,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [info, setInfo] = useState(location.state?.message || '')
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -95,28 +96,39 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} noValidate>
             <div className="auth-field">
-              <label htmlFor="staff-login-email">Email hoặc số điện thoại</label>
               <input
                 id="staff-login-email"
                 type="text"
                 autoComplete="username"
-                placeholder="vd: staff@email.com hoặc 09xx xxx xxx"
+                placeholder="Nhập email nhân viên"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
               />
             </div>
             <div className="auth-field">
-              <label htmlFor="staff-login-password">Mật khẩu</label>
-              <input
-                id="staff-login-password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-              />
+              <div className="auth-password-wrap">
+                <input
+                  id="staff-login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="Nhập mật khẩu"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowPassword((v) => !v)}
+                  disabled={loading}
+                  aria-pressed={showPassword}
+                  aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                >
+                  {showPassword ? 'Ẩn' : 'Hiện'}
+                </button>
+              </div>
             </div>
 
             <div className="auth-row">
@@ -139,146 +151,8 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="auth-footer">Không có chức năng đăng ký trên hệ thống nhân viên.</p>
         </div>
       </main>
     </div>
   )
 }
-
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { login as loginApi } from '../api/auth.js'
-import '../styles/auth.css'
-
-export default function Login() {
-  const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(true)
-  const [error, setError] = useState('')
-  const [info, setInfo] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setError('')
-    setInfo('')
-    if (!email.trim() || !password) {
-      setError('Vui lòng nhập email/số điện thoại và mật khẩu.')
-      return
-    }
-    setLoading(true)
-    try {
-      const data = await loginApi({ email: email.trim(), password })
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      sessionStorage.removeItem('token')
-      sessionStorage.removeItem('user')
-      if (remember) {
-        localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-      } else {
-        sessionStorage.setItem('token', data.token)
-        sessionStorage.setItem('user', JSON.stringify(data.user))
-      }
-      setInfo('Đăng nhập thành công.')
-      const ut = String(data?.user?.userType || '')
-      if (ut === 'receptionist') {
-        navigate('/reception', { replace: true })
-      } else {
-        navigate('/doctor', { replace: true })
-      }
-    } catch (err) {
-      setError(err?.message || 'Đăng nhập thất bại.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="auth-page">
-      <aside className="auth-brand" aria-hidden="false">
-        <div className="auth-brand-inner">
-          <span className="auth-brand-badge">Nhân viên phòng khám</span>
-          <h1>VitaCare Clinic</h1>
-          <p>Đăng nhập hệ thống nội bộ dành cho nhân viên.</p>
-        </div>
-      </aside>
-
-      <main className="auth-panel">
-        <div className="auth-card">
-          <h2>Đăng nhập</h2>
-          <p className="auth-card-sub">Nhập thông tin tài khoản nhân viên.</p>
-
-          {info ? (
-            <p
-              className="auth-error"
-              style={{
-                color: 'var(--clinic-primary)',
-                borderColor: 'rgba(13,148,136,0.35)',
-                background: 'rgba(13,148,136,0.08)',
-              }}
-              role="status"
-            >
-              {info}
-            </p>
-          ) : null}
-
-          {error ? (
-            <p className="auth-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-
-          <form onSubmit={handleSubmit} noValidate>
-            <div className="auth-field">
-              <label htmlFor="login-email">Email hoặc số điện thoại</label>
-              <input
-                id="login-email"
-                type="text"
-                autoComplete="username"
-                placeholder="vd: staff@email.com hoặc 09xx xxx xxx"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            <div className="auth-field">
-              <label htmlFor="login-password">Mật khẩu</label>
-              <input
-                id="login-password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            <div className="auth-row">
-              <label className="auth-checkbox">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  disabled={loading}
-                />
-                Ghi nhớ đăng nhập
-              </label>
-              <a href="#" onClick={(e) => e.preventDefault()}>
-                Quên mật khẩu?
-              </a>
-            </div>
-            <button type="submit" className="auth-submit" disabled={loading}>
-              {loading ? 'Đang xử lý…' : 'Đăng nhập'}
-            </button>
-          </form>
-
-          <p className="auth-footer">Không có chức năng đăng ký trên hệ thống nhân viên.</p>
-        </div>
-      </main>
-    </div>
-  )
-}
-
