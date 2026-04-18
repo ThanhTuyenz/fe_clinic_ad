@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  createAppointmentReception,
-  getAvailability,
   listReceptionAppointments,
   lookupAppointmentByTicket,
   updateAppointmentStatus,
 } from '../api/appointments.js'
-import { listDoctors } from '../api/doctors.js'
 import '../styles/reception-home.css'
 
 function safeParse(json) {
@@ -57,13 +54,6 @@ function formatDob(iso) {
   return formatDateVi(iso)
 }
 
-function doctorLabel(d) {
-  const last = String(d?.lastName || '').trim()
-  const first = String(d?.firstName || '').trim()
-  const full = `${last} ${first}`.trim()
-  return full || String(d?.displayName || '').trim() || d?.email || 'Bác sĩ'
-}
-
 function buildPatientCode(userId) {
   const raw = String(userId || '').replace(/[^a-fA-F0-9]/g, '')
   const yy = String(new Date().getFullYear()).slice(-2)
@@ -91,7 +81,6 @@ export default function ReceptionHome() {
   const navigate = useNavigate()
   const { token, user } = getSession()
 
-  const [mode, setMode] = useState('browse')
   const [fromDate, setFromDate] = useState(() => ymd(new Date()))
   const [toDate, setToDate] = useState(() => ymd(new Date()))
   const [statusFilter, setStatusFilter] = useState('all')
@@ -106,6 +95,9 @@ export default function ReceptionHome() {
 
   const [selectedId, setSelectedId] = useState(null)
   const [lookupDetail, setLookupDetail] = useState(null)
+  const [detailById, setDetailById] = useState(() => ({}))
+  const [detailLoadingId, setDetailLoadingId] = useState(null)
+  const [detailErr, setDetailErr] = useState('')
 
   const [detailStatus, setDetailStatus] = useState('pending')
   const [saveMsg, setSaveMsg] = useState('')
@@ -115,18 +107,6 @@ export default function ReceptionHome() {
   const [ticket, setTicket] = useState('')
   const [ticketErr, setTicketErr] = useState('')
   const [lookupLoading, setLookupLoading] = useState(false)
-
-  const [doctors, setDoctors] = useState([])
-  const [doctorsErr, setDoctorsErr] = useState('')
-  const [patientContact, setPatientContact] = useState('')
-  const [doctorId, setDoctorId] = useState('')
-  const [apptDate, setApptDate] = useState(() => ymd(new Date()))
-  const [startTime, setStartTime] = useState('')
-  const [note, setNote] = useState('')
-  const [freeSlots, setFreeSlots] = useState([])
-  const [availLoading, setAvailLoading] = useState(false)
-  const [bookErr, setBookErr] = useState('')
-  const [bookOk, setBookOk] = useState('')
 
   useEffect(() => {
     if (!token || !user) {
@@ -163,54 +143,6 @@ export default function ReceptionHome() {
     void loadList()
   }, [loadList])
 
-  useEffect(() => {
-    let mounted = true
-    listDoctors()
-      .then((rows) => {
-        if (!mounted) return
-        setDoctors(rows || [])
-        setDoctorsErr('')
-      })
-      .catch((e) => {
-        if (!mounted) return
-        setDoctorsErr(e?.message || 'Không tải được danh sách bác sĩ.')
-        setDoctors([])
-      })
-    return () => {
-      mounted = false
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!token || !doctorId || !apptDate) {
-      setFreeSlots([])
-      return
-    }
-    let mounted = true
-    setAvailLoading(true)
-    getAvailability({ token, doctorId, date: apptDate })
-      .then((data) => {
-        if (!mounted) return
-        setFreeSlots(Array.isArray(data?.freeSlots) ? data.freeSlots : [])
-        setStartTime((prev) => {
-          const free = data?.freeSlots || []
-          if (prev && free.includes(prev)) return prev
-          return free[0] || ''
-        })
-      })
-      .catch(() => {
-        if (!mounted) return
-        setFreeSlots([])
-      })
-      .finally(() => {
-        if (!mounted) return
-        setAvailLoading(false)
-      })
-    return () => {
-      mounted = false
-    }
-  }, [token, doctorId, apptDate])
-
   const filteredRows = useMemo(() => {
     const ft = filterTicket.trim().toLowerCase()
     const fp = filterPatientCode.trim().toLowerCase()
@@ -231,14 +163,15 @@ export default function ReceptionHome() {
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
 
   const activeDetail = useMemo(() => {
-    if (mode === 'create') return null
     if (selectedId) {
+      const cached = detailById[String(selectedId)]
+      if (cached) return cached
       const row = list.find((a) => String(a.id) === String(selectedId))
       if (row) return row
     }
     if (lookupDetail) return lookupDetail
     return null
-  }, [mode, selectedId, list, lookupDetail])
+  }, [selectedId, list, lookupDetail, detailById])
 
   useEffect(() => {
     if (!activeDetail) return
@@ -270,6 +203,7 @@ export default function ReceptionHome() {
       const t = String(raw != null ? raw : ticket).trim()
       setTicketErr('')
       setLookupLoading(true)
+      setDetailErr('')
       if (!t) {
         setTicketErr('Vui lòng nhập mã vé (YMA…).')
         setLookupLoading(false)
@@ -278,14 +212,15 @@ export default function ReceptionHome() {
       try {
         const data = await lookupAppointmentByTicket({ token, ticket: t })
         const norm = normalizeLookup(data)
-        setLookupDetail(norm)
-        setSelectedId(null)
+        setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
         const found = list.find((r) => String(r.id) === String(norm.id))
         if (found) {
           setSelectedId(String(found.id))
           setLookupDetail(null)
+        } else {
+          setSelectedId(null)
+          setLookupDetail(norm)
         }
-        setMode('browse')
         setSaveMsg('')
         setSaveErr('')
       } catch (e) {
@@ -302,12 +237,17 @@ export default function ReceptionHome() {
     if (!activeDetail?.id) return
     setSaveErr('')
     setSaveMsg('')
+    const next = String(detailStatus || '').toLowerCase()
+    if (next !== 'confirmed' && next !== 'cancelled') {
+      setSaveErr('Vui lòng chọn Xác nhận hoặc Hủy.')
+      return
+    }
     setSaving(true)
     try {
       await updateAppointmentStatus({
         token,
         appointmentId: activeDetail.id,
-        status: detailStatus,
+        status: next,
       })
       setSaveMsg('Đã lưu trạng thái lịch hẹn.')
       await loadList()
@@ -320,49 +260,78 @@ export default function ReceptionHome() {
     }
   }
 
-  async function handleBook(e) {
-    e.preventDefault()
-    setBookErr('')
-    setBookOk('')
-    if (!patientContact.trim() || !doctorId || !apptDate || !startTime) {
-      setBookErr('Vui lòng nhập đủ email/SĐT bệnh nhân, bác sĩ, ngày và giờ.')
-      return
-    }
-    try {
-      await createAppointmentReception({
-        token,
-        patientEmailOrPhone: patientContact.trim(),
-        doctorId,
-        appointmentDate: apptDate,
-        startTime,
-        note,
-      })
-      setBookOk('Đã tạo lịch hẹn thành công.')
-      setNote('')
-      setPatientContact('')
-      setMode('browse')
-      await loadList()
-    } catch (err) {
-      setBookErr(err?.message || 'Đặt lịch thất bại.')
-    }
-  }
-
-  function selectRow(row) {
-    setMode('browse')
+  async function selectRow(row) {
+    if (!row) return
+    const id = String(row.id)
     setLookupDetail(null)
-    setSelectedId(String(row.id))
+    setSelectedId(id)
     setSaveMsg('')
     setSaveErr('')
+    setDetailErr('')
+    setTicket(String(row.ticket || ''))
+
+    if (!row.ticket || !token) return
+    if (detailById[id]) return
+
+    setDetailLoadingId(id)
+    try {
+      const data = await lookupAppointmentByTicket({ token, ticket: row.ticket })
+      const norm = normalizeLookup(data)
+      setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
+    } catch (e) {
+      setDetailErr(e?.message || 'Không tải được chi tiết lịch hẹn.')
+    } finally {
+      setDetailLoadingId(null)
+    }
   }
 
   function handleAdd() {
-    setMode('create')
-    setSelectedId(null)
-    setLookupDetail(null)
-    setBookErr('')
-    setBookOk('')
-    setSaveMsg('')
+    navigate('/registration', { state: { createNew: true } })
+  }
+
+  async function openRegistrationFromActive() {
+    if (!token || !activeDetail?.ticket) return
     setSaveErr('')
+    setSaveMsg('')
+    setDetailErr('')
+
+    let detail = activeDetail
+    const hasNeeded =
+      Boolean(detail?.patient) &&
+      Boolean(detail?.doctor?.id) &&
+      Boolean(detail?.appointmentDate) &&
+      Boolean(detail?.startTime)
+
+    if (!hasNeeded) {
+      const id = String(detail?.id || '')
+      setDetailLoadingId(id || 'lookup')
+      try {
+        const data = await lookupAppointmentByTicket({ token, ticket: detail.ticket })
+        const norm = normalizeLookup(data)
+        setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
+        detail = norm
+      } catch (e) {
+        setDetailErr(e?.message || 'Không tải được chi tiết lịch hẹn.')
+        return
+      } finally {
+        setDetailLoadingId(null)
+      }
+    }
+
+    navigate('/registration', {
+      state: {
+        appointmentId: detail.id,
+        ticket: detail.ticket,
+        appointmentDate: detail.appointmentDate,
+        startTime: detail.startTime,
+        note: detail.note,
+        createdAt: detail.createdAt,
+        patient: detail.patient,
+        doctor: detail.doctor,
+        doctorId: detail.doctor?.id ?? '',
+        specialtyId: detail.doctor?.specialtyID ?? detail.doctor?.specialtyId ?? '',
+      },
+    })
   }
 
   if (!token || !user || user.userType !== 'receptionist') return null
@@ -375,7 +344,7 @@ export default function ReceptionHome() {
           <button type="button" className="is-active">
             Lịch hẹn
           </button>
-          <button type="button" onClick={() => navigate('/registration')}>
+          <button type="button" onClick={() => navigate('/registration', { state: { createNew: true } })}>
             Đăng ký
           </button>
           <button type="button" disabled>
@@ -413,7 +382,7 @@ export default function ReceptionHome() {
             <button
               type="button"
               className="tcl-btn tcl-btn--pri"
-              disabled={mode === 'create' || !activeDetail || saving}
+              disabled={!activeDetail || saving}
               onClick={() => void handleSaveStatus()}
             >
               {saving ? 'Đang lưu…' : 'Lưu'}
@@ -565,75 +534,13 @@ export default function ReceptionHome() {
           </aside>
 
           <main className="tcl-detail">
-            {mode === 'create' ? (
-              <div className="tcl-create">
-                <div className="tcl-banner-ok">Tạo lịch hẹn mới cho bệnh nhân đã có tài khoản</div>
-                {doctorsErr ? <div className="tcl-banner-err">{doctorsErr}</div> : null}
-                {bookErr ? <div className="tcl-banner-err">{bookErr}</div> : null}
-                {bookOk ? <div className="tcl-banner-ok">{bookOk}</div> : null}
-                <form onSubmit={handleBook}>
-                  <div className="tcl-sec">
-                    <h2 className="tcl-sec-title">
-                      <span>1</span>
-                      Thông tin đặt lịch
-                    </h2>
-                    <div className="tcl-grid-form">
-                      <div className="tcl-f">
-                        <label>Email hoặc SĐT bệnh nhân *</label>
-                        <input
-                          value={patientContact}
-                          onChange={(e) => setPatientContact(e.target.value)}
-                          placeholder="email hoặc 09xx"
-                          required
-                        />
-                      </div>
-                      <div className="tcl-f">
-                        <label>Bác sĩ *</label>
-                        <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)} required>
-                          <option value="">— Chọn —</option>
-                          {doctors.map((d) => (
-                            <option key={d.id} value={d.id}>
-                              {doctorLabel(d)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="tcl-f">
-                        <label>Ngày khám *</label>
-                        <input type="date" value={apptDate} onChange={(e) => setApptDate(e.target.value)} required />
-                      </div>
-                      <div className="tcl-f tcl-f--full">
-                        <label>Khung giờ trống {availLoading ? '(đang tải…)' : ''}</label>
-                        <div className="tcl-slot-grid">
-                          {freeSlots.map((t) => (
-                            <button
-                              key={t}
-                              type="button"
-                              className={`tcl-slot ${startTime === t ? 'is-on' : ''}`}
-                              onClick={() => setStartTime(t)}
-                            >
-                              {t}
-                            </button>
-                          ))}
-                        </div>
-                        {!freeSlots.length && doctorId && apptDate && !availLoading ? (
-                          <span className="tcl-muted">Không còn khung giờ.</span>
-                        ) : null}
-                      </div>
-                      <div className="tcl-f tcl-f--full">
-                        <label>Triệu chứng / ghi chú</label>
-                        <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-                      </div>
-                    </div>
-                  </div>
-                  <button type="submit" className="tcl-btn tcl-btn--pri" disabled={!doctorId || !startTime}>
-                    Lưu lịch hẹn
-                  </button>
-                </form>
-              </div>
-            ) : activeDetail ? (
+            {activeDetail ? (
               <>
                 <div className="tcl-banner-ok">Bạn đang xem thông tin lịch hẹn</div>
+                {detailErr ? <div className="tcl-banner-err">{detailErr}</div> : null}
+                {detailLoadingId && String(activeDetail?.id) === String(detailLoadingId) ? (
+                  <div className="tcl-banner-ok">Đang tải chi tiết…</div>
+                ) : null}
                 {saveErr ? <div className="tcl-banner-err">{saveErr}</div> : null}
                 {saveMsg ? <div className="tcl-banner-ok">{saveMsg}</div> : null}
 
@@ -726,7 +633,7 @@ export default function ReceptionHome() {
                           checked={detailStatus === 'cancelled'}
                           onChange={() => setDetailStatus('cancelled')}
                         />
-                        Từ chối
+                        Hủy
                       </label>
                       <label>
                         <input
@@ -737,21 +644,7 @@ export default function ReceptionHome() {
                         />
                         Xác nhận
                       </label>
-                      <label>
-                        <input
-                          type="radio"
-                          name="st"
-                          checked={detailStatus === 'pending'}
-                          onChange={() => setDetailStatus('pending')}
-                        />
-                        Chờ
-                      </label>
-                      <span className="tcl-muted" title="Chưa có trong hệ thống">
-                        Đang khám (—)
-                      </span>
-                      <span className="tcl-muted" title="Chưa có trong hệ thống">
-                        Kết thúc (—)
-                      </span>
+                      <span className="tcl-muted">Chờ (tự động)</span>
                     </div>
                   </div>
                   <div className="tcl-grid-form">
@@ -772,22 +665,10 @@ export default function ReceptionHome() {
                     <button
                       type="button"
                       className="tcl-btn tcl-btn--pri"
-                      onClick={() =>
-                        navigate('/registration', {
-                          state: {
-                            appointmentId: activeDetail.id,
-                            ticket: activeDetail.ticket,
-                            appointmentDate: activeDetail.appointmentDate,
-                            startTime: activeDetail.startTime,
-                            note: activeDetail.note,
-                            createdAt: activeDetail.createdAt,
-                            patient: activeDetail.patient,
-                            doctor: activeDetail.doctor,
-                          },
-                        })
-                      }
+                      disabled={!activeDetail || saving}
+                      onClick={() => void handleSaveStatus()}
                     >
-                      + Tạo đăng ký
+                      {saving ? 'Đang lưu…' : 'Lưu'}
                     </button>
                   </div>
                 </section>

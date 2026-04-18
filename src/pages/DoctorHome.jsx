@@ -99,6 +99,8 @@ export default function DoctorHome() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(0)
 
   useEffect(() => {
     if (!token || !user) {
@@ -111,32 +113,51 @@ export default function DoctorHome() {
   const todayKey = useMemo(() => ymd(new Date()), [])
   const monthCells = useMemo(() => buildMonthGrid(monthCursor), [monthCursor])
 
-  useEffect(() => {
-    if (!token) return
-    if (user?.userType !== 'doctor') {
-      queueMicrotask(() => setLoading(false))
-      return
-    }
-    let mounted = true
-    listDoctorAppointments({ token })
-      .then((rows) => {
-        if (!mounted) return
+  const loadAppointments = useMemo(() => {
+    return async ({ silent } = { silent: false }) => {
+      if (!token) return
+      if (user?.userType !== 'doctor') {
+        queueMicrotask(() => setLoading(false))
+        return
+      }
+      if (!silent) setLoading(true)
+      if (silent) setRefreshing(true)
+      try {
+        const rows = await listDoctorAppointments({ token })
         setError('')
-        setItems(rows || [])
-      })
-      .catch((err) => {
-        if (!mounted) return
+        // Business rule: doctor only sees confirmed appointments
+        const onlyConfirmed = (rows || []).filter((a) => String(a?.status || '').toLowerCase() === 'confirmed')
+        setItems(onlyConfirmed)
+        setLastUpdatedAt(Date.now())
+      } catch (err) {
         setError(err?.message || 'Không lấy được lịch khám.')
         setItems([])
-      })
-      .finally(() => {
-        if (!mounted) return
-        setLoading(false)
-      })
+      } finally {
+        if (!silent) setLoading(false)
+        setRefreshing(false)
+      }
+    }
+  }, [token, user?.userType])
+
+  useEffect(() => {
+    let mounted = true
+    void (async () => {
+      if (!mounted) return
+      await loadAppointments({ silent: false })
+    })()
     return () => {
       mounted = false
     }
-  }, [token, user?.userType])
+  }, [loadAppointments])
+
+  useEffect(() => {
+    if (!token || user?.userType !== 'doctor') return
+    // Poll to pick up confirmations from reception
+    const t = setInterval(() => {
+      void loadAppointments({ silent: true })
+    }, 15000)
+    return () => clearInterval(t)
+  }, [token, user?.userType, loadAppointments])
 
   const byDate = useMemo(() => {
     const map = new Map()
@@ -156,6 +177,13 @@ export default function DoctorHome() {
   }, [items])
 
   const selectedRows = useMemo(() => byDate.get(selected) || [], [byDate, selected])
+  const totalConfirmed = items.length
+  const lastUpdatedLabel = useMemo(() => {
+    if (!lastUpdatedAt) return ''
+    const d = new Date(lastUpdatedAt)
+    if (Number.isNaN(d.getTime())) return ''
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
+  }, [lastUpdatedAt])
 
   function logout() {
     localStorage.removeItem('token')
@@ -207,12 +235,21 @@ export default function DoctorHome() {
             <div className="dr-card-title">Lịch</div>
             <div className="dr-card-actions">
               <select className="dr-select" aria-label="Bộ lọc lịch">
-                <option>Tất cả lịch khám</option>
+                <option>Chỉ lịch đã xác nhận</option>
                 <option>Hôm nay</option>
                 <option>Tuần này</option>
               </select>
               <button type="button" className="dr-btn dr-btn--solid">
                 Sự kiện mới
+              </button>
+              <button
+                type="button"
+                className="dr-btn dr-btn--ghost"
+                onClick={() => void loadAppointments({ silent: true })}
+                disabled={refreshing || loading}
+                title={lastUpdatedLabel ? `Cập nhật lần cuối: ${lastUpdatedLabel}` : undefined}
+              >
+                {refreshing ? 'Đang làm mới…' : 'Làm mới'}
               </button>
             </div>
           </div>
@@ -302,7 +339,7 @@ export default function DoctorHome() {
               <div className="dr-agenda-head">
                 <div className="dr-agenda-title">Lịch khám trong ngày</div>
                 <div className="dr-agenda-sub">
-                  {loading ? 'Đang tải…' : `${selectedRows.length} ca`}
+                  {loading ? 'Đang tải…' : `${selectedRows.length} ca — tổng ${totalConfirmed} lịch đã xác nhận`}
                 </div>
               </div>
 
@@ -333,7 +370,9 @@ export default function DoctorHome() {
                   })}
                 </div>
               ) : (
-                <div className="dr-agenda-empty">Không có lịch khám cho ngày này.</div>
+                <div className="dr-agenda-empty">
+                  Không có lịch <strong>đã xác nhận</strong> cho ngày này. Lịch sẽ xuất hiện sau khi nhân viên tiếp nhận bấm <strong>Xác nhận</strong>.
+                </div>
               )}
             </div>
           </div>

@@ -1,3 +1,126 @@
+:root {
+  --clinic-primary: #0d9488;
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(1200px 600px at 50% 0%, rgba(13, 148, 136, 0.12), transparent 55%),
+    linear-gradient(180deg, #f8fafc, #eef2ff);
+  padding: 24px;
+}
+
+.auth-panel {
+  display: grid;
+  place-items: center;
+}
+
+.auth-card {
+  width: min(520px, 100%);
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 18px 55px rgba(15, 23, 42, 0.08);
+}
+
+.auth-card h2 {
+  margin: 0 0 6px;
+  font-size: 32px;
+  letter-spacing: -0.02em;
+}
+
+.auth-card-sub {
+  margin: 0 0 18px;
+  color: rgba(15, 23, 42, 0.65);
+}
+
+.auth-field {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.auth-field label {
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.9);
+}
+
+.auth-field input,
+.auth-field textarea,
+.auth-field select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  outline: none;
+  font: inherit;
+}
+
+.auth-field input:focus,
+.auth-field textarea:focus,
+.auth-field select:focus {
+  border-color: rgba(13, 148, 136, 0.55);
+  box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.12);
+}
+
+.auth-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.auth-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+}
+
+.auth-submit {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 700;
+  background: var(--clinic-primary);
+  color: #fff;
+  cursor: pointer;
+}
+
+.auth-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.auth-error {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.06);
+  color: #b91c1c;
+}
+
+.auth-footer {
+  margin: 18px 0 0;
+  text-align: center;
+  color: rgba(15, 23, 42, 0.6);
+}
+
+.auth-link {
+  border: none;
+  background: transparent;
+  color: rgba(13, 148, 136, 0.9);
+  font: inherit;
+  font-weight: 600;
+  cursor: not-allowed;
+  padding: 0;
+}
+
 .auth-page {
   min-height: 100vh;
   display: flex;

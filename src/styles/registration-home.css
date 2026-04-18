@@ -1,4 +1,16 @@
+
 /* Màn Đăng ký — bổ sung trên nền reception-home.css */
+.reg-code-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.reg-code-row input {
+  flex: 1;
+  min-width: 0;
+}
+
 .reg-inner-banner {
   margin: 0.65rem 0.75rem 0;
   padding: 0.45rem 0.65rem;
@@ -76,4 +88,146 @@
   text-align: center;
   color: #94a3b8;
   font-size: 0.85rem;
+}
+
+.reg-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 60;
+}
+
+.reg-modal {
+  width: min(1200px, 100%);
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.35);
+}
+
+.reg-modal-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.reg-modal-title {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.reg-modal-x {
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0.25rem 0.4rem;
+  cursor: pointer;
+  color: #475569;
+}
+
+.reg-modal-x:hover {
+  color: #0f172a;
+}
+
+.reg-modal-filters {
+  padding: 0.75rem 0.85rem 0.65rem;
+}
+
+.reg-modal-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.6rem;
+}
+
+.reg-modal-tab {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 750;
+  color: #64748b;
+}
+
+.reg-modal-tab.is-active {
+  color: #0369a1;
+  border-color: #7dd3fc;
+  background: #e0f2fe;
+}
+
+.reg-modal-tab:disabled {
+  opacity: 0.5;
+}
+
+.reg-modal-filter-row {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr 1fr 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.reg-modal-filter-row input {
+  height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 0.55rem;
+  font-size: 0.9rem;
+}
+
+.reg-modal-err {
+  margin: 0 0.85rem 0.65rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.84rem;
+  border: 1px solid #fecaca;
+}
+
+.reg-modal-table {
+  padding: 0 0.85rem 0.75rem;
+  max-height: min(58vh, 520px);
+  overflow: auto;
+}
+
+.reg-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  flex-wrap: wrap;
+}
+
+.reg-modal-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.reg-modal-pager select {
+  height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 0.4rem;
+  background: #fff;
+}
+
+.reg-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
