@@ -1,37 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listDoctorAppointments } from '../api/appointments.js'
+import {
+  appointmentCreatorName,
+  appointmentSourceLabel,
+  appointmentSourceTitle,
+  appointmentSourceValue,
+} from '../utils/appointmentSource.js'
+import { getStaffSession } from '../utils/staffSession.js'
 import '../styles/auth.css'
 import '../styles/doctor-home.css'
 
-function safeParse(json) {
-  try {
-    return JSON.parse(json)
-  } catch {
-    return null
-  }
-}
-
 function getSession() {
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token')
-  const userRaw = localStorage.getItem('user') || sessionStorage.getItem('user')
-  const user = safeParse(userRaw || 'null')
-  return { token, user }
+  return getStaffSession()
 }
 
 function displayName(user) {
   const first = String(user?.firstName || '').trim()
   const last = String(user?.lastName || '').trim()
   const full = `${first} ${last}`.trim()
-  return full || String(user?.displayName || user?.fullName || '').trim() || user?.email || 'Nhân viên'
-}
-
-function firstNameFromUser(user) {
-  const fn = String(user?.firstName || '').trim()
-  if (fn) return fn
-  const dn = String(user?.displayName || '').trim()
-  if (dn) return dn.split(/\s+/).slice(-1)[0]
-  return 'bạn'
+  return full || String(user?.displayName || user?.fullName || '').trim() || user?.email || 'Bác sĩ'
 }
 
 function pad2(n) {
@@ -42,16 +30,9 @@ function ymd(d) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
 
-function monthLabelVi(date) {
-  const m = date.getMonth() + 1
-  const y = date.getFullYear()
-  return `Tháng ${m} / ${y}`
-}
-
 function dateKeyFromAppointmentDate(value) {
   if (!value) return ''
   if (typeof value === 'string') {
-    // usually ISO string
     return value.includes('T') ? value.slice(0, 10) : value.slice(0, 10)
   }
   const d = value instanceof Date ? value : new Date(value)
@@ -64,43 +45,72 @@ function timeLabel(v) {
   return s.length >= 5 ? s.slice(0, 5) : s
 }
 
-function buildMonthGrid(baseMonthDate) {
-  // baseMonthDate: any date within month
-  const year = baseMonthDate.getFullYear()
-  const month = baseMonthDate.getMonth()
+function patientLabel(a) {
+  const p = a?.patient
+  const fromParts = [p?.lastName, p?.firstName].filter(Boolean).join(' ').trim()
+  return (
+    String(p?.displayName || '').trim() ||
+    fromParts ||
+    String(p?.email || '').trim() ||
+    'Bệnh nhân'
+  )
+}
 
-  const firstOfMonth = new Date(year, month, 1)
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
+function sourceCreatorLabel(appointment) {
+  if (appointmentSourceValue(appointment) !== 'clinic') return '—'
+  return appointmentCreatorName(appointment) || 'Nhân viên phòng khám'
+}
 
-  // JS: 0=Sun..6=Sat -> convert to Monday-first index 0..6
-  const jsDay = firstOfMonth.getDay()
-  const startOffset = (jsDay + 6) % 7
+function statusLabelVi(st) {
+  const s = String(st || '').toLowerCase()
+  if (s === 'cancelled') return 'Đã hủy'
+  if (s === 'confirmed') return 'Chờ khám'
+  return 'Chờ'
+}
 
-  const cells = []
-  for (let i = 0; i < 42; i += 1) {
-    const dayNum = i - startOffset + 1
-    if (dayNum < 1 || dayNum > daysInMonth) {
-      cells.push(null)
-    } else {
-      cells.push(new Date(year, month, dayNum))
-    }
-  }
-  return cells
+function formatDobVi(iso) {
+  if (!iso) return '—'
+  const d = iso instanceof Date ? iso : new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`
 }
 
 export default function DoctorHome() {
   const navigate = useNavigate()
   const { token, user } = getSession()
-  const [monthCursor, setMonthCursor] = useState(() => {
-    const now = new Date()
-    return new Date(now.getFullYear(), now.getMonth(), 1)
-  })
-  const [selected, setSelected] = useState(() => ymd(new Date()))
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(0)
+
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterTicket, setFilterTicket] = useState('')
+  const [filterFrom, setFilterFrom] = useState(() => ymd(new Date()))
+  const [filterTo, setFilterTo] = useState(() => ymd(new Date()))
+  const [filterName, setFilterName] = useState('')
+  const [filterPatientCode, setFilterPatientCode] = useState('')
+  const [filterRoom, setFilterRoom] = useState('all')
+  const [filterPriority, setFilterPriority] = useState('all')
+  const [page, setPage] = useState(1)
+  const pageSize = 10
+
+  const [selectedApptId, setSelectedApptId] = useState(null)
+  const [examSubTab, setExamSubTab] = useState('info')
+
+  const [vitals, setVitals] = useState({
+    examAt: '',
+    clinicRoom: 'Phòng nội tổng quát',
+    temp: '',
+    breath: '',
+    bp: '',
+    pulse: '',
+    height: '',
+    weight: '',
+    bmi: '',
+    spo2: '',
+    symptoms: '',
+    notes: '',
+  })
 
   useEffect(() => {
     if (!token || !user) {
@@ -109,9 +119,6 @@ export default function DoctorHome() {
       navigate('/reception', { replace: true })
     }
   }, [token, user, navigate])
-
-  const todayKey = useMemo(() => ymd(new Date()), [])
-  const monthCells = useMemo(() => buildMonthGrid(monthCursor), [monthCursor])
 
   const loadAppointments = useMemo(() => {
     return async ({ silent } = { silent: false }) => {
@@ -125,10 +132,8 @@ export default function DoctorHome() {
       try {
         const rows = await listDoctorAppointments({ token })
         setError('')
-        // Business rule: doctor only sees confirmed appointments
         const onlyConfirmed = (rows || []).filter((a) => String(a?.status || '').toLowerCase() === 'confirmed')
         setItems(onlyConfirmed)
-        setLastUpdatedAt(Date.now())
       } catch (err) {
         setError(err?.message || 'Không lấy được lịch khám.')
         setItems([])
@@ -152,38 +157,78 @@ export default function DoctorHome() {
 
   useEffect(() => {
     if (!token || user?.userType !== 'doctor') return
-    // Poll to pick up confirmations from reception
     const t = setInterval(() => {
       void loadAppointments({ silent: true })
     }, 15000)
     return () => clearInterval(t)
   }, [token, user?.userType, loadAppointments])
 
-  const byDate = useMemo(() => {
-    const map = new Map()
-    for (const a of items || []) {
-      const k = dateKeyFromAppointmentDate(a?.appointmentDate)
-      if (!k) continue
-      const prev = map.get(k) || []
-      prev.push(a)
-      map.set(k, prev)
-    }
-    // Sort each day by time
-    for (const [k, rows] of map.entries()) {
-      rows.sort((x, y) => String(x?.startTime || '').localeCompare(String(y?.startTime || '')))
-      map.set(k, rows)
-    }
-    return map
-  }, [items])
+  const filteredQueue = useMemo(() => {
+    let rows = [...(items || [])]
+    rows.sort((a, b) => {
+      const da = dateKeyFromAppointmentDate(a?.appointmentDate)
+      const db = dateKeyFromAppointmentDate(b?.appointmentDate)
+      if (da !== db) return String(da).localeCompare(String(db))
+      return String(a?.startTime || '').localeCompare(String(b?.startTime || ''))
+    })
 
-  const selectedRows = useMemo(() => byDate.get(selected) || [], [byDate, selected])
-  const totalConfirmed = items.length
-  const lastUpdatedLabel = useMemo(() => {
-    if (!lastUpdatedAt) return ''
-    const d = new Date(lastUpdatedAt)
-    if (Number.isNaN(d.getTime())) return ''
-    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
-  }, [lastUpdatedAt])
+    if (filterFrom) {
+      rows = rows.filter((a) => {
+        const k = dateKeyFromAppointmentDate(a?.appointmentDate)
+        return k && k >= filterFrom
+      })
+    }
+    if (filterTo) {
+      rows = rows.filter((a) => {
+        const k = dateKeyFromAppointmentDate(a?.appointmentDate)
+        return k && k <= filterTo
+      })
+    }
+    const ft = filterTicket.trim().toLowerCase()
+    if (ft) {
+      rows = rows.filter((a) => String(a?.ticket || a?.id || '').toLowerCase().includes(ft))
+    }
+    const fn = filterName.trim().toLowerCase()
+    if (fn) {
+      rows = rows.filter((a) => patientLabel(a).toLowerCase().includes(fn))
+    }
+    const fp = filterPatientCode.trim().toLowerCase()
+    if (fp) {
+      rows = rows.filter((a) => String(a?.patient?.patientCode || '').toLowerCase().includes(fp))
+    }
+    if (filterStatus !== 'all') {
+      rows = rows.filter((a) => String(a?.status || '').toLowerCase() === filterStatus)
+    }
+    return rows
+  }, [items, filterFrom, filterTo, filterTicket, filterName, filterPatientCode, filterStatus])
+
+  const totalFiltered = filteredQueue.length
+  const pageCount = Math.max(1, Math.ceil(totalFiltered / pageSize))
+  const safePage = Math.min(page, pageCount)
+  const pagedRows = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return filteredQueue.slice(start, start + pageSize)
+  }, [filteredQueue, safePage])
+
+  useEffect(() => {
+    setPage(1)
+  }, [filterFrom, filterTo, filterTicket, filterName, filterPatientCode, filterStatus])
+
+  const selectedAppt = useMemo(() => {
+    if (!selectedApptId) return null
+    return items.find((a) => String(a?.id || a?._id) === String(selectedApptId)) || null
+  }, [items, selectedApptId])
+
+  useEffect(() => {
+    if (!selectedAppt) return
+    const d = dateKeyFromAppointmentDate(selectedAppt?.appointmentDate)
+    const t = timeLabel(selectedAppt?.startTime)
+    setVitals((s) => ({
+      ...s,
+      examAt: d && t ? `${formatDobVi(`${d}T12:00:00`)} ${t}` : formatDobVi(new Date()) + ` ${pad2(new Date().getHours())}:${pad2(new Date().getMinutes())}`,
+      symptoms: String(selectedAppt?.note || '').trim() || s.symptoms,
+    }))
+  }, [selectedAppt])
 
   function logout() {
     localStorage.removeItem('token')
@@ -196,8 +241,8 @@ export default function DoctorHome() {
   if (!token || !user) return null
 
   return (
-    <div className="dr-landing">
-      <header className="dr-header">
+    <div className="dr-desk">
+      <header className="dr-topbar">
         <div className="dr-brand" role="banner" aria-label="VitaCare Clinic">
           <span className="dr-brand-mark" aria-hidden="true">
             +
@@ -205,180 +250,416 @@ export default function DoctorHome() {
           <span className="dr-brand-text">VitaCare Clinic</span>
         </div>
 
-        <nav className="dr-nav" aria-label="Điều hướng chính">
-          <button type="button" className="dr-nav-link is-active">
-            Bảng điều khiển
+        <nav className="dr-topnav" aria-label="Điều hướng phân hệ">
+          <button type="button" className="dr-topnav-item is-active">
+            Khám bệnh
           </button>
-          <button type="button" className="dr-nav-link">
-            Lịch khám
+          <button type="button" className="dr-topnav-item is-disabled" disabled title="Sắp có">
+            Cận lâm sàng
           </button>
-          <button type="button" className="dr-nav-link">
-            Tin tức và thông báo
+          <button type="button" className="dr-topnav-item is-disabled" disabled title="Sắp có">
+            PT - TT
+          </button>
+          <button type="button" className="dr-topnav-item is-disabled" disabled title="Sắp có">
+            Thu chi
+          </button>
+          <button type="button" className="dr-topnav-item is-disabled" disabled title="Sắp có">
+            Báo cáo
           </button>
         </nav>
 
-        <div className="dr-user">
-          <span className="dr-user-greet">Xin chào, {displayName(user)}</span>
-          <button type="button" className="dr-btn dr-btn--ghost" onClick={logout}>
+        <div className="dr-topbar-right">
+          <span className="dr-user-name">{displayName(user)}</span>
+          <button type="button" className="dr-btn dr-btn--ghost dr-logout" onClick={logout}>
             Đăng xuất
           </button>
         </div>
       </header>
 
-      <main className="dr-main" role="main" aria-label="Trang chủ bác sĩ">
-        <h1 className="dr-title">
-          Chào mừng quay trở lại, {firstNameFromUser(user)}!
-        </h1>
-
-        <section className="dr-card" aria-label="Lịch">
-          <div className="dr-card-head">
-            <div className="dr-card-title">Lịch</div>
-            <div className="dr-card-actions">
-              <select className="dr-select" aria-label="Bộ lọc lịch">
-                <option>Chỉ lịch đã xác nhận</option>
-                <option>Hôm nay</option>
-                <option>Tuần này</option>
-              </select>
-              <button type="button" className="dr-btn dr-btn--solid">
-                Sự kiện mới
-              </button>
-              <button
-                type="button"
-                className="dr-btn dr-btn--ghost"
-                onClick={() => void loadAppointments({ silent: true })}
-                disabled={refreshing || loading}
-                title={lastUpdatedLabel ? `Cập nhật lần cuối: ${lastUpdatedLabel}` : undefined}
-              >
-                {refreshing ? 'Đang làm mới…' : 'Làm mới'}
-              </button>
-            </div>
+      <main className="dr-view dr-view--exam" role="main">
+        {error ? (
+          <div className="dr-banner dr-banner--error dr-banner--flush" role="alert">
+            {error}
           </div>
-
-          <div className="dr-cal">
-            {error ? (
-              <div className="dr-banner dr-banner--error" role="alert">
-                {error}
+        ) : null}
+        <div className="dr-split">
+            <aside className="dr-side" aria-label="Danh sách đăng ký">
+              <div className="dr-filter-grid">
+                <label className="dr-field">
+                  <span className="dr-field-label">Trạng thái</span>
+                  <select className="dr-input" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                    <option value="all">Tất cả</option>
+                    <option value="confirmed">Chờ khám</option>
+                  </select>
+                </label>
+                <label className="dr-field">
+                  <span className="dr-field-label">Mã KCB</span>
+                  <input
+                    className="dr-input"
+                    value={filterTicket}
+                    onChange={(e) => setFilterTicket(e.target.value)}
+                    placeholder="Mã vé / KCB"
+                  />
+                </label>
+                <label className="dr-field">
+                  <span className="dr-field-label">Từ ngày</span>
+                  <input className="dr-input" type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+                </label>
+                <label className="dr-field">
+                  <span className="dr-field-label">Đến ngày</span>
+                  <input className="dr-input" type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+                </label>
+                <label className="dr-field">
+                  <span className="dr-field-label">Họ tên</span>
+                  <input className="dr-input" value={filterName} onChange={(e) => setFilterName(e.target.value)} placeholder="Tìm theo tên" />
+                </label>
+                <label className="dr-field">
+                  <span className="dr-field-label">Mã BN</span>
+                  <input
+                    className="dr-input"
+                    value={filterPatientCode}
+                    onChange={(e) => setFilterPatientCode(e.target.value)}
+                    placeholder="Mã bệnh nhân"
+                  />
+                </label>
+                <label className="dr-field">
+                  <span className="dr-field-label">Phòng đăng ký</span>
+                  <select className="dr-input" value={filterRoom} onChange={(e) => setFilterRoom(e.target.value)}>
+                    <option value="all">Tất cả</option>
+                    <option value="noi">Phòng nội tổng quát</option>
+                    <option value="ngoai">Phòng ngoại</option>
+                  </select>
+                </label>
+                <label className="dr-field">
+                  <span className="dr-field-label">Ưu tiên</span>
+                  <select className="dr-input" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+                    <option value="all">Tất cả</option>
+                    <option value="yes">Có</option>
+                    <option value="no">Không</option>
+                  </select>
+                </label>
               </div>
-            ) : null}
-            <div className="dr-cal-top">
-              <button
-                type="button"
-                className="dr-cal-nav"
-                aria-label="Tháng trước"
-                onClick={() => {
-                  setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))
-                }}
-              >
-                ‹
-              </button>
-              <div className="dr-cal-month" aria-live="polite">
-                {monthLabelVi(monthCursor)}
-              </div>
-              <button
-                type="button"
-                className="dr-cal-nav"
-                aria-label="Tháng sau"
-                onClick={() => {
-                  setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))
-                }}
-              >
-                ›
-              </button>
-            </div>
 
-            <div className="dr-cal-grid" role="grid" aria-label="Lịch theo tháng">
-              {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((w) => (
-                <div key={w} className="dr-cal-dow" role="columnheader">
-                  {w}
-                </div>
-              ))}
-
-              {monthCells.map((d, idx) => {
-                const key = d ? ymd(d) : `empty-${idx}`
-                const isEmpty = !d
-                const isToday = d ? ymd(d) === todayKey : false
-                const isSelected = d ? ymd(d) === selected : false
-                const count = d ? (byDate.get(ymd(d)) || []).length : 0
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    className={[
-                      'dr-cal-cell',
-                      isEmpty ? 'is-empty' : '',
-                      isToday ? 'is-today' : '',
-                      isSelected ? 'is-selected' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    role="gridcell"
-                    disabled={isEmpty}
-                    onClick={() => {
-                      if (!d) return
-                      setSelected(ymd(d))
-                    }}
-                    aria-label={d ? `Ngày ${d.getDate()}` : 'Trống'}
-                  >
-                    {d ? (
-                      <>
-                        <span className="dr-cal-day">{d.getDate()}</span>
-                        {count ? <span className="dr-cal-badge">{count}</span> : null}
-                      </>
-                    ) : null}
+              <div className="dr-reg-head">
+                <div className="dr-reg-title">Danh sách đăng ký</div>
+                <div className="dr-reg-tools">
+                  <button type="button" className="dr-icon-btn" title="Tải lên" aria-label="Tải lên">
+                    ↑
                   </button>
-                )
-              })}
-            </div>
-
-            <div className="dr-cal-foot">
-              <div className="dr-cal-foot-title">Đang chọn</div>
-              <div className="dr-cal-foot-value">{selected}</div>
-            </div>
-
-            <div className="dr-agenda" aria-label="Danh sách lịch theo ngày">
-              <div className="dr-agenda-head">
-                <div className="dr-agenda-title">Lịch khám trong ngày</div>
-                <div className="dr-agenda-sub">
-                  {loading ? 'Đang tải…' : `${selectedRows.length} ca — tổng ${totalConfirmed} lịch đã xác nhận`}
+                  <button
+                    type="button"
+                    className="dr-icon-btn"
+                    title="Làm mới"
+                    aria-label="Làm mới"
+                    onClick={() => void loadAppointments({ silent: true })}
+                  >
+                    ↻
+                  </button>
+                  <button type="button" className="dr-icon-btn" title="Cài đặt" aria-label="Cài đặt">
+                    ⚙
+                  </button>
                 </div>
               </div>
 
-              {loading ? (
-                <div className="dr-agenda-empty">Đang tải dữ liệu…</div>
-              ) : selectedRows.length ? (
-                <div className="dr-agenda-list">
-                  {selectedRows.map((a) => {
-                    const pid =
-                      a?.patient?.displayName ||
-                      [a?.patient?.lastName, a?.patient?.firstName].filter(Boolean).join(' ').trim() ||
-                      a?.patient?.email ||
-                      'Bệnh nhân'
-                    const note = String(a?.note || '').trim()
-                    const st = String(a?.status || '').toLowerCase()
-                    return (
-                      <div className="dr-agenda-row" key={String(a?.id || a?._id || `${a?.appointmentDate}-${a?.startTime}`)}>
-                        <div className="dr-agenda-time">{timeLabel(a?.startTime) || '—'}</div>
-                        <div className="dr-agenda-main">
-                          <div className="dr-agenda-name">{pid}</div>
-                          <div className="dr-agenda-meta">{note || 'Không ghi chú'}</div>
-                        </div>
-                        <span className={`dr-pill ${st === 'cancelled' ? 'is-bad' : st === 'confirmed' ? 'is-ok' : 'is-pending'}`}>
-                          {st === 'cancelled' ? 'Đã hủy' : st === 'confirmed' ? 'Đã xác nhận' : 'Chờ'}
+              <div className="dr-table-wrap">
+                <table className="dr-table">
+                  <thead>
+                    <tr>
+                      <th className="col-tt">TT</th>
+                      <th>STT</th>
+                      <th>Mã KCB</th>
+                      <th>Nguồn</th>
+                      <th>Mã BN</th>
+                      <th>Tên BN</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr>
+                        <td colSpan={6} className="dr-table-empty">
+                          Đang tải…
+                        </td>
+                      </tr>
+                    ) : pagedRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="dr-table-empty">
+                          Không có bản ghi phù hợp.
+                        </td>
+                      </tr>
+                    ) : (
+                      pagedRows.map((a, i) => {
+                        const id = String(a?.id || a?._id || '')
+                        const st = String(a?.status || '').toLowerCase()
+                        const sel = selectedApptId && id === String(selectedApptId)
+                        return (
+                          <tr
+                            key={id || `${i}`}
+                            className={sel ? 'is-selected' : ''}
+                            onClick={() => setSelectedApptId(id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                setSelectedApptId(id)
+                              }
+                            }}
+                            tabIndex={0}
+                            role="button"
+                          >
+                            <td className="col-tt">
+                              <span className={`dr-dot ${st === 'confirmed' ? 'is-wait' : ''}`} title={statusLabelVi(st)} />
+                            </td>
+                            <td>{(safePage - 1) * pageSize + i + 1}</td>
+                            <td>{String(a?.ticket || a?.id || '—').slice(0, 14)}</td>
+                            <td>
+                              <span
+                                className={`dr-source-pill dr-source-pill--${appointmentSourceValue(a)}`}
+                                title={appointmentSourceTitle(a)}
+                              >
+                                {appointmentSourceLabel(a)}
+                              </span>
+                            </td>
+                            <td>{a?.patient?.patientCode || '—'}</td>
+                            <td>{patientLabel(a)}</td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="dr-pagination">
+                <span>
+                  {totalFiltered ? `${(safePage - 1) * pageSize + 1}-${Math.min(safePage * pageSize, totalFiltered)} của ${totalFiltered}` : '0 của 0'}
+                </span>
+                <span className="dr-pagination-pages">{pageSize} / trang</span>
+                <button type="button" className="dr-page-btn" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  className="dr-page-btn"
+                  disabled={safePage >= pageCount}
+                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                >
+                  ›
+                </button>
+              </div>
+            </aside>
+
+            <section className="dr-panel" aria-label="Khám bệnh">
+              <div className="dr-panel-top">
+                <div className="dr-subtabs" role="tablist">
+                  {[
+                    { id: 'info', label: 'Thông tin khám bệnh' },
+                    { id: 'services', label: 'Kê dịch vụ' },
+                    { id: 'rx', label: 'Đơn thuốc' },
+                    { id: 'history', label: 'Lịch sử khám' },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={examSubTab === t.id}
+                      className={`dr-subtab${examSubTab === t.id ? ' is-active' : ''}`}
+                      onClick={() => setExamSubTab(t.id)}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="dr-panel-actions">
+                  <button type="button" className="dr-btn dr-btn--muted" disabled={!selectedAppt}>
+                    Kết thúc khám
+                  </button>
+                  <button type="button" className="dr-btn dr-btn--primary" disabled={!selectedAppt}>
+                    Lưu
+                  </button>
+                </div>
+              </div>
+
+              <div className="dr-panel-alert" role="status">
+                Bạn đang xem thông tin khám bệnh
+                {selectedAppt ? ` — ${patientLabel(selectedAppt)}` : ''}
+              </div>
+
+              {examSubTab !== 'info' ? (
+                <div className="dr-placeholder">Nội dung đang phát triển.</div>
+              ) : (
+                <>
+                  <div className="dr-section">
+                    <div className="dr-section-title">Thông tin người đăng ký</div>
+                    <div className="dr-info-grid">
+                      <div className="dr-kv">
+                        <span className="dr-k">Mã lịch hẹn</span>
+                        <span className="dr-v">{selectedAppt ? String(selectedAppt.id || selectedAppt._id || '—') : '—'}</span>
+                      </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Mã KCB</span>
+                        <span className="dr-v">{selectedAppt?.ticket || '—'}</span>
+                      </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Nguồn đăng ký</span>
+                        <span className="dr-v">{selectedAppt ? appointmentSourceTitle(selectedAppt) : '—'}</span>
+                      </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Nhân viên tạo lịch</span>
+                        <span className="dr-v">{selectedAppt ? sourceCreatorLabel(selectedAppt) : '—'}</span>
+                      </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Mã bệnh nhân</span>
+                        <span className="dr-v">{selectedAppt?.patient?.patientCode || '—'}</span>
+                      </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Họ tên</span>
+                        <span className="dr-v">{selectedAppt ? patientLabel(selectedAppt) : '—'}</span>
+                      </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Điện thoại</span>
+                        <span className="dr-v">{selectedAppt?.patient?.phone || '—'}</span>
+                      </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Ngày sinh</span>
+                        <span className="dr-v">{selectedAppt?.patient?.dob ? formatDobVi(selectedAppt.patient.dob) : '—'}</span>
+                      </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Giới tính</span>
+                        <span className="dr-v">
+                          {(() => {
+                            const g = String(selectedAppt?.patient?.gender || '').trim()
+                            if (!g) return '—'
+                            if (/^(male|nam)$/i.test(g)) return 'Nam'
+                            if (/^(female|nữ|nu)$/i.test(g)) return 'Nữ'
+                            return g
+                          })()}
                         </span>
                       </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="dr-agenda-empty">
-                  Không có lịch <strong>đã xác nhận</strong> cho ngày này. Lịch sẽ xuất hiện sau khi nhân viên tiếp nhận bấm <strong>Xác nhận</strong>.
-                </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Ngày đăng ký</span>
+                        <span className="dr-v">
+                          {selectedAppt ? formatDobVi(`${dateKeyFromAppointmentDate(selectedAppt.appointmentDate)}T12:00:00`) : '—'}
+                        </span>
+                      </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Phòng đăng ký</span>
+                        <span className="dr-v">Phòng nội tổng quát</span>
+                      </div>
+                      <div className="dr-kv">
+                        <span className="dr-k">Số đăng ký</span>
+                        <span className="dr-v">—</span>
+                      </div>
+                      <div className="dr-kv dr-kv--full">
+                        <span className="dr-k">Địa chỉ</span>
+                        <span className="dr-v">{selectedAppt?.patient?.address || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="dr-section">
+                    <div className="dr-section-title">Khám lâm sàng</div>
+                    <div className="dr-info-grid dr-info-grid--tight">
+                      <label className="dr-field">
+                        <span className="dr-field-label">Ngày khám</span>
+                        <input
+                          className="dr-input"
+                          value={vitals.examAt}
+                          onChange={(e) => setVitals((s) => ({ ...s, examAt: e.target.value }))}
+                          disabled={!selectedAppt}
+                        />
+                      </label>
+                      <label className="dr-field">
+                        <span className="dr-field-label">Bác sĩ</span>
+                        <select className="dr-input" disabled={!selectedAppt}>
+                          <option>{displayName(user)}</option>
+                        </select>
+                      </label>
+                      <label className="dr-field">
+                        <span className="dr-field-label">Phòng khám</span>
+                        <select
+                          className="dr-input"
+                          value={vitals.clinicRoom}
+                          onChange={(e) => setVitals((s) => ({ ...s, clinicRoom: e.target.value }))}
+                          disabled={!selectedAppt}
+                        >
+                          <option>Phòng nội tổng quát</option>
+                          <option>Phòng ngoại</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="dr-vitals">
+                      {[
+                        ['temp', 'Nhiệt độ (°C)'],
+                        ['breath', 'Nhịp thở (L/P)'],
+                        ['bp', 'Huyết áp (mmHg)'],
+                        ['pulse', 'Mạch (L/P)'],
+                        ['height', 'Chiều cao (cm)'],
+                        ['weight', 'Cân nặng (kg)'],
+                        ['bmi', 'BMI (kg/m²)'],
+                        ['spo2', 'SPO₂ (%)'],
+                      ].map(([key, lab]) => (
+                        <label key={key} className="dr-field">
+                          <span className="dr-field-label">{lab}</span>
+                          <input
+                            className="dr-input"
+                            value={vitals[key]}
+                            onChange={(e) => setVitals((s) => ({ ...s, [key]: e.target.value }))}
+                            disabled={!selectedAppt}
+                          />
+                        </label>
+                      ))}
+                    </div>
+
+                    <label className="dr-field dr-field--block">
+                      <span className="dr-field-label">Triệu chứng</span>
+                      <textarea
+                        className="dr-textarea"
+                        rows={2}
+                        value={vitals.symptoms}
+                        onChange={(e) => setVitals((s) => ({ ...s, symptoms: e.target.value }))}
+                        disabled={!selectedAppt}
+                      />
+                    </label>
+                    <label className="dr-field dr-field--block">
+                      <span className="dr-field-label">Ghi chú</span>
+                      <textarea
+                        className="dr-textarea"
+                        rows={2}
+                        value={vitals.notes}
+                        onChange={(e) => setVitals((s) => ({ ...s, notes: e.target.value }))}
+                        disabled={!selectedAppt}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="dr-section">
+                    <div className="dr-section-title">Chẩn đoán</div>
+                    <div className="dr-table-wrap">
+                      <table className="dr-table dr-table--dx">
+                        <thead>
+                          <tr>
+                            <th>BC</th>
+                            <th>Mã ICD</th>
+                            <th>Tên bệnh</th>
+                            <th>Diễn giải</th>
+                            <th className="col-act">#</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td colSpan={5} className="dr-table-empty">
+                              Chưa có dòng chẩn đoán. Chọn bệnh nhân và nhập sau khi tích hợp ICD.
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
               )}
-            </div>
+            </section>
           </div>
-        </section>
       </main>
     </div>
   )
 }
-

@@ -63,6 +63,21 @@ export async function listPatientsReception({ token, page = 1, pageSize = 10, pa
   return data
 }
 
+export async function listPatientHistoryReception({ token, patientId }) {
+  const qs = new URLSearchParams({ patientId: String(patientId || '').trim() })
+  const res = await fetch(`${base}/api/appointments/patient-history?${qs.toString()}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Không lấy được lịch sử khám.')
+  }
+  return data?.appointments || []
+}
+
 export async function lookupAppointmentByTicket({ token, ticket }) {
   const qs = new URLSearchParams({ ticket: String(ticket || '').trim() })
   const res = await fetch(`${base}/api/appointments/lookup-ticket?${qs.toString()}`, {
@@ -135,6 +150,8 @@ export async function updateAppointmentStatus({ token, appointmentId, status }) 
 export async function createAppointmentReception({
   token,
   patientEmailOrPhone,
+  patient,
+  createdByStaff,
   doctorId,
   appointmentDate,
   startTime,
@@ -147,7 +164,11 @@ export async function createAppointmentReception({
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
+      source: 'clinic',
+      bookingSource: 'clinic',
+      createdByStaff: createdByStaff || null,
       patientEmailOrPhone: String(patientEmailOrPhone || '').trim(),
+      patient: patient || null,
       doctorId,
       appointmentDate,
       startTime,

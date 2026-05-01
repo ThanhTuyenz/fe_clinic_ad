@@ -1,25 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   listReceptionAppointments,
   lookupAppointmentByTicket,
   updateAppointmentStatus,
 } from '../api/appointments.js'
+import {
+  appointmentCreatorName,
+  appointmentSourceLabel,
+  appointmentSourceTitle,
+  appointmentSourceValue,
+} from '../utils/appointmentSource.js'
+import { isPendingAppointmentPastSlot } from '../utils/appointmentExpiry.js'
+import { getStaffSession } from '../utils/staffSession.js'
 import '../styles/reception-home.css'
 
-function safeParse(json) {
-  try {
-    return JSON.parse(json)
-  } catch {
-    return null
-  }
-}
-
 function getSession() {
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token')
-  const userRaw = localStorage.getItem('user') || sessionStorage.getItem('user')
-  const user = safeParse(userRaw || 'null')
-  return { token, user }
+  return getStaffSession()
 }
 
 function displayName(user) {
@@ -27,6 +24,11 @@ function displayName(user) {
   const last = String(user?.lastName || '').trim()
   const full = `${last} ${first}`.trim()
   return full || String(user?.displayName || '').trim() || user?.email || 'Nhân viên'
+}
+
+function sourceCreatorLabel(appointment) {
+  if (appointmentSourceValue(appointment) !== 'clinic') return '—'
+  return appointmentCreatorName(appointment) || 'Nhân viên phòng khám'
 }
 
 function pad2(n) {
@@ -72,10 +74,42 @@ function statusLabelVi(st) {
   const s = String(st || '').toLowerCase()
   if (s === 'confirmed') return 'Đã xác nhận'
   if (s === 'cancelled') return 'Từ chối'
+  if (s === 'examined' || s === 'completed' || s === 'done') return 'Đã khám'
   return 'Chờ'
 }
 
 const PAGE_SIZE = 10
+
+function normalizeStatus(st) {
+  const s = String(st || '').toLowerCase()
+  if (s === 'done' || s === 'completed') return 'examined'
+  return s || 'pending'
+}
+
+/** Quét pending trong khoảng ngày; hủy các lịch đã quá hết khung giờ mà chưa được xác nhận. */
+async function expireStalePendingInRange({ token, from, to }) {
+  const pendingRows = await listReceptionAppointments({
+    token,
+    from,
+    to,
+    status: 'pending',
+  })
+  const stale = (pendingRows || []).filter((r) => isPendingAppointmentPastSlot(r))
+  let anyOk = false
+  for (const row of stale) {
+    try {
+      await updateAppointmentStatus({
+        token,
+        appointmentId: row.id,
+        status: 'cancelled',
+      })
+      anyOk = true
+    } catch {
+      /* có thể đã xử lý ở tab/phiên khác */
+    }
+  }
+  return anyOk
+}
 
 export default function ReceptionHome() {
   const navigate = useNavigate()
@@ -123,12 +157,21 @@ export default function ReceptionHome() {
     setListLoading(true)
     setListErr('')
     try {
-      const rows = await listReceptionAppointments({
+      let rows = await listReceptionAppointments({
         token,
         from: fromDate,
         to: toDate,
         status: statusFilter,
       })
+      const didExpire = await expireStalePendingInRange({ token, from: fromDate, to: toDate })
+      if (didExpire) {
+        rows = await listReceptionAppointments({
+          token,
+          from: fromDate,
+          to: toDate,
+          status: statusFilter,
+        })
+      }
       setList(rows || [])
       setPage(0)
     } catch (e) {
@@ -142,6 +185,14 @@ export default function ReceptionHome() {
   useEffect(() => {
     void loadList()
   }, [loadList])
+
+  useEffect(() => {
+    if (!token) return undefined
+    const t = setInterval(() => {
+      void loadList()
+    }, 60000)
+    return () => clearInterval(t)
+  }, [token, loadList])
 
   const filteredRows = useMemo(() => {
     const ft = filterTicket.trim().toLowerCase()
@@ -173,9 +224,16 @@ export default function ReceptionHome() {
     return null
   }, [selectedId, list, lookupDetail, detailById])
 
+  const currentStatus = useMemo(() => normalizeStatus(activeDetail?.status), [activeDetail?.status])
+  const canEditStatus = currentStatus === 'pending'
+
+  const lastDetailIdRef = useRef(null)
   useEffect(() => {
     if (!activeDetail) return
-    setDetailStatus(String(activeDetail.status || 'pending').toLowerCase())
+    const currentId = String(activeDetail.id ?? '')
+    if (currentId && lastDetailIdRef.current === currentId) return
+    lastDetailIdRef.current = currentId
+    setDetailStatus(normalizeStatus(activeDetail.status || 'pending'))
   }, [activeDetail])
 
   function normalizeLookup(data) {
@@ -186,6 +244,9 @@ export default function ReceptionHome() {
       startTime: data.appointment.startTime,
       endTime: data.appointment.endTime || '',
       status: data.appointment.status,
+      source: data.appointment.source || data.appointment.bookingSource || data.source,
+      bookingSource: data.appointment.bookingSource || data.appointment.source || data.source,
+      createdByStaff: data.appointment.createdByStaff || data.appointment.createdByReceptionist || data.createdByStaff,
       note: data.appointment.note || '',
       createdAt: data.appointment.createdAt,
       patient: data.patient
@@ -237,7 +298,11 @@ export default function ReceptionHome() {
     if (!activeDetail?.id) return
     setSaveErr('')
     setSaveMsg('')
-    const next = String(detailStatus || '').toLowerCase()
+    if (!canEditStatus) {
+      setSaveErr('Chỉ có thể xác nhận/hủy khi lịch ở trạng thái Chờ xác nhận.')
+      return
+    }
+    const next = normalizeStatus(detailStatus || '')
     if (next !== 'confirmed' && next !== 'cancelled') {
       setSaveErr('Vui lòng chọn Xác nhận hoặc Hủy.')
       return
@@ -250,6 +315,12 @@ export default function ReceptionHome() {
         status: next,
       })
       setSaveMsg('Đã lưu trạng thái lịch hẹn.')
+      setDetailById((prev) => {
+        const key = String(activeDetail.id)
+        const cur = prev[key]
+        if (!cur) return prev
+        return { ...prev, [key]: { ...cur, status: next } }
+      })
       await loadList()
       setLookupDetail(null)
       setSelectedId(String(activeDetail.id))
@@ -326,6 +397,9 @@ export default function ReceptionHome() {
         startTime: detail.startTime,
         note: detail.note,
         createdAt: detail.createdAt,
+        source: detail.source,
+        bookingSource: detail.bookingSource,
+        createdByStaff: detail.createdByStaff,
         patient: detail.patient,
         doctor: detail.doctor,
         doctorId: detail.doctor?.id ?? '',
@@ -382,7 +456,7 @@ export default function ReceptionHome() {
             <button
               type="button"
               className="tcl-btn tcl-btn--pri"
-              disabled={!activeDetail || saving}
+              disabled={!activeDetail || saving || !canEditStatus}
               onClick={() => void handleSaveStatus()}
             >
               {saving ? 'Đang lưu…' : 'Lưu'}
@@ -471,6 +545,7 @@ export default function ReceptionHome() {
                   <tr>
                     <th style={{ width: 36 }}>TT</th>
                     <th>Mã LH</th>
+                    <th>Nguồn</th>
                     <th>Mã BN</th>
                     <th>Tên BN</th>
                   </tr>
@@ -478,13 +553,13 @@ export default function ReceptionHome() {
                 <tbody>
                   {listLoading ? (
                     <tr>
-                      <td colSpan={4} style={{ padding: '1rem', color: '#64748b' }}>
+                      <td colSpan={5} style={{ padding: '1rem', color: '#64748b' }}>
                         Đang tải…
                       </td>
                     </tr>
                   ) : pageRows.length === 0 ? (
                     <tr>
-                      <td colSpan={4} style={{ padding: '1rem', color: '#64748b' }}>
+                      <td colSpan={5} style={{ padding: '1rem', color: '#64748b' }}>
                         {listErr || 'Không có lịch trong khoảng thời gian này.'}
                       </td>
                     </tr>
@@ -499,6 +574,14 @@ export default function ReceptionHome() {
                           <span className={`tcl-stt-dot ${statusDotClass(row.status)}`} title={statusLabelVi(row.status)} />
                         </td>
                         <td>{row.ticket}</td>
+                        <td>
+                          <span
+                            className={`tcl-source-badge tcl-source-badge--${appointmentSourceValue(row)}`}
+                            title={appointmentSourceTitle(row)}
+                          >
+                            {appointmentSourceLabel(row)}
+                          </span>
+                        </td>
                         <td>{row.patient?.patientCode || '—'}</td>
                         <td>{row.patient?.displayName || '—'}</td>
                       </tr>
@@ -596,6 +679,14 @@ export default function ReceptionHome() {
                       <input readOnly value={formatDateTimeVi(activeDetail.createdAt)} />
                     </div>
                     <div className="tcl-f">
+                      <label>Nguồn đăng ký</label>
+                      <input readOnly value={appointmentSourceTitle(activeDetail)} />
+                    </div>
+                    <div className="tcl-f">
+                      <label>Nhân viên tạo lịch</label>
+                      <input readOnly value={sourceCreatorLabel(activeDetail)} />
+                    </div>
+                    <div className="tcl-f">
                       <label>Ngày khám</label>
                       <input readOnly value={formatDateVi(activeDetail.appointmentDate)} />
                     </div>
@@ -626,25 +717,56 @@ export default function ReceptionHome() {
                   <div className="tcl-f" style={{ marginBottom: '0.65rem' }}>
                     <label>Trạng thái</label>
                     <div className="tcl-status-row">
+                      <label title="Chỉ hiển thị">
+                        <input
+                          type="radio"
+                          name={`st-${String(activeDetail?.id ?? 'x')}`}
+                          checked={detailStatus === 'pending'}
+                          disabled
+                          readOnly
+                        />
+                        Chờ xác nhận
+                      </label>
                       <label>
                         <input
                           type="radio"
-                          name="st"
+                          name={`st-${String(activeDetail?.id ?? 'x')}`}
                           checked={detailStatus === 'cancelled'}
-                          onChange={() => setDetailStatus('cancelled')}
+                          disabled={!canEditStatus}
+                          onChange={() => canEditStatus && setDetailStatus('cancelled')}
                         />
                         Hủy
                       </label>
                       <label>
                         <input
                           type="radio"
-                          name="st"
+                          name={`st-${String(activeDetail?.id ?? 'x')}`}
                           checked={detailStatus === 'confirmed'}
-                          onChange={() => setDetailStatus('confirmed')}
+                          disabled={!canEditStatus}
+                          onChange={() => canEditStatus && setDetailStatus('confirmed')}
                         />
                         Xác nhận
                       </label>
-                      <span className="tcl-muted">Chờ (tự động)</span>
+                      <label title="Trạng thái này do bác sĩ/cận lâm sàng cập nhật">
+                        <input
+                          type="radio"
+                          name={`st-${String(activeDetail?.id ?? 'x')}`}
+                          checked={detailStatus === 'examined'}
+                          disabled
+                          readOnly
+                        />
+                        Đã khám
+                      </label>
+                      <span
+                        className="tcl-muted"
+                        title={
+                          canEditStatus
+                            ? 'Quá hết khung giờ mà chưa xác nhận — hệ thống tự hủy'
+                            : 'Lịch không còn ở trạng thái Chờ xác nhận nên không thể thay đổi.'
+                        }
+                      >
+                        {canEditStatus ? 'Chờ (tự hủy nếu quá giờ)' : `Đã khóa: ${statusLabelVi(currentStatus)}`}
+                      </span>
                     </div>
                   </div>
                   <div className="tcl-grid-form">
@@ -665,7 +787,7 @@ export default function ReceptionHome() {
                     <button
                       type="button"
                       className="tcl-btn tcl-btn--pri"
-                      disabled={!activeDetail || saving}
+                      disabled={!activeDetail || saving || !canEditStatus}
                       onClick={() => void handleSaveStatus()}
                     >
                       {saving ? 'Đang lưu…' : 'Lưu'}

@@ -3,31 +3,16 @@ import Login from './pages/Login.jsx'
 import DoctorHome from './pages/DoctorHome.jsx'
 import ReceptionHome from './pages/ReceptionHome.jsx'
 import RegistrationHome from './pages/RegistrationHome.jsx'
-
-function safeParse(json) {
-  try {
-    return JSON.parse(json)
-  } catch {
-    return null
-  }
-}
+import { getStaffSession } from './utils/staffSession.js'
 
 function hasSession() {
-  try {
-    return Boolean(localStorage.getItem('token') || sessionStorage.getItem('token'))
-  } catch {
-    return false
-  }
+  return Boolean(getStaffSession().token)
 }
 
 function sessionUser() {
-  try {
-    const raw = localStorage.getItem('user') || sessionStorage.getItem('user')
-    return safeParse(raw || 'null')
-  } catch {
-    return null
-  }
+  return getStaffSession().user
 }
+
 
 function RootRedirect() {
   if (!hasSession()) {

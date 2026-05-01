@@ -1,7 +1,31 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { login as loginApi } from '../api/auth.js'
 import '../styles/auth.css'
+
+/** Chỉ lưu lựa chọn UI (có/không ghi nhớ), không lưu mật khẩu. */
+const REMEMBER_PREF_KEY = 'vitacare_staff_remember_login'
+/** Email lần đăng nhập gần nhất — tự điền ô email (không lưu mật khẩu). */
+const LAST_EMAIL_KEY = 'vitacare_staff_last_login_email'
+
+function readLastEmail() {
+  try {
+    return String(localStorage.getItem(LAST_EMAIL_KEY) || '').trim()
+  } catch {
+    return ''
+  }
+}
+
+function readRememberPref() {
+  try {
+    const v = localStorage.getItem(REMEMBER_PREF_KEY)
+    if (v === '0') return false
+    if (v === '1') return true
+  } catch {
+    /* ignore */
+  }
+  return true
+}
 
 function userTypeLower(user) {
   return String(user?.userType || user?.role || '').trim().toLowerCase()
@@ -23,13 +47,20 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(readLastEmail)
   const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(true)
+  const [remember, setRemember] = useState(readRememberPref)
   const [error, setError] = useState('')
   const [info, setInfo] = useState(location.state?.message || '')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const passwordRef = useRef(null)
+
+  useEffect(() => {
+    if (email.trim() && passwordRef.current) {
+      passwordRef.current.focus()
+    }
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -58,6 +89,13 @@ export default function Login() {
       const storage = remember ? localStorage : sessionStorage
       storage.setItem('token', data.token)
       storage.setItem('user', JSON.stringify(data.user))
+
+      try {
+        localStorage.setItem(REMEMBER_PREF_KEY, remember ? '1' : '0')
+        localStorage.setItem(LAST_EMAIL_KEY, emailOrPhone)
+      } catch {
+        /* ignore */
+      }
 
       navigate(redirectPathForUser(data.user), { replace: true })
     } catch (err) {
@@ -109,6 +147,7 @@ export default function Login() {
             <div className="auth-field">
               <div className="auth-password-wrap">
                 <input
+                  ref={passwordRef}
                   id="staff-login-password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
@@ -132,15 +171,18 @@ export default function Login() {
             </div>
 
             <div className="auth-row">
-              <label className="auth-checkbox">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  disabled={loading}
-                />
-                Ghi nhớ đăng nhập
-              </label>
+              <div className="auth-remember-col">
+                <label className="auth-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    disabled={loading}
+                  />
+                  Ghi nhớ đăng nhập
+                </label>
+      
+              </div>
               <button type="button" className="auth-link" disabled>
                 Quên mật khẩu?
               </button>
