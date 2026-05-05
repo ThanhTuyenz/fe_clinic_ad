@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   createAppointmentReception,
   getAvailability,
   listPatientHistoryReception,
   listPatientsReception,
-  lookupPatientByCode,
+  listReceptionAppointments,
   updateAppointmentStatus,
 } from '../api/appointments'
 import { listDoctors } from '../api/doctors.js'
@@ -64,6 +64,26 @@ function isoDateFromApi(dob) {
   return ymd(d)
 }
 
+/** Đồng bộ gender từ API (Nam/Nữ, boolean, male/female) → draftGender */
+function mapGenderToDraft(g) {
+  if (g === true || g === 'true') return 'male'
+  if (g === false || g === 'false') return 'female'
+  const s = String(g ?? '').trim().toLowerCase()
+  if (s === 'nam' || s === 'male' || s === 'm') return 'male'
+  if (s === 'nữ' || s === 'nu' || s === 'female' || s === 'f') return 'female'
+  return ''
+}
+
+/** Gán state form từ object patient (patient-by-code / danh sách / embed). */
+function readDisplayNameFromPatient(pat) {
+  if (!pat) return ''
+  const dn = String(pat.displayName || '').trim()
+  if (dn) return dn
+  const last = String(pat.lastName || '').trim()
+  const first = String(pat.firstName || '').trim()
+  return `${last} ${first}`.trim() || `${first} ${last}`.trim() || ''
+}
+
 function formatDateTimeNow() {
   const d = new Date()
   return `${formatDateVi(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
@@ -82,8 +102,15 @@ function isoDateOnly(value) {
   return isoDateFromApi(s)
 }
 
-function isGmailAddress(email) {
-  return /^[^\s@]+@gmail\.com$/i.test(String(email || '').trim())
+/** Mã dự kiến (YM…) khi tạo BN mới tại quầy — chỉ hiển thị; mã thật do CSDL gán sau khi lưu. */
+function provisionalPatientCodeWalkIn(phone, displayName) {
+  const seed = String(phone || '').trim() || String(displayName || '').trim()
+  if (!seed) return ''
+  const yy = String(new Date().getFullYear()).slice(-2)
+  let h = 0
+  for (let i = 0; i < seed.length; i += 1) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  const pad = (h.toString(16) + '00000000').slice(0, 8).toUpperCase()
+  return `YM${yy}${pad}`
 }
 
 function statusLabelVi(st) {
@@ -92,6 +119,97 @@ function statusLabelVi(st) {
   if (s === 'cancelled') return 'Đã hủy'
   if (s === 'completed' || s === 'done' || s === 'examined') return 'Đã khám'
   return 'Chờ'
+}
+
+/** Khớp `buildAppointmentNote` trong handleSave — để load lại từ server vẫn có triệu chứng/ghi chú. */
+function parseRegistrationNote(note) {
+  const lines = String(note || '').split('\n')
+  let symptom = ''
+  let regNote = ''
+  let priority = false
+  for (const line of lines) {
+    const t = String(line || '')
+    if (t.startsWith('Triệu chứng:')) symptom = t.replace(/^Triệu chứng:\s*/i, '').trim()
+    else if (t.startsWith('Ghi chú:')) regNote = t.replace(/^Ghi chú:\s*/i, '').trim()
+    else if (t.trim() === 'Ưu tiên') priority = true
+  }
+  return { symptom, regNote, priority }
+}
+
+function mapReceptionAppointmentToRegistrationRow(a, seq) {
+  const { symptom, regNote, priority } = parseRegistrationNote(a.note)
+  const aptId = String(a.id ?? a._id ?? '')
+  const ad = isoDateOnly(a.appointmentDate)
+  const p = a.patient
+  const patient = p
+    ? {
+        id: String(p.id ?? ''),
+        patientCode: p.patientCode || '',
+        displayName:
+          String(p.displayName || '').trim() ||
+          [p.lastName, p.firstName].filter(Boolean).join(' ').trim() ||
+          [p.firstName, p.lastName].filter(Boolean).join(' ').trim() ||
+          '',
+        dob: p.dob ?? null,
+        age: p.age ?? null,
+        phone: p.phone || '',
+        gender: p.gender || '',
+        address: p.address || '',
+        email: p.email || '',
+        ticket: a.ticket || '',
+      }
+    : {
+        id: '',
+        patientCode: '',
+        displayName: '',
+        dob: null,
+        age: null,
+        phone: '',
+        gender: '',
+        address: '',
+        email: '',
+        ticket: a.ticket || '',
+      }
+  const d = a.doctor
+  const doctor = d
+    ? {
+        id: String(d.id ?? ''),
+        displayName:
+          String(d.displayName || '').trim() ||
+          [d.lastName, d.firstName].filter(Boolean).join(' ').trim() ||
+          [d.firstName, d.lastName].filter(Boolean).join(' ').trim() ||
+          '',
+        specialtyName: String(d.specialtyName || d.specialty || d.deptName || '').trim(),
+      }
+    : null
+  const created = a.createdAt ? new Date(a.createdAt).getTime() : Date.now()
+  return {
+    id: aptId,
+    seq: String(seq),
+    maKcb: a.ticket || '',
+    createdAt: created,
+    updatedAt: created,
+    symptom,
+    regNote,
+    specialtyId: String(d?.specialtyID ?? d?.specialtyId ?? ''),
+    specialtyName: doctor?.specialtyName || '',
+    doctorId: String(d?.id ?? ''),
+    doctor,
+    appointmentDate: ad,
+    startTime: String(a.startTime || ''),
+    source: a.source || '',
+    bookingSource: a.bookingSource || a.source || '',
+    createdByStaff: a.createdByStaff || null,
+    patient,
+    priority,
+    appointment: {
+      id: aptId,
+      appointmentDate: a.appointmentDate,
+      startTime: a.startTime,
+      status: a.status,
+      source: a.source,
+    },
+  }
 }
 
 export default function RegistrationHome() {
@@ -136,9 +254,15 @@ export default function RegistrationHome() {
   /** '' | 'male' | 'female' — khớp User.gender boolean */
   const [draftGender, setDraftGender] = useState('')
   const [draftAddress, setDraftAddress] = useState('')
-  const [draftEmail, setDraftEmail] = useState('')
-  const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupErr, setLookupErr] = useState('')
+
+  const effectiveDraftPatientCode = useMemo(() => {
+    const dc = String(draftPatientCode || '').trim()
+    if (dc) return dc
+    if (!createNew) return ''
+    if (draftPatientId) return ''
+    return provisionalPatientCodeWalkIn(draftPhone, draftName)
+  }, [createNew, draftPatientCode, draftPatientId, draftPhone, draftName])
 
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerLoading, setPickerLoading] = useState(false)
@@ -188,8 +312,7 @@ export default function RegistrationHome() {
         draftDob !== lastSaved.draftDob ||
         draftPhone !== lastSaved.draftPhone ||
         draftGender !== lastSaved.draftGender ||
-        draftAddress !== lastSaved.draftAddress ||
-        draftEmail !== lastSaved.draftEmail
+        draftAddress !== lastSaved.draftAddress
       )
     }
     return (
@@ -218,7 +341,6 @@ export default function RegistrationHome() {
     draftPhone,
     draftGender,
     draftAddress,
-    draftEmail,
   ])
 
   const patientDisplay = useMemo(() => {
@@ -228,7 +350,12 @@ export default function RegistrationHome() {
         patientCode: p.patientCode || '—',
         displayName: p.displayName || [p.lastName, p.firstName].filter(Boolean).join(' ').trim() || '—',
         dobLabel: p.dob ? formatDateVi(p.dob) : '—',
-        age: p.age != null && p.age !== '' ? String(p.age) : '—',
+        age:
+          p.age != null && p.age !== ''
+            ? String(p.age)
+            : p.dob
+              ? ageFromIsoDate(isoDateFromApi(p.dob)) || '—'
+              : '—',
         phone: p.phone || '—',
         gender: p.gender || '—',
         address: p.address || '—',
@@ -240,28 +367,27 @@ export default function RegistrationHome() {
       const gLabel = draftGender === 'male' ? 'Nam' : draftGender === 'female' ? 'Nữ' : ''
       return {
         id: draftPatientId,
-        patientCode: draftPatientCode,
+        patientCode: effectiveDraftPatientCode,
         displayName: draftName,
         dobLabel: draftDob ? formatDateVi(`${draftDob}T12:00:00`) : '',
         age: ageStr,
         phone: draftPhone,
         gender: gLabel,
         address: draftAddress,
-        email: draftEmail,
+        email: '',
       }
     }
     return null
   }, [
     p,
     createNew,
-    draftPatientCode,
+    effectiveDraftPatientCode,
     draftName,
     draftPatientId,
     draftDob,
     draftPhone,
     draftGender,
     draftAddress,
-    draftEmail,
   ])
 
   const appointmentDoctorDisplay = useMemo(() => {
@@ -330,6 +456,26 @@ export default function RegistrationHome() {
     return String(patientDisplay?.id || '').trim()
   }, [patientDisplay?.id])
 
+  const refreshTodayClinicQueue = useCallback(async () => {
+    if (!token) return
+    try {
+      const day = ymd(new Date())
+      const rows = await listReceptionAppointments({ token, from: day, to: day, status: 'all' })
+      const clinicOnly = (rows || []).filter(
+        (r) => String(r.source || r.bookingSource || '').toLowerCase() === 'clinic',
+      )
+      clinicOnly.sort((x, y) => {
+        const tx = x?.createdAt ? new Date(x.createdAt).getTime() : 0
+        const ty = y?.createdAt ? new Date(y.createdAt).getTime() : 0
+        return tx - ty
+      })
+      const mapped = clinicOnly.map((a, i) => mapReceptionAppointmentToRegistrationRow(a, i + 1))
+      setRegistrations(mapped)
+    } catch (e) {
+      console.error(e)
+    }
+  }, [token])
+
   useEffect(() => {
     if (!token || !user) {
       navigate('/login', { replace: true })
@@ -337,6 +483,13 @@ export default function RegistrationHome() {
       navigate('/doctor', { replace: true })
     }
   }, [token, user, navigate])
+
+  /** Hàng đợi trái trước đây chỉ nằm trong state — F5 là mất. Tải phiếu đăng ký tại quầy (source clinic) trong ngày từ API. */
+  useEffect(() => {
+    if (!token || !user || user.userType !== 'receptionist') return
+    if (!createNew) return
+    void refreshTodayClinicQueue()
+  }, [token, user, createNew, refreshTodayClinicQueue])
 
   useEffect(() => {
     if (!token || !selectedPatientId) {
@@ -507,14 +660,14 @@ export default function RegistrationHome() {
     }
     return {
       id: draftPatientId || '',
-      patientCode: draftPatientCode || '',
+      patientCode: effectiveDraftPatientCode || '',
       displayName: draftName || '',
       dob: draftDob ? `${draftDob}T12:00:00` : null,
       age: draftDob ? Number(ageFromIsoDate(draftDob) || 0) || null : null,
       phone: draftPhone || '',
       gender: draftGender === 'male' ? 'Nam' : draftGender === 'female' ? 'Nữ' : '',
       address: draftAddress || '',
-      email: draftEmail || '',
+      email: '',
       ticket: '',
     }
   }
@@ -537,7 +690,6 @@ export default function RegistrationHome() {
             draftPhone,
             draftGender,
             draftAddress,
-            draftEmail,
           }
         : {}),
     }
@@ -563,6 +715,21 @@ export default function RegistrationHome() {
         return
       }
     } else {
+      if (!String(draftName || '').trim()) {
+        setSaveMsg('')
+        setLookupErr('Vui lòng nhập họ tên bệnh nhân.')
+        return
+      }
+      if (!draftDob) {
+        setSaveMsg('')
+        setLookupErr('Vui lòng chọn ngày sinh.')
+        return
+      }
+      if (!String(draftPhone || '').trim()) {
+        setSaveMsg('')
+        setLookupErr('Vui lòng nhập số điện thoại.')
+        return
+      }
       if (!specialtyId) {
         setSaveMsg('')
         setLookupErr('Vui lòng chọn chuyên khoa.')
@@ -586,13 +753,8 @@ export default function RegistrationHome() {
     }
 
     const patient = currentPatientSnapshot()
-    const gmail = String(patient.email || '').trim().toLowerCase()
-    if (!fromAppointment && !isGmailAddress(gmail)) {
-      setSaveMsg('')
-      setLookupErr('Vui lòng nhập Gmail của bệnh nhân (ví dụ: ten@gmail.com).')
-      return
-    }
-    const contact = gmail || String(patient.phone || '').trim()
+    const phoneTrim = String(patient.phone || '').trim()
+    const contact = phoneTrim || ''
 
     const chosenDoctor = doctorId ? doctors.find((d) => String(d?.id) === String(doctorId)) || null : null
     const doctor = chosenDoctor
@@ -621,6 +783,7 @@ export default function RegistrationHome() {
             token,
             appointmentId: payload?.appointmentId,
             status: 'confirmed',
+            note: buildAppointmentNote(),
           })
         : await createAppointmentReception({
             token,
@@ -641,73 +804,85 @@ export default function RegistrationHome() {
       setMaKcb(stamp)
       setSaveMsg(
         data?.patientCreated
-          ? `Đã tạo tài khoản bệnh nhân và lưu đăng ký lên MongoDB. Mã KCB: ${stamp}. Mật khẩu mặc định: 111111`
-          : `Đã lưu đăng ký lên MongoDB. Mã KCB: ${stamp}`,
+          ? `Đã tạo hồ sơ bệnh nhân tại quầy và lưu lịch hẹn. Mã vé: ${stamp}.`
+          : `Đã lưu đăng ký. Mã lịch hẹn: ${stamp}`,
       )
       setActiveRegId(rowId)
-      setRegistrations((prev) => {
-        const idx = prev.findIndex((r) => String(r.id) === String(rowId))
-        const nextRow = {
-          id: rowId,
-          seq: idx >= 0 ? prev[idx].seq : seq,
-          maKcb: stamp,
-          createdAt: idx >= 0 ? prev[idx].createdAt : now,
-          updatedAt: now,
-          symptom,
-          regNote,
-          specialtyId,
-          specialtyName,
-          priority,
-          doctorId,
-          doctor,
-          appointmentDate,
-          startTime,
-          source: fromAppointment ? payload?.source || payload?.bookingSource || 'unknown' : 'clinic',
-          bookingSource: fromAppointment ? payload?.bookingSource || payload?.source || 'unknown' : 'clinic',
-          createdByStaff: fromAppointment ? payload?.createdByStaff || null : staffCreatorPayload(user),
-          patient,
-          appointment: savedAppointment,
+      if (fromAppointment) {
+        setRegistrations((prev) => {
+          const idx = prev.findIndex((r) => String(r.id) === String(rowId))
+          const nextRow = {
+            id: rowId,
+            seq: idx >= 0 ? prev[idx].seq : seq,
+            maKcb: stamp,
+            createdAt: idx >= 0 ? prev[idx].createdAt : now,
+            updatedAt: now,
+            symptom,
+            regNote,
+            specialtyId,
+            specialtyName,
+            priority,
+            doctorId,
+            doctor,
+            appointmentDate,
+            startTime,
+            source: payload?.source || payload?.bookingSource || 'unknown',
+            bookingSource: payload?.bookingSource || payload?.source || 'unknown',
+            createdByStaff: payload?.createdByStaff || null,
+            patient,
+            appointment: savedAppointment,
+          }
+          if (idx >= 0) {
+            const copy = prev.slice()
+            copy[idx] = { ...copy[idx], ...nextRow }
+            return copy
+          }
+          return [...prev, nextRow]
+        })
+        // Sau khi "Đăng ký" từ lịch hẹn (xác nhận), nhảy về Lịch hẹn và mở chi tiết theo mã vé.
+        const t = String(payload?.ticket || stamp).trim()
+        if (t) {
+          navigate(
+            '/reception',
+            {
+              state: {
+                lookupTicket: t,
+                flash: { type: 'ok', message: `Đăng ký thành công. Mã lịch hẹn: ${t}` },
+              },
+              replace: true,
+            },
+          )
+          return
         }
-        if (idx >= 0) {
-          const copy = prev.slice()
-          copy[idx] = { ...copy[idx], ...nextRow }
-          return copy
+      } else {
+        // Sau khi tạo lịch tại quầy, nhảy về Lịch hẹn và mở chi tiết lịch vừa tạo.
+        const t = String(stamp || '').trim()
+        if (t) {
+          navigate(
+            '/reception',
+            {
+              state: {
+                lookupTicket: t,
+                flash: { type: 'ok', message: `Đăng ký thành công. Mã lịch hẹn: ${t}` },
+              },
+              replace: true,
+            },
+          )
+          return
         }
-        return [...prev, nextRow]
-      })
+        await refreshTodayClinicQueue()
+      }
       setLastSaved(makeSavedSnapshot())
     } catch (e) {
-      setLookupErr(e?.message || 'Không lưu được đăng ký lên MongoDB.')
+      const msg = e?.message || 'Không lưu được đăng ký.'
+      const hint =
+        /Cần bệnh nhân|Không tìm thấy bệnh nhân|chọn bệnh nhân|hồ sơ bệnh nhân mới|Email trùng/i.test(msg) &&
+        !draftPatientId
+          ? ' Hãy chọn BN từ Danh sách, hoặc nhập SĐT đã đăng ký, hoặc điền đủ họ tên + SĐT + ngày sinh để tạo hồ sơ mới.'
+          : ''
+      setLookupErr(`${msg}${hint}`)
     } finally {
       setSaving(false)
-    }
-  }
-
-  async function handleLookupPatient() {
-    const code = draftPatientCode.trim()
-    if (!code || !token) return
-    setLookupErr('')
-    setLookupLoading(true)
-    try {
-      const data = await lookupPatientByCode({ token, code })
-      const pat = data?.patient
-      if (!pat) {
-        setLookupErr('Không có dữ liệu bệnh nhân.')
-        return
-      }
-      setDraftPatientId(pat.id || '')
-      setDraftPatientCode(pat.patientCode || code)
-      setDraftName(pat.displayName || '')
-      setDraftDob(pat.dob ? isoDateFromApi(pat.dob) : '')
-      setDraftPhone(pat.phone || '')
-      setDraftGender(pat.gender === 'Nam' ? 'male' : pat.gender === 'Nữ' ? 'female' : '')
-      setDraftAddress(pat.address || '')
-      setDraftEmail(pat.email || '')
-      setSaveMsg('')
-    } catch (e) {
-      setLookupErr(e?.message || 'Tra cứu thất bại.')
-    } finally {
-      setLookupLoading(false)
     }
   }
 
@@ -717,6 +892,8 @@ export default function RegistrationHome() {
     setPickerErr('')
     setPickerSelectedId('')
     setPickerPage(1)
+    const pc = draftPatientId ? String(draftPatientCode || '').trim() : ''
+    if (pc) setPickerFilters((s) => ({ ...s, patientCode: pc }))
   }
 
   function closePicker() {
@@ -757,16 +934,16 @@ export default function RegistrationHome() {
 
   function applySelectedPatient(patient) {
     if (!patient) return
-    setDraftPatientId(String(patient.id || ''))
-    setDraftPatientCode(patient.patientCode || '')
-    setDraftName(patient.displayName || [patient.lastName, patient.firstName].filter(Boolean).join(' ').trim() || '')
+    setDraftPatientId(String(patient.id || patient._id || ''))
+    setDraftPatientCode(String(patient.patientCode || '').trim())
+    setDraftName(readDisplayNameFromPatient(patient))
     setDraftDob(patient.dob ? isoDateFromApi(patient.dob) : '')
-    setDraftPhone(patient.phone || '')
-    setDraftGender(patient.gender === 'Nam' ? 'male' : patient.gender === 'Nữ' ? 'female' : '')
-    setDraftAddress(patient.address || '')
-    setDraftEmail(patient.email || '')
+    setDraftPhone(String(patient.phone || '').trim())
+    setDraftGender(mapGenderToDraft(patient.gender))
+    setDraftAddress(String(patient.address || '').trim())
     setLookupErr('')
-    setSaveMsg('')
+    setSaveMsg('Đã chọn bệnh nhân từ danh sách.')
+    setLastSaved(null)
   }
 
   function resetDraftForNew() {
@@ -789,7 +966,6 @@ export default function RegistrationHome() {
       setDraftPhone('')
       setDraftGender('')
       setDraftAddress('')
-      setDraftEmail('')
     }
 
     setSymptom('')
@@ -821,7 +997,6 @@ export default function RegistrationHome() {
       setDraftPhone(String(r.patient?.phone || ''))
       setDraftGender(r.patient?.gender === 'Nam' ? 'male' : r.patient?.gender === 'Nữ' ? 'female' : '')
       setDraftAddress(String(r.patient?.address || ''))
-      setDraftEmail(String(r.patient?.email || ''))
     }
 
     setLastSaved({
@@ -841,7 +1016,6 @@ export default function RegistrationHome() {
             draftPhone: String(r.patient?.phone || ''),
             draftGender: r.patient?.gender === 'Nam' ? 'male' : r.patient?.gender === 'Nữ' ? 'female' : '',
             draftAddress: String(r.patient?.address || ''),
-            draftEmail: String(r.patient?.email || ''),
           }
         : {}),
     })
@@ -851,14 +1025,7 @@ export default function RegistrationHome() {
     return (
       <div className="tcl-shell">
         <header className="tcl-top">
-          <button
-            type="button"
-            className="tcl-brand"
-            onClick={() => navigate('/reception')}
-            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, font: 'inherit' }}
-          >
-            VITACARE
-          </button>
+          <div className="tcl-brand">VITACARE</div>
           <nav className="tcl-nav" aria-label="Module">
             <button type="button" onClick={() => navigate('/reception')}>
               Lịch hẹn
@@ -906,14 +1073,7 @@ export default function RegistrationHome() {
   return (
     <div className="tcl-shell">
       <header className="tcl-top">
-        <button
-          type="button"
-          className="tcl-brand"
-          onClick={() => navigate('/reception')}
-          style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, font: 'inherit' }}
-        >
-          VITACARE
-        </button>
+        <div className="tcl-brand">VITACARE</div>
         <nav className="tcl-nav" aria-label="Module">
           <button type="button" onClick={() => navigate('/reception')}>
             Lịch hẹn
@@ -975,85 +1135,7 @@ export default function RegistrationHome() {
           </div>
         </div>
 
-        <div className="tcl-split">
-          <aside className="tcl-sidebar">
-            <div className="tcl-filters">
-              <div className="tcl-filters-row">
-                <div>
-                  <label>Trạng thái</label>
-                  <select defaultValue="all">
-                    <option value="all">Tất cả</option>
-                  </select>
-                </div>
-                <div>
-                  <label>Mã LH</label>
-                  <input readOnly value={fromAppointment ? payload?.ticket || maKcb : maKcb} placeholder="—" />
-                </div>
-              </div>
-              <div className="tcl-filters-row">
-                <div>
-                  <label>Từ ngày</label>
-                  <input type="date" readOnly value={todayIso} />
-                </div>
-                <div>
-                  <label>Đến ngày</label>
-                  <input type="date" readOnly value={todayIso} />
-                </div>
-              </div>
-              <div className="tcl-filters-row">
-                <div>
-                  <label>Mã BN</label>
-                  <input readOnly value={patientDisplay?.patientCode || ''} />
-                </div>
-                <div>
-                  <label>Họ tên</label>
-                  <input readOnly value={patientDisplay?.displayName || ''} />
-                </div>
-              </div>
-            </div>
-            <div className="tcl-table-wrap">
-              <table className="tcl-table">
-                <thead>
-                  <tr>
-                    <th>TT</th>
-                    <th>Mã LH</th>
-                    <th>Mã BN</th>
-                    <th>Tên BN</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {appointmentRows.length ? (
-                    appointmentRows.map((r) => (
-                      <tr
-                        key={r.id}
-                        className={String(r.id) === String(activeRegId || payload?.appointmentId) ? 'is-selected' : undefined}
-                        onClick={() => loadRegistration(r)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <td>
-                          <span className="tcl-stt-dot tcl-stt-dot--pending" />
-                        </td>
-                        <td>{fromAppointment ? r.ticket || r.maKcb || '—' : r.maKcb || '—'}</td>
-                        <td>{r.patient?.patientCode || '—'}</td>
-                        <td>{r.patient?.displayName || '—'}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} style={{ padding: '1rem', color: '#94a3b8' }}>
-                        Chưa có phiếu đăng ký. Bấm <strong>Lưu</strong> để thêm vào danh sách.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="tcl-pager">
-              <span>{appointmentRows.length ? `1–${appointmentRows.length} của ${appointmentRows.length}` : '0 của 0'}</span>
-              <span />
-            </div>
-          </aside>
-
+        <div className="tcl-split reg-layout--full">
           <main className="tcl-detail">
             <div className="reg-tabs">
               <button type="button" className="reg-tab is-active">
@@ -1122,20 +1204,18 @@ export default function RegistrationHome() {
                       <label>Mã bệnh nhân</label>
                       <div className="reg-code-row">
                         <input
-                          value={draftPatientCode}
                           readOnly
-                          onClick={openPicker}
-                          placeholder="Nhập mã hoặc tra cứu BN có sẵn"
+                          value={effectiveDraftPatientCode}
+                          placeholder="Mã bệnh nhân"
+                          title="Không nhập tay mã: chọn BN trong Danh sách, hoặc điền họ tên và SĐT để xem mã dự kiến (BN mới tại quầy)."
                           autoComplete="off"
+                          className="reg-patient-code-readonly"
                         />
-                        <button
-                          type="button"
-                          className="tcl-btn tcl-btn--pri"
-                          onClick={openPicker}
-                          disabled={lookupLoading}
-                        >
-                          Tìm kiếm
-                        </button>
+                        <div className="reg-code-row-actions">
+                          <button type="button" className="tcl-btn" onClick={openPicker}>
+                            Danh sách
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div className="tcl-f">
@@ -1161,15 +1241,6 @@ export default function RegistrationHome() {
                         <option value="male">Nam</option>
                         <option value="female">Nữ</option>
                       </select>
-                    </div>
-                    <div className="tcl-f">
-                      <label>Gmail *</label>
-                      <input
-                        type="email"
-                        value={draftEmail}
-                        onChange={(e) => setDraftEmail(e.target.value)}
-                        placeholder="ten@gmail.com"
-                      />
                     </div>
                     <div className="tcl-f tcl-f--full">
                       <label>Địa chỉ</label>
@@ -1497,11 +1568,6 @@ export default function RegistrationHome() {
                     </div>
                   </>
                 )}
-                <div className="tcl-f tcl-f--full">
-                  <label>
-                    <input type="checkbox" checked={priority} onChange={(e) => setPriority(e.target.checked)} /> Ưu tiên
-                  </label>
-                </div>
                 <div className="tcl-f tcl-f--full">
                   <label>Triệu chứng</label>
                   <textarea rows={2} value={symptom} onChange={(e) => setSymptom(e.target.value)} placeholder="VD: Đau bụng" />

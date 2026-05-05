@@ -201,6 +201,59 @@
   margin-top: 0.35rem;
 }
 
+/* Modal quét QR mã vé */
+.tcl-qr-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.tcl-qr-modal {
+  width: 100%;
+  max-width: 420px;
+  padding: 1rem 1.1rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
+}
+
+.tcl-qr-modal-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.tcl-qr-modal-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.tcl-qr-reader-wrap {
+  min-height: 260px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.tcl-qr-reader-wrap video {
+  border-radius: 8px;
+}
+
+.tcl-qr-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
 .tcl-table-wrap {
   flex: 1;
   overflow: auto;
@@ -342,6 +395,17 @@
   color: #fff;
   font-size: 0.78rem;
   margin-right: 0.4rem;
+}
+
+.tcl-cancel-info {
+  margin-top: 0.35rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.tcl-cancel-reason-ta {
+  resize: vertical;
+  min-height: 4.25rem;
 }
 
 .tcl-grid-form {

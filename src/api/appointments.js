@@ -1,17 +1,11 @@
-const base =
-  (import.meta.env.VITE_API_URL && String(import.meta.env.VITE_API_URL).replace(/\/$/, '')) ||
-  'http://localhost:5000'
+import { getApiBase, parseJsonResponse } from './apiBase.js'
 
 async function parseJson(res) {
-  const text = await res.text()
-  try {
-    return text ? JSON.parse(text) : {}
-  } catch {
-    return { message: text || 'Lỗi không xác định.' }
-  }
+  return parseJsonResponse(res)
 }
 
 export async function listDoctorAppointments({ token }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/appointments/doctor`, {
     method: 'GET',
     headers: {
@@ -27,6 +21,7 @@ export async function listDoctorAppointments({ token }) {
 }
 
 export async function lookupPatientByCode({ token, code }) {
+  const base = getApiBase()
   const qs = new URLSearchParams({ code: String(code || '').trim() })
   const res = await fetch(`${base}/api/appointments/patient-by-code?${qs.toString()}`, {
     method: 'GET',
@@ -42,6 +37,7 @@ export async function lookupPatientByCode({ token, code }) {
 }
 
 export async function listPatientsReception({ token, page = 1, pageSize = 10, patientCode, name, phone, account }) {
+  const base = getApiBase()
   const qs = new URLSearchParams()
   if (page) qs.set('page', String(page))
   if (pageSize) qs.set('pageSize', String(pageSize))
@@ -64,6 +60,7 @@ export async function listPatientsReception({ token, page = 1, pageSize = 10, pa
 }
 
 export async function listPatientHistoryReception({ token, patientId }) {
+  const base = getApiBase()
   const qs = new URLSearchParams({ patientId: String(patientId || '').trim() })
   const res = await fetch(`${base}/api/appointments/patient-history?${qs.toString()}`, {
     method: 'GET',
@@ -79,6 +76,7 @@ export async function listPatientHistoryReception({ token, patientId }) {
 }
 
 export async function lookupAppointmentByTicket({ token, ticket }) {
+  const base = getApiBase()
   const qs = new URLSearchParams({ ticket: String(ticket || '').trim() })
   const res = await fetch(`${base}/api/appointments/lookup-ticket?${qs.toString()}`, {
     method: 'GET',
@@ -94,6 +92,7 @@ export async function lookupAppointmentByTicket({ token, ticket }) {
 }
 
 export async function getAvailability({ token, doctorId, date }) {
+  const base = getApiBase()
   const qs = new URLSearchParams({
     doctorId: String(doctorId || '').trim(),
     date: String(date || '').trim(),
@@ -112,6 +111,7 @@ export async function getAvailability({ token, doctorId, date }) {
 }
 
 export async function listReceptionAppointments({ token, from, to, status, q }) {
+  const base = getApiBase()
   const qs = new URLSearchParams()
   if (from) qs.set('from', String(from).trim())
   if (to) qs.set('to', String(to).trim())
@@ -130,19 +130,40 @@ export async function listReceptionAppointments({ token, from, to, status, q }) 
   return data?.appointments || []
 }
 
-export async function updateAppointmentStatus({ token, appointmentId, status }) {
+export async function updateAppointmentStatus({ token, appointmentId, status, cancelReason, cancelledBySystem, note }) {
+  const base = getApiBase()
   const id = String(appointmentId || '').trim()
+  const body = { status }
+  if (cancelReason != null && String(cancelReason).trim()) body.cancelReason = String(cancelReason).trim()
+  if (cancelledBySystem === true) body.cancelledBySystem = true
+  if (note !== undefined) body.note = String(note || '')
   const res = await fetch(`${base}/api/appointments/${encodeURIComponent(id)}/status`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(body),
   })
   const data = await parseJson(res)
   if (!res.ok) {
     throw new Error(data.message || 'Không cập nhật được trạng thái.')
+  }
+  return data
+}
+
+export async function finishExamAppointment({ token, appointmentId }) {
+  const base = getApiBase()
+  const id = String(appointmentId || '').trim()
+  const res = await fetch(`${base}/api/appointments/${encodeURIComponent(id)}/finish-exam`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Không kết thúc khám được.')
   }
   return data
 }
@@ -157,6 +178,7 @@ export async function createAppointmentReception({
   startTime,
   note,
 }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/appointments/reception`, {
     method: 'POST',
     headers: {

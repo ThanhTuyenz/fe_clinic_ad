@@ -1,12 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { listDoctorAppointments } from '../api/appointments.js'
-import {
-  appointmentCreatorName,
-  appointmentSourceLabel,
-  appointmentSourceTitle,
-  appointmentSourceValue,
-} from '../utils/appointmentSource.js'
+import { finishExamAppointment, listDoctorAppointments } from '../api/appointments.js'
+import { getExaminationByAppointment, saveExamination } from '../api/examinations.js'
+import { appointmentSourceLabel, appointmentSourceTitle, appointmentSourceValue } from '../utils/appointmentSource.js'
 import { getStaffSession } from '../utils/staffSession.js'
 import '../styles/auth.css'
 import '../styles/doctor-home.css'
@@ -18,12 +14,18 @@ function getSession() {
 function displayName(user) {
   const first = String(user?.firstName || '').trim()
   const last = String(user?.lastName || '').trim()
-  const full = `${first} ${last}`.trim()
+  const full = `${last} ${first}`.trim()
   return full || String(user?.displayName || user?.fullName || '').trim() || user?.email || 'Bác sĩ'
 }
 
 function pad2(n) {
   return String(n).padStart(2, '0')
+}
+
+function toDatetimeLocalValue(d) {
+  const dt = d instanceof Date ? d : new Date(d)
+  if (Number.isNaN(dt.getTime())) return ''
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}T${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`
 }
 
 function ymd(d) {
@@ -56,16 +58,37 @@ function patientLabel(a) {
   )
 }
 
-function sourceCreatorLabel(appointment) {
-  if (appointmentSourceValue(appointment) !== 'clinic') return '—'
-  return appointmentCreatorName(appointment) || 'Nhân viên phòng khám'
-}
-
 function statusLabelVi(st) {
   const s = String(st || '').toLowerCase()
   if (s === 'cancelled') return 'Đã hủy'
   if (s === 'confirmed') return 'Chờ khám'
+  if (s === 'pending') return 'Chờ xác nhận'
   return 'Chờ'
+}
+
+function formatCancelledByLine(cancelledBy) {
+  if (!cancelledBy || typeof cancelledBy !== 'object') return '—'
+  const ut = String(cancelledBy.userType || '').toLowerCase()
+  const role = String(cancelledBy.role || '').toLowerCase()
+  if (role === 'system' || ut === 'system') return 'Hệ thống'
+  const isPatient = role === 'patient' || ut === 'patient'
+  const label = isPatient ? 'Bệnh nhân' : 'Phòng khám'
+  const name = String(cancelledBy.displayName || '').trim() || String(cancelledBy.email || '').trim()
+  return name ? `${label}: ${name}` : label
+}
+
+function formatDateTimeVi(iso) {
+  if (iso == null || iso === '') return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+
+/** Nhân viên tiếp nhận xác nhận lịch (từ API `confirmedBy`). */
+function formatConfirmedByLine(confirmedBy) {
+  if (!confirmedBy || typeof confirmedBy !== 'object') return '—'
+  const name = String(confirmedBy.displayName || '').trim() || String(confirmedBy.email || '').trim()
+  return name || '—'
 }
 
 function formatDobVi(iso) {
@@ -83,7 +106,8 @@ export default function DoctorHome() {
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
 
-  const [filterStatus, setFilterStatus] = useState('all')
+  // Bác sĩ chỉ thấy lịch sau khi tiếp nhận xác nhận (confirmed/examined), không hiển thị pending/cancelled.
+  const [filterStatus, setFilterStatus] = useState('confirmed')
   const [filterTicket, setFilterTicket] = useState('')
   const [filterFrom, setFilterFrom] = useState(() => ymd(new Date()))
   const [filterTo, setFilterTo] = useState(() => ymd(new Date()))
@@ -112,6 +136,43 @@ export default function DoctorHome() {
     notes: '',
   })
 
+  const [examSaving, setExamSaving] = useState(false)
+  const [examSaveOk, setExamSaveOk] = useState('')
+  const [examSaveErr, setExamSaveErr] = useState('')
+  const flashTimerRef = useRef(null)
+  const examLoadSeqRef = useRef(0)
+
+  function clearFlashTimer() {
+    if (flashTimerRef.current) {
+      clearTimeout(flashTimerRef.current)
+      flashTimerRef.current = null
+    }
+  }
+
+  function flashOk(msg) {
+    clearFlashTimer()
+    setExamSaveErr('')
+    setExamSaveOk(msg)
+    flashTimerRef.current = setTimeout(() => {
+      setExamSaveOk('')
+      flashTimerRef.current = null
+    }, 2000)
+  }
+
+  function flashErr(msg) {
+    clearFlashTimer()
+    setExamSaveOk('')
+    setExamSaveErr(msg)
+    flashTimerRef.current = setTimeout(() => {
+      setExamSaveErr('')
+      flashTimerRef.current = null
+    }, 2000)
+  }
+
+  useEffect(() => {
+    return () => clearFlashTimer()
+  }, [])
+
   useEffect(() => {
     if (!token || !user) {
       navigate('/login', { replace: true })
@@ -132,8 +193,7 @@ export default function DoctorHome() {
       try {
         const rows = await listDoctorAppointments({ token })
         setError('')
-        const onlyConfirmed = (rows || []).filter((a) => String(a?.status || '').toLowerCase() === 'confirmed')
-        setItems(onlyConfirmed)
+        setItems(rows || [])
       } catch (err) {
         setError(err?.message || 'Không lấy được lịch khám.')
         setItems([])
@@ -170,6 +230,12 @@ export default function DoctorHome() {
       const db = dateKeyFromAppointmentDate(b?.appointmentDate)
       if (da !== db) return String(da).localeCompare(String(db))
       return String(a?.startTime || '').localeCompare(String(b?.startTime || ''))
+    })
+
+    // Không hiển thị lịch chưa được nhân viên tiếp nhận xác nhận hoặc đã hủy.
+    rows = rows.filter((a) => {
+      const st = String(a?.status || '').toLowerCase()
+      return st !== 'pending' && st !== 'cancelled'
     })
 
     if (filterFrom) {
@@ -219,16 +285,111 @@ export default function DoctorHome() {
     return items.find((a) => String(a?.id || a?._id) === String(selectedApptId)) || null
   }, [items, selectedApptId])
 
+  const examLocked = !selectedAppt || String(selectedAppt?.status || '').toLowerCase() === 'cancelled'
+
+  async function handleSaveExamination() {
+    if (!token || examLocked || examSaving) return
+    const appointmentId = String(selectedAppt?.id || selectedAppt?._id || '').trim()
+    if (!appointmentId) {
+      flashErr('Chưa chọn lịch khám.')
+      return
+    }
+    setExamSaving(true)
+    clearFlashTimer()
+    setExamSaveOk('')
+    setExamSaveErr('')
+    try {
+      await saveExamination({
+        token,
+        appointmentId,
+        payload: {
+          examAt: vitals.examAt,
+          clinicRoom: vitals.clinicRoom,
+          temp: vitals.temp,
+          breath: vitals.breath,
+          bp: vitals.bp,
+          pulse: vitals.pulse,
+          height: vitals.height,
+          weight: vitals.weight,
+          bmi: vitals.bmi,
+          spo2: vitals.spo2,
+          symptoms: vitals.symptoms,
+          notes: vitals.notes,
+        },
+      })
+      flashOk('Đã lưu phiên khám.')
+    } catch (e) {
+      flashErr(e?.message || 'Không lưu được.')
+    } finally {
+      setExamSaving(false)
+    }
+  }
+
+  async function handleFinishExam() {
+    if (!token || !selectedAppt || examLocked) return
+    const appointmentId = String(selectedAppt?.id || selectedAppt?._id || '').trim()
+    if (!appointmentId) return
+    clearFlashTimer()
+    setExamSaveOk('')
+    setExamSaveErr('')
+    try {
+      await finishExamAppointment({ token, appointmentId })
+      flashOk('Đã kết thúc khám.')
+      await loadAppointments({ silent: true })
+    } catch (e) {
+      flashErr(e?.message || 'Không kết thúc khám được.')
+    }
+  }
+
   useEffect(() => {
-    if (!selectedAppt) return
+    if (!token || !selectedAppt) return undefined
+    const appointmentId = String(selectedAppt?.id || selectedAppt?._id || '').trim()
+    if (!appointmentId) return undefined
+
     const d = dateKeyFromAppointmentDate(selectedAppt?.appointmentDate)
     const t = timeLabel(selectedAppt?.startTime)
-    setVitals((s) => ({
-      ...s,
-      examAt: d && t ? `${formatDobVi(`${d}T12:00:00`)} ${t}` : formatDobVi(new Date()) + ` ${pad2(new Date().getHours())}:${pad2(new Date().getMinutes())}`,
-      symptoms: String(selectedAppt?.note || '').trim() || s.symptoms,
-    }))
-  }, [selectedAppt])
+    const fallbackExamAt =
+      d && t
+        ? `${formatDobVi(`${d}T12:00:00`)} ${t}`
+        : formatDobVi(new Date()) + ` ${pad2(new Date().getHours())}:${pad2(new Date().getMinutes())}`
+
+    const seq = ++examLoadSeqRef.current
+
+    void (async () => {
+      try {
+        const data = await getExaminationByAppointment({ token, appointmentId })
+        if (seq !== examLoadSeqRef.current) return
+        const ex = data?.examination
+        setVitals((s) => ({
+          ...s,
+          examAt: String(ex?.examAt || '').trim() || fallbackExamAt,
+          clinicRoom: String(ex?.clinicRoom || '').trim() || s.clinicRoom,
+          temp: String(ex?.temp || '').trim() || '',
+          breath: String(ex?.breath || '').trim() || '',
+          bp: String(ex?.bp || '').trim() || '',
+          pulse: String(ex?.pulse || '').trim() || '',
+          height: String(ex?.height || '').trim() || '',
+          weight: String(ex?.weight || '').trim() || '',
+          bmi: String(ex?.bmi || '').trim() || '',
+          spo2: String(ex?.spo2 || '').trim() || '',
+          symptoms: String(ex?.symptoms || '').trim() || String(selectedAppt?.note || '').trim() || '',
+          notes: String(ex?.notes || '').trim() || '',
+        }))
+      } catch {
+        if (seq !== examLoadSeqRef.current) return
+        setVitals((s) => ({
+          ...s,
+          examAt: s.examAt || fallbackExamAt,
+          symptoms: String(selectedAppt?.note || '').trim() || s.symptoms,
+        }))
+      }
+    })()
+
+    return () => {
+      // invalidates in-flight response
+      examLoadSeqRef.current += 1
+    }
+  }, [token, selectedApptId])
 
   function logout() {
     localStorage.removeItem('token')
@@ -290,6 +451,7 @@ export default function DoctorHome() {
                   <select className="dr-input" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                     <option value="all">Tất cả</option>
                     <option value="confirmed">Chờ khám</option>
+                    <option value="examined">Đã khám</option>
                   </select>
                 </label>
                 <label className="dr-field">
@@ -371,18 +533,19 @@ export default function DoctorHome() {
                       <th>Nguồn</th>
                       <th>Mã BN</th>
                       <th>Tên BN</th>
+                      <th>Xác nhận bởi</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={6} className="dr-table-empty">
+                        <td colSpan={7} className="dr-table-empty">
                           Đang tải…
                         </td>
                       </tr>
                     ) : pagedRows.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="dr-table-empty">
+                        <td colSpan={7} className="dr-table-empty">
                           Không có bản ghi phù hợp.
                         </td>
                       </tr>
@@ -391,10 +554,13 @@ export default function DoctorHome() {
                         const id = String(a?.id || a?._id || '')
                         const st = String(a?.status || '').toLowerCase()
                         const sel = selectedApptId && id === String(selectedApptId)
+                        const isCancelled = st === 'cancelled'
+                        const dotClass =
+                          st === 'confirmed' ? 'is-wait' : st === 'cancelled' ? 'is-cancelled' : st === 'pending' ? 'is-pending' : ''
                         return (
                           <tr
                             key={id || `${i}`}
-                            className={sel ? 'is-selected' : ''}
+                            className={`${sel ? 'is-selected' : ''}${isCancelled ? ' is-cancelled-row' : ''}`}
                             onClick={() => setSelectedApptId(id)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' || e.key === ' ') {
@@ -406,7 +572,7 @@ export default function DoctorHome() {
                             role="button"
                           >
                             <td className="col-tt">
-                              <span className={`dr-dot ${st === 'confirmed' ? 'is-wait' : ''}`} title={statusLabelVi(st)} />
+                              <span className={`dr-dot ${dotClass}`} title={statusLabelVi(st)} />
                             </td>
                             <td>{(safePage - 1) * pageSize + i + 1}</td>
                             <td>{String(a?.ticket || a?.id || '—').slice(0, 14)}</td>
@@ -420,6 +586,9 @@ export default function DoctorHome() {
                             </td>
                             <td>{a?.patient?.patientCode || '—'}</td>
                             <td>{patientLabel(a)}</td>
+                            <td className="dr-cell-muted">
+                              {st === 'confirmed' ? formatConfirmedByLine(a.confirmedBy) : '—'}
+                            </td>
                           </tr>
                         )
                       })
@@ -453,7 +622,7 @@ export default function DoctorHome() {
                   {[
                     { id: 'info', label: 'Thông tin khám bệnh' },
                     { id: 'services', label: 'Kê dịch vụ' },
-                    { id: 'rx', label: 'Đơn thuốc' },
+                    { id: 'prescription', label: 'Kê đơn thuốc' },
                     { id: 'history', label: 'Lịch sử khám' },
                   ].map((t) => (
                     <button
@@ -469,18 +638,42 @@ export default function DoctorHome() {
                   ))}
                 </div>
                 <div className="dr-panel-actions">
-                  <button type="button" className="dr-btn dr-btn--muted" disabled={!selectedAppt}>
+                  <button
+                    type="button"
+                    className="dr-btn dr-btn--muted"
+                    disabled={examLocked || examSaving}
+                    onClick={() => void handleFinishExam()}
+                  >
                     Kết thúc khám
                   </button>
-                  <button type="button" className="dr-btn dr-btn--primary" disabled={!selectedAppt}>
-                    Lưu
+                  <button
+                    type="button"
+                    className="dr-btn dr-btn--primary"
+                    disabled={examLocked || examSaving}
+                    onClick={() => void handleSaveExamination()}
+                  >
+                    {examSaving ? 'Đang lưu…' : 'Lưu'}
                   </button>
                 </div>
               </div>
 
+              {examSaveOk ? (
+                <div className="dr-panel-flash dr-panel-flash--ok" role="status">
+                  {examSaveOk}
+                </div>
+              ) : null}
+              {examSaveErr ? (
+                <div className="dr-panel-flash dr-panel-flash--err" role="alert">
+                  {examSaveErr}
+                </div>
+              ) : null}
+
               <div className="dr-panel-alert" role="status">
                 Bạn đang xem thông tin khám bệnh
                 {selectedAppt ? ` — ${patientLabel(selectedAppt)}` : ''}
+                {selectedAppt && String(selectedAppt.status || '').toLowerCase() === 'cancelled'
+                  ? ' (Lịch đã hủy — chỉ xem thông tin)'
+                  : ''}
               </div>
 
               {examSubTab !== 'info' ? (
@@ -492,19 +685,7 @@ export default function DoctorHome() {
                     <div className="dr-info-grid">
                       <div className="dr-kv">
                         <span className="dr-k">Mã lịch hẹn</span>
-                        <span className="dr-v">{selectedAppt ? String(selectedAppt.id || selectedAppt._id || '—') : '—'}</span>
-                      </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Mã KCB</span>
                         <span className="dr-v">{selectedAppt?.ticket || '—'}</span>
-                      </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Nguồn đăng ký</span>
-                        <span className="dr-v">{selectedAppt ? appointmentSourceTitle(selectedAppt) : '—'}</span>
-                      </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Nhân viên tạo lịch</span>
-                        <span className="dr-v">{selectedAppt ? sourceCreatorLabel(selectedAppt) : '—'}</span>
                       </div>
                       <div className="dr-kv">
                         <span className="dr-k">Mã bệnh nhân</span>
@@ -534,26 +715,28 @@ export default function DoctorHome() {
                           })()}
                         </span>
                       </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Ngày đăng ký</span>
-                        <span className="dr-v">
-                          {selectedAppt ? formatDobVi(`${dateKeyFromAppointmentDate(selectedAppt.appointmentDate)}T12:00:00`) : '—'}
-                        </span>
-                      </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Phòng đăng ký</span>
-                        <span className="dr-v">Phòng nội tổng quát</span>
-                      </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Số đăng ký</span>
-                        <span className="dr-v">—</span>
-                      </div>
                       <div className="dr-kv dr-kv--full">
                         <span className="dr-k">Địa chỉ</span>
                         <span className="dr-v">{selectedAppt?.patient?.address || '—'}</span>
                       </div>
                     </div>
                   </div>
+
+                  {selectedAppt && String(selectedAppt.status || '').toLowerCase() === 'cancelled' ? (
+                    <div className="dr-section dr-section--cancelled">
+                      <div className="dr-section-title">Thông tin hủy lịch</div>
+                      <div className="dr-info-grid">
+                        <div className="dr-kv">
+                          <span className="dr-k">Hủy bởi</span>
+                          <span className="dr-v">{formatCancelledByLine(selectedAppt.cancelledBy)}</span>
+                        </div>
+                        <div className="dr-kv">
+                          <span className="dr-k">Thời điểm hủy</span>
+                          <span className="dr-v">{formatDateTimeVi(selectedAppt.cancelledAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="dr-section">
                     <div className="dr-section-title">Khám lâm sàng</div>
@@ -564,12 +747,12 @@ export default function DoctorHome() {
                           className="dr-input"
                           value={vitals.examAt}
                           onChange={(e) => setVitals((s) => ({ ...s, examAt: e.target.value }))}
-                          disabled={!selectedAppt}
+                          disabled={examLocked}
                         />
                       </label>
                       <label className="dr-field">
                         <span className="dr-field-label">Bác sĩ</span>
-                        <select className="dr-input" disabled={!selectedAppt}>
+                        <select className="dr-input" disabled={examLocked}>
                           <option>{displayName(user)}</option>
                         </select>
                       </label>
@@ -579,7 +762,7 @@ export default function DoctorHome() {
                           className="dr-input"
                           value={vitals.clinicRoom}
                           onChange={(e) => setVitals((s) => ({ ...s, clinicRoom: e.target.value }))}
-                          disabled={!selectedAppt}
+                          disabled={examLocked}
                         >
                           <option>Phòng nội tổng quát</option>
                           <option>Phòng ngoại</option>
@@ -604,7 +787,7 @@ export default function DoctorHome() {
                             className="dr-input"
                             value={vitals[key]}
                             onChange={(e) => setVitals((s) => ({ ...s, [key]: e.target.value }))}
-                            disabled={!selectedAppt}
+                            disabled={examLocked}
                           />
                         </label>
                       ))}
@@ -617,7 +800,7 @@ export default function DoctorHome() {
                         rows={2}
                         value={vitals.symptoms}
                         onChange={(e) => setVitals((s) => ({ ...s, symptoms: e.target.value }))}
-                        disabled={!selectedAppt}
+                        disabled={examLocked}
                       />
                     </label>
                     <label className="dr-field dr-field--block">
@@ -627,33 +810,9 @@ export default function DoctorHome() {
                         rows={2}
                         value={vitals.notes}
                         onChange={(e) => setVitals((s) => ({ ...s, notes: e.target.value }))}
-                        disabled={!selectedAppt}
+                        disabled={examLocked}
                       />
                     </label>
-                  </div>
-
-                  <div className="dr-section">
-                    <div className="dr-section-title">Chẩn đoán</div>
-                    <div className="dr-table-wrap">
-                      <table className="dr-table dr-table--dx">
-                        <thead>
-                          <tr>
-                            <th>BC</th>
-                            <th>Mã ICD</th>
-                            <th>Tên bệnh</th>
-                            <th>Diễn giải</th>
-                            <th className="col-act">#</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td colSpan={5} className="dr-table-empty">
-                              Chưa có dòng chẩn đoán. Chọn bệnh nhân và nhập sau khi tích hợp ICD.
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
                   </div>
                 </>
               )}

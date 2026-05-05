@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   listReceptionAppointments,
   lookupAppointmentByTicket,
@@ -13,7 +13,25 @@ import {
 } from '../utils/appointmentSource.js'
 import { isPendingAppointmentPastSlot } from '../utils/appointmentExpiry.js'
 import { getStaffSession } from '../utils/staffSession.js'
+import { Html5Qrcode } from 'html5-qrcode'
 import '../styles/reception-home.css'
+
+const QR_READER_ELEMENT_ID = 'tcl-ticket-qr-reader'
+
+/** Lấy mã vé từ nội dung QR (plain YMA… hoặc URL có ticket/code). */
+function ticketFromQrPayload(text) {
+  const raw = String(text || '').trim()
+  if (!raw) return ''
+  try {
+    const u = new URL(raw)
+    const q = u.searchParams.get('ticket') || u.searchParams.get('code')
+    if (q) return String(q).trim()
+  } catch {
+    /* không phải URL */
+  }
+  const m = raw.match(/YMA[a-zA-Z0-9]+/i)
+  return (m ? m[0] : raw).trim()
+}
 
 function getSession() {
   return getStaffSession()
@@ -51,6 +69,23 @@ function formatDateTimeVi(iso) {
   return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
+function formatCancelledByLine(cancelledBy) {
+  if (!cancelledBy || typeof cancelledBy !== 'object') return '—'
+  const ut = String(cancelledBy.userType || '').toLowerCase()
+  const role = String(cancelledBy.role || '').toLowerCase()
+  if (role === 'system' || ut === 'system') return 'Hệ thống'
+  const isPatient = role === 'patient' || ut === 'patient'
+  const label = isPatient ? 'Bệnh nhân' : 'Phòng khám'
+  const name = String(cancelledBy.displayName || '').trim() || String(cancelledBy.email || '').trim()
+  return name ? `${label}: ${name}` : label
+}
+
+function formatConfirmedByLine(confirmedBy) {
+  if (!confirmedBy || typeof confirmedBy !== 'object') return '—'
+  const name = String(confirmedBy.displayName || '').trim() || String(confirmedBy.email || '').trim()
+  return name || '—'
+}
+
 function formatDob(iso) {
   if (!iso) return '—'
   return formatDateVi(iso)
@@ -61,6 +96,50 @@ function buildPatientCode(userId) {
   const yy = String(new Date().getFullYear()).slice(-2)
   const pad = (raw + '00000000').slice(0, 8).toUpperCase()
   return `YM${yy}${pad}`
+}
+
+/** Hiển thị chuyên khoa — đồng bộ với be_clinic doctorEmbed / fe_clinic khi API thiếu specialtyName. */
+function doctorSpecialtyDisplay(d) {
+  if (!d || typeof d !== 'object') return '—'
+  const direct = String(d.specialtyName || d.specialty || '').trim()
+  if (direct) return direct
+  const sid = String(d.specialtyID || d.specialtyId || d.chuyenKhoaId || '').trim()
+  if (sid) return sid
+  const dept = String(d.deptName || d.department || d.departmentName || '').trim()
+  if (dept) return dept
+  const bio = String(d.bio || '').trim()
+  if (bio) {
+    const dash = bio.match(/(?:—|-)\s*([^\n]+)/)
+    if (dash) return String(dash[1]).trim().slice(0, 120)
+    const head = bio.match(/^Bác sĩ\s*([^\n—-]+)/i)
+    if (head) return String(head[1]).trim().slice(0, 120)
+    const linhvuc = bio.match(/lĩnh vực\s+([^.\n]+)/i)
+    if (linhvuc) return String(linhvuc[1]).trim().slice(0, 120)
+  }
+  return '—'
+}
+
+function patientListDisplayName(p) {
+  if (!p) return '—'
+  const dn = String(p.displayName || '').trim()
+  if (dn) return dn
+  const last = String(p.lastName || '').trim()
+  const first = String(p.firstName || '').trim()
+  const vi = `${last} ${first}`.trim()
+  if (vi) return vi
+  const en = `${first} ${last}`.trim()
+  return en || '—'
+}
+
+function ageFromDobField(dob) {
+  if (dob == null || dob === '') return ''
+  const d = dob instanceof Date ? dob : new Date(dob)
+  if (Number.isNaN(d.getTime())) return ''
+  const today = new Date()
+  let age = today.getFullYear() - d.getFullYear()
+  const m = today.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age -= 1
+  return age >= 0 ? String(age) : ''
 }
 
 function statusDotClass(st) {
@@ -96,12 +175,16 @@ async function expireStalePendingInRange({ token, from, to }) {
   })
   const stale = (pendingRows || []).filter((r) => isPendingAppointmentPastSlot(r))
   let anyOk = false
+  const systemCancelReason =
+    'Quá thời gian chờ xác nhận — khung giờ khám đã kết thúc, hệ thống tự hủy lịch.'
   for (const row of stale) {
     try {
       await updateAppointmentStatus({
         token,
         appointmentId: row.id,
         status: 'cancelled',
+        cancelledBySystem: true,
+        cancelReason: systemCancelReason,
       })
       anyOk = true
     } catch {
@@ -113,6 +196,7 @@ async function expireStalePendingInRange({ token, from, to }) {
 
 export default function ReceptionHome() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { token, user } = getSession()
 
   const [fromDate, setFromDate] = useState(() => ymd(new Date()))
@@ -141,6 +225,15 @@ export default function ReceptionHome() {
   const [ticket, setTicket] = useState('')
   const [ticketErr, setTicketErr] = useState('')
   const [lookupLoading, setLookupLoading] = useState(false)
+
+  const [qrOpen, setQrOpen] = useState(false)
+  const [qrErr, setQrErr] = useState('')
+  const runLookupRef = useRef(async () => {})
+  const qrScanDoneRef = useRef(false)
+  const didAutoLookupRef = useRef(false)
+
+  const [flashOk, setFlashOk] = useState('')
+  const [flashErr, setFlashErr] = useState('')
 
   useEffect(() => {
     if (!token || !user) {
@@ -201,7 +294,7 @@ export default function ReceptionHome() {
     return (list || []).filter((r) => {
       if (ft && !String(r.ticket || '').toLowerCase().includes(ft)) return false
       if (fp && !String(r.patient?.patientCode || '').toLowerCase().includes(fp)) return false
-      if (fn && !String(r.patient?.displayName || '').toLowerCase().includes(fn)) return false
+      if (fn && !patientListDisplayName(r.patient).toLowerCase().includes(fn)) return false
       return true
     })
   }, [list, filterTicket, filterPatientCode, filterName])
@@ -215,9 +308,21 @@ export default function ReceptionHome() {
 
   const activeDetail = useMemo(() => {
     if (selectedId) {
-      const cached = detailById[String(selectedId)]
+      const idStr = String(selectedId)
+      const cached = detailById[idStr]
+      const row = list.find((a) => String(a.id) === idStr)
+      if (cached && row) {
+        return {
+          ...cached,
+          status: row.status,
+          cancelReason: row.cancelReason,
+          cancelledAt: row.cancelledAt,
+          cancelledBy: row.cancelledBy,
+          confirmedAt: row.confirmedAt,
+          confirmedBy: row.confirmedBy,
+        }
+      }
       if (cached) return cached
-      const row = list.find((a) => String(a.id) === String(selectedId))
       if (row) return row
     }
     if (lookupDetail) return lookupDetail
@@ -248,6 +353,11 @@ export default function ReceptionHome() {
       bookingSource: data.appointment.bookingSource || data.appointment.source || data.source,
       createdByStaff: data.appointment.createdByStaff || data.appointment.createdByReceptionist || data.createdByStaff,
       note: data.appointment.note || '',
+      cancelReason: data.appointment.cancelReason || '',
+      cancelledAt: data.appointment.cancelledAt ?? null,
+      cancelledBy: data.appointment.cancelledBy ?? null,
+      confirmedAt: data.appointment.confirmedAt ?? null,
+      confirmedBy: data.appointment.confirmedBy ?? null,
       createdAt: data.appointment.createdAt,
       patient: data.patient
         ? {
@@ -255,7 +365,7 @@ export default function ReceptionHome() {
             patientCode: data.patient.patientCode || buildPatientCode(data.patient.id),
           }
         : null,
-      doctor: data.doctor,
+      doctor: data.doctor || data.appointment?.doctor || null,
     }
   }
 
@@ -294,6 +404,106 @@ export default function ReceptionHome() {
     [token, ticket, list],
   )
 
+  runLookupRef.current = runLookup
+
+  // Auto tra cứu khi chuyển từ trang Đăng ký về (state.lookupTicket)
+  useEffect(() => {
+    const t = String(location.state?.lookupTicket || '').trim()
+    if (!token || !t) return
+    if (didAutoLookupRef.current) return
+    didAutoLookupRef.current = true
+    setTicket(t)
+    void runLookup(t)
+  }, [token, location.state, runLookup])
+
+  // Flash message khi điều hướng từ trang khác sang (vd. đăng ký thành công).
+  useEffect(() => {
+    const msg = location.state?.flash
+    const type = String(msg?.type || '').toLowerCase()
+    const text = String(msg?.message || '').trim()
+    if (!text) return
+    if (type === 'error' || type === 'err') {
+      setFlashErr(text)
+      setFlashOk('')
+    } else {
+      setFlashOk(text)
+      setFlashErr('')
+    }
+    const t = setTimeout(() => {
+      setFlashOk('')
+      setFlashErr('')
+    }, 4500)
+    return () => clearTimeout(t)
+  }, [location.state])
+
+  useEffect(() => {
+    if (!qrOpen) return undefined
+    setQrErr('')
+    qrScanDoneRef.current = false
+    const html5 = new Html5Qrcode(QR_READER_ELEMENT_ID, { verbose: false })
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } }
+
+    const onScan = async (decodedText) => {
+      if (qrScanDoneRef.current) return
+      const code = ticketFromQrPayload(decodedText)
+      if (!code) return
+      qrScanDoneRef.current = true
+      try {
+        await html5.stop()
+      } catch {
+        /* ignore */
+      }
+      try {
+        html5.clear()
+      } catch {
+        /* ignore */
+      }
+      setQrOpen(false)
+      setTicket(code)
+      try {
+        await runLookupRef.current(code)
+      } catch {
+        /* lỗi đã xử lý trong runLookup */
+      }
+    }
+
+    const onFail = () => {}
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        await html5.start({ facingMode: 'environment' }, config, onScan, onFail)
+      } catch {
+        if (cancelled) return
+        try {
+          await html5.start({ facingMode: 'user' }, config, onScan, onFail)
+        } catch (e2) {
+          if (!cancelled) setQrErr(e2?.message || 'Không mở được camera. Kiểm tra quyền truy cập.')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      /** `stop()` throws đồng bộ nếu scanner đã dừng (vd. sau khi quét xong) — phải bắt để không crash React. */
+      let stopPromise
+      try {
+        stopPromise = html5.stop()
+      } catch {
+        stopPromise = Promise.resolve()
+      }
+      void stopPromise
+        .catch(() => {})
+        .finally(() => {
+          try {
+            html5.clear()
+          } catch {
+            /* ignore */
+          }
+        })
+    }
+  }, [qrOpen])
+
   async function handleSaveStatus() {
     if (!activeDetail?.id) return
     setSaveErr('')
@@ -309,17 +519,35 @@ export default function ReceptionHome() {
     }
     setSaving(true)
     try {
-      await updateAppointmentStatus({
+      const saveRes = await updateAppointmentStatus({
         token,
         appointmentId: activeDetail.id,
         status: next,
       })
       setSaveMsg('Đã lưu trạng thái lịch hẹn.')
+      const ap = saveRes?.appointment
       setDetailById((prev) => {
         const key = String(activeDetail.id)
-        const cur = prev[key]
-        if (!cur) return prev
-        return { ...prev, [key]: { ...cur, status: next } }
+        const cur = prev[key] || activeDetail
+        let patch = {}
+        if (next === 'cancelled' && ap) {
+          patch = {
+            cancelReason: ap.cancelReason ?? cur.cancelReason,
+            cancelledAt: ap.cancelledAt ?? cur.cancelledAt,
+            cancelledBy: ap.cancelledBy ?? cur.cancelledBy,
+            confirmedAt: null,
+            confirmedBy: null,
+          }
+        } else if (next === 'confirmed' && ap) {
+          patch = {
+            cancelReason: '',
+            cancelledAt: null,
+            cancelledBy: null,
+            confirmedAt: ap.confirmedAt ?? cur.confirmedAt,
+            confirmedBy: ap.confirmedBy ?? cur.confirmedBy,
+          }
+        }
+        return { ...prev, [key]: { ...cur, status: next, ...patch } }
       })
       await loadList()
       setLookupDetail(null)
@@ -447,6 +675,8 @@ export default function ReceptionHome() {
       </header>
 
       <div className="tcl-page">
+        {flashOk ? <div className="tcl-banner-ok">{flashOk}</div> : null}
+        {flashErr ? <div className="tcl-banner-err">{flashErr}</div> : null}
         <div className="tcl-bar">
           <h1>Lịch hẹn</h1>
           <div className="tcl-bar-actions">
@@ -532,6 +762,18 @@ export default function ReceptionHome() {
                   placeholder="YMA…"
                   autoComplete="off"
                 />
+                <button
+                  type="button"
+                  className="tcl-btn"
+                  title="Mở camera để quét mã QR lịch hẹn"
+                  onClick={() => {
+                    setTicketErr('')
+                    setQrErr('')
+                    setQrOpen(true)
+                  }}
+                >
+                  Quét QR
+                </button>
                 <button type="button" className="tcl-btn tcl-btn--pri" onClick={() => void runLookup()} disabled={lookupLoading}>
                   {lookupLoading ? '…' : 'Tìm'}
                 </button>
@@ -583,7 +825,7 @@ export default function ReceptionHome() {
                           </span>
                         </td>
                         <td>{row.patient?.patientCode || '—'}</td>
-                        <td>{row.patient?.displayName || '—'}</td>
+                        <td>{patientListDisplayName(row.patient)}</td>
                       </tr>
                     ))
                   )}
@@ -639,7 +881,7 @@ export default function ReceptionHome() {
                     </div>
                     <div className="tcl-f">
                       <label>Họ tên</label>
-                      <input readOnly value={activeDetail.patient?.displayName || '—'} />
+                      <input readOnly value={patientListDisplayName(activeDetail.patient)} />
                     </div>
                     <div className="tcl-f">
                       <label>Ngày sinh</label>
@@ -647,7 +889,14 @@ export default function ReceptionHome() {
                     </div>
                     <div className="tcl-f">
                       <label>Độ tuổi</label>
-                      <input readOnly value={activeDetail.patient?.age != null ? String(activeDetail.patient.age) : '—'} />
+                      <input
+                        readOnly
+                        value={
+                          activeDetail.patient?.age != null && activeDetail.patient.age !== ''
+                            ? String(activeDetail.patient.age)
+                            : ageFromDobField(activeDetail.patient?.dob) || '—'
+                        }
+                      />
                     </div>
                     <div className="tcl-f">
                       <label>Điện thoại</label>
@@ -655,7 +904,16 @@ export default function ReceptionHome() {
                     </div>
                     <div className="tcl-f">
                       <label>Giới tính</label>
-                      <input readOnly value={activeDetail.patient?.gender || '—'} />
+                      <input
+                        readOnly
+                        value={(() => {
+                          const g = activeDetail.patient?.gender
+                          if (g === true || g === 'true') return 'Nam'
+                          if (g === false || g === 'false') return 'Nữ'
+                          const s = String(g ?? '').trim()
+                          return s || '—'
+                        })()}
+                      />
                     </div>
                     <div className="tcl-f tcl-f--full">
                       <label>Địa chỉ</label>
@@ -696,11 +954,24 @@ export default function ReceptionHome() {
                     </div>
                     <div className="tcl-f">
                       <label>Bác sĩ</label>
-                      <input readOnly value={activeDetail.doctor?.displayName || '—'} />
+                      <input
+                        readOnly
+                        value={
+                          (() => {
+                            const d = activeDetail.doctor
+                            if (!d) return '—'
+                            const name = String(d.displayName || '').trim()
+                            if (name) return name
+                            const last = String(d.lastName || '').trim()
+                            const first = String(d.firstName || '').trim()
+                            return `${last} ${first}`.trim() || String(d.email || '').trim() || '—'
+                          })()
+                        }
+                      />
                     </div>
                     <div className="tcl-f">
                       <label>Chuyên khoa</label>
-                      <input readOnly value={activeDetail.doctor?.specialtyName || '—'} />
+                      <input readOnly value={doctorSpecialtyDisplay(activeDetail.doctor)} />
                     </div>
                     <div className="tcl-f tcl-f--full">
                       <label>Triệu chứng / Ghi chú</label>
@@ -769,20 +1040,65 @@ export default function ReceptionHome() {
                       </span>
                     </div>
                   </div>
-                  <div className="tcl-grid-form">
-                    <div className="tcl-f">
-                      <label>Nhân viên xác nhận</label>
-                      <input readOnly value={displayName(user)} />
+                  {currentStatus === 'cancelled' ? (
+                    <div className="tcl-grid-form tcl-cancel-info">
+                      <div className="tcl-f">
+                        <label>Hủy bởi</label>
+                        <input readOnly value={formatCancelledByLine(activeDetail.cancelledBy)} />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Thời điểm hủy</label>
+                        <input
+                          readOnly
+                          value={
+                            activeDetail.cancelledAt != null && activeDetail.cancelledAt !== ''
+                              ? formatDateTimeVi(activeDetail.cancelledAt)
+                              : '—'
+                          }
+                        />
+                      </div>
+                      <div className="tcl-f tcl-f--full">
+                        <label>Lý do hủy</label>
+                        <textarea
+                          readOnly
+                          rows={3}
+                          value={String(activeDetail.cancelReason || '').trim() || '—'}
+                          className="tcl-cancel-reason-ta"
+                        />
+                      </div>
                     </div>
-                    <div className="tcl-f">
-                      <label>Ngày xác nhận</label>
-                      <input readOnly placeholder="—" />
+                  ) : (
+                    <div className="tcl-grid-form">
+                      <div className="tcl-f">
+                        <label>Nhân viên xác nhận</label>
+                        <input
+                          readOnly
+                          value={
+                            String(activeDetail?.status || '').toLowerCase() === 'confirmed'
+                              ? formatConfirmedByLine(activeDetail.confirmedBy)
+                              : '—'
+                          }
+                        />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Ngày xác nhận</label>
+                        <input
+                          readOnly
+                          value={
+                            String(activeDetail?.status || '').toLowerCase() === 'confirmed' &&
+                            activeDetail.confirmedAt != null &&
+                            activeDetail.confirmedAt !== ''
+                              ? formatDateTimeVi(activeDetail.confirmedAt)
+                              : '—'
+                          }
+                        />
+                      </div>
+                      <div className="tcl-f tcl-f--full">
+                        <label>Nội dung xác nhận</label>
+                        <input readOnly value={saveMsg || '—'} />
+                      </div>
                     </div>
-                    <div className="tcl-f tcl-f--full">
-                      <label>Nội dung xác nhận</label>
-                      <input readOnly value={saveMsg || '—'} />
-                    </div>
-                  </div>
+                  )}
                   <div style={{ marginTop: '0.75rem', textAlign: 'right' }}>
                     <button
                       type="button"
@@ -803,6 +1119,40 @@ export default function ReceptionHome() {
           </main>
         </div>
       </div>
+
+      {qrOpen ? (
+        <div
+          className="tcl-qr-modal-backdrop"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setQrOpen(false)
+          }}
+        >
+          <div
+            className="tcl-qr-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tcl-qr-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="tcl-qr-title" className="tcl-qr-modal-title">
+              Quét mã QR lịch hẹn
+            </h2>
+            <p className="tcl-qr-modal-hint">Đưa mã QR vé vào khung hình; hệ thống sẽ tra cứu khi quét xong.</p>
+            <div id={QR_READER_ELEMENT_ID} className="tcl-qr-reader-wrap" />
+            {qrErr ? (
+              <div className="tcl-banner-err" style={{ marginTop: 8 }}>
+                {qrErr}
+              </div>
+            ) : null}
+            <div className="tcl-qr-modal-actions">
+              <button type="button" className="tcl-btn" onClick={() => setQrOpen(false)}>
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

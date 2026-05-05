@@ -1,17 +1,11 @@
-const base =
-  (import.meta.env.VITE_API_URL && String(import.meta.env.VITE_API_URL).replace(/\/$/, '')) ||
-  'http://localhost:5000'
+import { getApiBase, parseJsonResponse } from './apiBase.js'
 
 async function parseJson(res) {
-  const text = await res.text()
-  try {
-    return text ? JSON.parse(text) : {}
-  } catch {
-    return { message: text || 'Lỗi không xác định.' }
-  }
+  return parseJsonResponse(res)
 }
 
 export async function login({ email, password }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/auth/staff-login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -1,5 +1,11 @@
 
 /* Màn Đăng ký — bổ sung trên nền reception-home.css */
+
+/* Sidebar đã bỏ: .tcl-split mặc định vẫn 2 cột (280–380px | 1fr) — main đang rơi vào cột hẹp. */
+.tcl-split.reg-layout--full {
+  grid-template-columns: 1fr;
+}
+
 .reg-code-row {
   display: flex;
   gap: 0.5rem;
@@ -9,6 +15,19 @@
 .reg-code-row input {
   flex: 1;
   min-width: 0;
+}
+
+.reg-code-row input.reg-patient-code-readonly {
+  cursor: default;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.reg-code-row-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .reg-inner-banner {
