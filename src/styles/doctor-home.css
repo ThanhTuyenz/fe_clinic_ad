@@ -843,6 +843,11 @@
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.28);
 }
 
+.dr-dot.is-examined {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.28);
+}
+
 .dr-table tbody tr.is-cancelled-row {
   background: rgba(254, 242, 242, 0.85);
 }

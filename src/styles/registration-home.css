@@ -1,14 +1,13 @@
 
 /* Màn Đăng ký — bổ sung trên nền reception-home.css */
 
-/* Sidebar đã bỏ: .tcl-split mặc định vẫn 2 cột (280–380px | 1fr) — main đang rơi vào cột hẹp. */
 .tcl-split.reg-layout--full {
   grid-template-columns: 1fr;
 }
 
 .reg-code-row {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.55rem;
   align-items: center;
 }
 
@@ -20,54 +19,57 @@
 .reg-code-row input.reg-patient-code-readonly {
   cursor: default;
   background: #f8fafc;
-  color: #0f172a;
+  color: var(--text-heading);
+  font-weight: 650;
 }
 
 .reg-code-row-actions {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.4rem;
   flex-shrink: 0;
   flex-wrap: wrap;
 }
 
 .reg-inner-banner {
-  margin: 0.65rem 0.75rem 0;
-  padding: 0.45rem 0.65rem;
-  border-radius: 4px;
-  background: #e0f2fe;
-  border: 1px solid #7dd3fc;
-  color: #0369a1;
-  font-size: 0.82rem;
+  margin: 0.75rem 0.95rem 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  background: rgba(13, 148, 136, 0.1);
+  border: 1px solid rgba(13, 148, 136, 0.22);
+  color: var(--clinic-primary-dark);
+  font-size: 0.86rem;
   font-weight: 650;
+  line-height: 1.5;
 }
 
 .reg-tabs {
   display: flex;
-  gap: 0.25rem;
-  padding: 0 0.75rem;
-  margin-top: 0.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  gap: 0.35rem;
+  padding: 0 0.95rem;
+  margin-top: 0.65rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .reg-tab {
   border: none;
   background: none;
-  padding: 0.45rem 0.65rem;
-  font-size: 0.88rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  color: #64748b;
+  color: var(--muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
 
-.reg-tab:hover {
-  color: #0369a1;
+.reg-tab:hover:not(:disabled) {
+  color: var(--clinic-primary-dark);
 }
 
 .reg-tab.is-active {
-  color: #0369a1;
-  border-bottom-color: #0284c7;
+  color: var(--clinic-primary-dark);
+  border-bottom-color: var(--clinic-primary);
 }
 
 .reg-tab:disabled {
@@ -76,9 +78,9 @@
 }
 
 .reg-history-wrap {
-  margin-top: 0.5rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  margin-top: 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   overflow: hidden;
   background: #fff;
 }
@@ -86,27 +88,49 @@
 .reg-history-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
 }
 
 .reg-history-table th,
 .reg-history-table td {
-  border-bottom: 1px solid #e2e8f0;
-  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 0.65rem;
   text-align: left;
 }
 
 .reg-history-table th {
-  background: #f1f5f9;
-  font-weight: 700;
+  background: #f8fafc;
+  font-weight: 800;
   color: #475569;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.reg-history-table tbody tr:nth-child(even) td {
+  background: #fcfdfe;
+}
+
+.reg-history-table tbody tr:hover td {
+  background: #f0fdfa;
+}
+
+.reg-history-reexam-btn {
+  white-space: nowrap;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.74rem;
 }
 
 .reg-history-empty {
   padding: 2rem 1rem;
   text-align: center;
   color: #94a3b8;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.reg-history-empty.is-error {
+  color: #b91c1c;
 }
 
 .reg-modal-backdrop {
@@ -123,24 +147,25 @@
 .reg-modal {
   width: min(1200px, 100%);
   background: #fff;
-  border-radius: 10px;
+  border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.35);
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.28);
 }
 
 .reg-modal-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.65rem 0.85rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  padding: 0.75rem 0.95rem;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #fafafa 0%, #fff 100%);
 }
 
 .reg-modal-title {
   font-weight: 800;
-  color: #0f172a;
+  color: var(--text-heading);
+  font-size: 1rem;
 }
 
 .reg-modal-x {
@@ -148,39 +173,41 @@
   background: transparent;
   font-size: 1.4rem;
   line-height: 1;
-  padding: 0.25rem 0.4rem;
+  padding: 0.25rem 0.45rem;
   cursor: pointer;
   color: #475569;
+  border-radius: 8px;
 }
 
 .reg-modal-x:hover {
-  color: #0f172a;
+  color: var(--text-heading);
+  background: #f1f5f9;
 }
 
 .reg-modal-filters {
-  padding: 0.75rem 0.85rem 0.65rem;
+  padding: 0.85rem 0.95rem 0.75rem;
 }
 
 .reg-modal-tabs {
   display: flex;
-  gap: 0.25rem;
-  margin-bottom: 0.6rem;
+  gap: 0.35rem;
+  margin-bottom: 0.7rem;
 }
 
 .reg-modal-tab {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   background: #fff;
-  padding: 0.35rem 0.55rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.86rem;
   font-weight: 750;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .reg-modal-tab.is-active {
-  color: #0369a1;
-  border-color: #7dd3fc;
-  background: #e0f2fe;
+  color: var(--clinic-primary-dark);
+  border-color: rgba(13, 148, 136, 0.35);
+  background: var(--clinic-primary-soft);
 }
 
 .reg-modal-tab:disabled {
@@ -190,30 +217,59 @@
 .reg-modal-filter-row {
   display: grid;
   grid-template-columns: 1fr 1.25fr 1fr 1fr auto;
-  gap: 0.5rem;
+  gap: 0.55rem;
   align-items: center;
 }
 
+@media (max-width: 900px) {
+  .reg-modal-filter-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.reg-modal-code-field {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.reg-modal-code-field input {
+  flex: 1;
+  min-width: 0;
+}
+
+.reg-modal-code-field .tcl-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .reg-modal-filter-row input {
-  height: 36px;
+  height: 38px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  padding: 0 0.55rem;
+  padding: 0 0.6rem;
   font-size: 0.9rem;
 }
 
+.reg-modal-filter-row input:focus {
+  outline: none;
+  border-color: rgba(13, 148, 136, 0.55);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+}
+
 .reg-modal-err {
-  margin: 0 0.85rem 0.65rem;
-  padding: 0.45rem 0.65rem;
-  border-radius: 6px;
+  margin: 0 0.95rem 0.7rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
   background: #fef2f2;
   color: #b91c1c;
-  font-size: 0.84rem;
+  font-size: 0.86rem;
   border: 1px solid #fecaca;
 }
 
 .reg-modal-table {
-  padding: 0 0.85rem 0.75rem;
+  padding: 0 0.95rem 0.8rem;
   max-height: min(58vh, 520px);
   overflow: auto;
 }
@@ -222,31 +278,31 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.65rem 0.85rem;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  gap: 0.85rem;
+  padding: 0.75rem 0.95rem;
+  border-top: 1px solid var(--border);
+  background: #fafafa;
   flex-wrap: wrap;
 }
 
 .reg-modal-pager {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
   color: #475569;
-  font-size: 0.85rem;
+  font-size: 0.86rem;
 }
 
 .reg-modal-pager select {
-  height: 34px;
+  height: 36px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  padding: 0 0.4rem;
+  padding: 0 0.45rem;
   background: #fff;
 }
 
 .reg-modal-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
 }

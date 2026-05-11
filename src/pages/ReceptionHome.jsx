@@ -700,10 +700,15 @@ export default function ReceptionHome() {
         <div className="tcl-split">
           <aside className="tcl-sidebar">
             <div className="tcl-filters">
-              <div className="tcl-filters-row">
-                <div>
-                  <label>Trạng thái</label>
+              <div className="tcl-filters-head">
+                <h2 className="tcl-filters-title">Bộ lọc danh sách</h2>
+                <p className="tcl-filters-desc">Lọc theo trạng thái, mã vé, bệnh nhân và khoảng ngày.</p>
+              </div>
+              <div className="tcl-filters-body">
+                <div className="tcl-filter-field">
+                  <label htmlFor="reception-status-filter">Trạng thái</label>
                   <select
+                    id="reception-status-filter"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                   >
@@ -713,50 +718,51 @@ export default function ReceptionHome() {
                     <option value="cancelled">Đã hủy</option>
                   </select>
                 </div>
-                <div>
-                  <label>Mã lịch hẹn</label>
+                <div className="tcl-filter-field">
+                  <label htmlFor="reception-ticket-filter">Mã lịch hẹn</label>
                   <input
+                    id="reception-ticket-filter"
                     value={filterTicket}
                     onChange={(e) => setFilterTicket(e.target.value)}
                     placeholder="YMA…"
+                    autoComplete="off"
                   />
                 </div>
-              </div>
-              <div className="tcl-filters-row">
-                <div>
-                  <label>Mã bệnh nhân</label>
+                <div className="tcl-filter-field">
+                  <label htmlFor="reception-patient-code-filter">Mã bệnh nhân</label>
                   <input
+                    id="reception-patient-code-filter"
                     value={filterPatientCode}
                     onChange={(e) => setFilterPatientCode(e.target.value)}
                     placeholder="YM…"
+                    autoComplete="off"
                   />
                 </div>
-                <div>
-                  <label>Họ tên</label>
+                <div className="tcl-filter-field">
+                  <label htmlFor="reception-name-filter">Họ tên</label>
                   <input
+                    id="reception-name-filter"
                     value={filterName}
                     onChange={(e) => setFilterName(e.target.value)}
                     placeholder="Tên BN"
+                    autoComplete="off"
                   />
                 </div>
-              </div>
-              <div className="tcl-filters-row">
-                <div>
-                  <label>Từ ngày</label>
-                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+                <div className="tcl-filter-field">
+                  <label htmlFor="reception-from-date">Từ ngày</label>
+                  <input id="reception-from-date" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
                 </div>
-                <div>
-                  <label>Đến ngày</label>
-                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                <div className="tcl-filter-field">
+                  <label htmlFor="reception-to-date">Đến ngày</label>
+                  <input id="reception-to-date" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
                 </div>
               </div>
             </div>
 
             <div className="tcl-lookup-block">
-              <strong style={{ fontSize: '0.82rem', color: '#334155' }}>Tra cứu mã vé</strong>
+              <strong className="tcl-lookup-label">Tra cứu mã vé</strong>
               <div className="tcl-lookup-row">
                 <input
-                  style={{ flex: 1, minWidth: 120 }}
                   value={ticket}
                   onChange={(e) => setTicket(e.target.value)}
                   placeholder="YMA…"
@@ -778,83 +784,95 @@ export default function ReceptionHome() {
                   {lookupLoading ? '…' : 'Tìm'}
                 </button>
               </div>
-              {ticketErr ? <div className="tcl-banner-err" style={{ marginTop: 6 }}>{ticketErr}</div> : null}
+              {ticketErr ? <div className="tcl-banner-err">{ticketErr}</div> : null}
             </div>
 
-            <div className="tcl-table-wrap">
-              <table className="tcl-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 36 }}>TT</th>
-                    <th>Mã LH</th>
-                    <th>Nguồn</th>
-                    <th>Mã BN</th>
-                    <th>Tên BN</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {listLoading ? (
+            <div className="tcl-list-panel">
+              <div className="tcl-list-head">
+                <div>
+                  <h3 className="tcl-list-title">Danh sách lịch hẹn</h3>
+                  <p className="tcl-list-meta">
+                    {listLoading ? 'Đang tải…' : `${filteredRows.length} lịch phù hợp bộ lọc`}
+                  </p>
+                </div>
+                <span className="tcl-list-page">Trang {page + 1}/{pageCount}</span>
+              </div>
+              <div className="tcl-table-wrap">
+                <table className="tcl-table tcl-list-table">
+                  <thead>
                     <tr>
-                      <td colSpan={5} style={{ padding: '1rem', color: '#64748b' }}>
-                        Đang tải…
-                      </td>
+                      <th className="tcl-col-status" scope="col">TT</th>
+                      <th className="tcl-col-ticket" scope="col">Mã LH</th>
+                      <th className="tcl-col-source" scope="col">Nguồn</th>
+                      <th className="tcl-col-code" scope="col">Mã BN</th>
+                      <th className="tcl-col-name" scope="col">Tên BN</th>
                     </tr>
-                  ) : pageRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} style={{ padding: '1rem', color: '#64748b' }}>
-                        {listErr || 'Không có lịch trong khoảng thời gian này.'}
-                      </td>
-                    </tr>
-                  ) : (
-                    pageRows.map((row) => (
-                      <tr
-                        key={String(row.id)}
-                        className={String(selectedId) === String(row.id) ? 'is-selected' : ''}
-                        onClick={() => selectRow(row)}
-                      >
-                        <td>
-                          <span className={`tcl-stt-dot ${statusDotClass(row.status)}`} title={statusLabelVi(row.status)} />
+                  </thead>
+                  <tbody>
+                    {listLoading ? (
+                      <tr className="tcl-table-empty-row">
+                        <td colSpan={5} className="tcl-table-empty">
+                          Đang tải danh sách…
                         </td>
-                        <td>{row.ticket}</td>
-                        <td>
-                          <span
-                            className={`tcl-source-badge tcl-source-badge--${appointmentSourceValue(row)}`}
-                            title={appointmentSourceTitle(row)}
-                          >
-                            {appointmentSourceLabel(row)}
-                          </span>
-                        </td>
-                        <td>{row.patient?.patientCode || '—'}</td>
-                        <td>{patientListDisplayName(row.patient)}</td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="tcl-pager">
-              <span>
-                {filteredRows.length} lịch — trang {page + 1}/{pageCount}
-              </span>
-              <span>
-                <button
-                  type="button"
-                  className="tcl-btn"
-                  disabled={page <= 0}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                >
-                  ‹
-                </button>{' '}
-                <button
-                  type="button"
-                  className="tcl-btn"
-                  disabled={page >= pageCount - 1}
-                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-                >
-                  ›
-                </button>
-              </span>
+                    ) : pageRows.length === 0 ? (
+                      <tr className="tcl-table-empty-row">
+                        <td colSpan={5} className="tcl-table-empty">
+                          {listErr || 'Không có lịch trong khoảng thời gian này.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      pageRows.map((row) => (
+                        <tr
+                          key={String(row.id)}
+                          className={String(selectedId) === String(row.id) ? 'is-selected' : ''}
+                          onClick={() => selectRow(row)}
+                        >
+                          <td className="tcl-cell-status">
+                            <span className={`tcl-stt-dot ${statusDotClass(row.status)}`} title={statusLabelVi(row.status)} />
+                          </td>
+                          <td className="tcl-cell-ticket">{row.ticket}</td>
+                          <td className="tcl-cell-source">
+                            <span
+                              className={`tcl-source-badge tcl-source-badge--${appointmentSourceValue(row)}`}
+                              title={appointmentSourceTitle(row)}
+                            >
+                              {appointmentSourceLabel(row)}
+                            </span>
+                          </td>
+                          <td className="tcl-cell-code">{row.patient?.patientCode || '—'}</td>
+                          <td className="tcl-cell-name">{patientListDisplayName(row.patient)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="tcl-pager">
+                <span className="tcl-pager-summary">
+                  {filteredRows.length} lịch — trang {page + 1}/{pageCount}
+                </span>
+                <div className="tcl-pager-actions">
+                  <button
+                    type="button"
+                    className="tcl-btn"
+                    disabled={page <= 0}
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    aria-label="Trang trước"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    className="tcl-btn"
+                    disabled={page >= pageCount - 1}
+                    onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                    aria-label="Trang sau"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
             </div>
           </aside>
 
@@ -1112,7 +1130,7 @@ export default function ReceptionHome() {
                 </section>
               </>
             ) : (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>
+              <div className="tcl-empty">
                 Chọn một dòng trong danh sách hoặc nhập mã vé để tra cứu chi tiết.
               </div>
             )}

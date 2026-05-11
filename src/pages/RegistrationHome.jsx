@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   createAppointmentReception,
@@ -10,8 +10,28 @@ import {
 } from '../api/appointments'
 import { listDoctors } from '../api/doctors.js'
 import { getStaffSession } from '../utils/staffSession.js'
+import { Html5Qrcode } from 'html5-qrcode'
 import '../styles/reception-home.css'
 import '../styles/registration-home.css'
+
+const QR_READER_ELEMENT_ID = 'reg-patient-qr-reader'
+
+/** Lấy mã BN từ QR (YM…; không nhầm với mã vé YMA…). */
+function patientFromQrPayload(text) {
+  const raw = String(text || '').trim()
+  if (!raw) return ''
+  try {
+    const u = new URL(raw)
+    for (const key of ['patientCode', 'patient', 'code', 'maBn', 'mabn']) {
+      const q = u.searchParams.get(key)
+      if (q) return String(q).trim().toUpperCase()
+    }
+  } catch {
+    /* không phải URL */
+  }
+  const m = raw.match(/\bYM(?!A)[A-Z0-9]+\b/i)
+  return (m ? m[0] : raw).trim().toUpperCase()
+}
 
 function getSession() {
   return getStaffSession()
@@ -119,6 +139,27 @@ function statusLabelVi(st) {
   if (s === 'cancelled') return 'Đã hủy'
   if (s === 'completed' || s === 'done' || s === 'examined') return 'Đã khám'
   return 'Chờ'
+}
+
+function historyDoctorLabel(row) {
+  const doctor = row?.doctor
+  const name = String(
+    doctor?.displayName ||
+      [doctor?.lastName, doctor?.firstName].filter(Boolean).join(' ').trim() ||
+      row?.doctorName ||
+      '',
+  ).trim()
+  return name || '—'
+}
+
+function historySpecialtyLabel(row) {
+  const name = String(row?.doctor?.specialtyName || row?.specialtyName || '').trim()
+  return name || '—'
+}
+
+function historyIsExamined(row) {
+  const s = String(row?.status || '').toLowerCase()
+  return s === 'completed' || s === 'done' || s === 'examined'
 }
 
 /** Khớp `buildAppointmentNote` trong handleSave — để load lại từ server vẫn có triệu chứng/ghi chú. */
@@ -278,6 +319,10 @@ export default function RegistrationHome() {
     account: '',
   })
   const [pickerSelectedId, setPickerSelectedId] = useState('')
+  const [qrOpen, setQrOpen] = useState(false)
+  const [qrErr, setQrErr] = useState('')
+  const qrScanDoneRef = useRef(false)
+  const loadPickerRef = useRef(async () => [])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyErr, setHistoryErr] = useState('')
   const [historyRows, setHistoryRows] = useState([])
@@ -901,36 +946,144 @@ export default function RegistrationHome() {
     setPickerErr('')
   }
 
-  async function loadPicker({ page, pageSize, filters }) {
-    if (!token) return
-    setPickerErr('')
-    setPickerLoading(true)
-    try {
-      const data = await listPatientsReception({
-        token,
-        page,
-        pageSize,
-        patientCode: filters.patientCode,
-        name: filters.name,
-        phone: filters.phone,
-        account: filters.account,
-      })
-      setPickerRows(Array.isArray(data?.patients) ? data.patients : [])
-      setPickerTotal(Number(data?.total || 0))
-    } catch (e) {
-      setPickerErr(e?.message || 'Không lấy được danh sách bệnh nhân.')
-      setPickerRows([])
-      setPickerTotal(0)
-    } finally {
-      setPickerLoading(false)
-    }
-  }
+  const loadPicker = useCallback(
+    async ({ page, pageSize, filters }) => {
+      if (!token) return []
+      setPickerErr('')
+      setPickerLoading(true)
+      try {
+        const data = await listPatientsReception({
+          token,
+          page,
+          pageSize,
+          patientCode: filters.patientCode,
+          name: filters.name,
+          phone: filters.phone,
+          account: filters.account,
+        })
+        const rows = Array.isArray(data?.patients) ? data.patients : []
+        setPickerRows(rows)
+        setPickerTotal(Number(data?.total || 0))
+        return rows
+      } catch (e) {
+        setPickerErr(e?.message || 'Không lấy được danh sách bệnh nhân.')
+        setPickerRows([])
+        setPickerTotal(0)
+        return []
+      } finally {
+        setPickerLoading(false)
+      }
+    },
+    [token],
+  )
+
+  loadPickerRef.current = loadPicker
 
   useEffect(() => {
     if (!pickerOpen) return
     loadPicker({ page: pickerPage, pageSize: pickerPageSize, filters: pickerFilters })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickerOpen, pickerPage, pickerPageSize])
+  }, [pickerOpen, pickerPage, pickerPageSize, loadPicker])
+
+  useEffect(() => {
+    if (!qrOpen) return undefined
+    setQrErr('')
+    qrScanDoneRef.current = false
+    const html5 = new Html5Qrcode(QR_READER_ELEMENT_ID, { verbose: false })
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } }
+
+    const onScan = async (decodedText) => {
+      if (qrScanDoneRef.current) return
+      const code = patientFromQrPayload(decodedText)
+      if (!code) return
+      qrScanDoneRef.current = true
+      try {
+        await html5.stop()
+      } catch {
+        /* ignore */
+      }
+      try {
+        html5.clear()
+      } catch {
+        /* ignore */
+      }
+      setQrOpen(false)
+      const nextFilters = { ...pickerFilters, patientCode: code }
+      setPickerFilters(nextFilters)
+      setPickerPage(1)
+      setPickerSelectedId('')
+      const rows = await loadPickerRef.current({ page: 1, pageSize: pickerPageSize, filters: nextFilters })
+      if (rows.length === 1) setPickerSelectedId(String(rows[0].id))
+    }
+
+    const onFail = () => {}
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        await html5.start({ facingMode: 'environment' }, config, onScan, onFail)
+      } catch {
+        if (cancelled) return
+        try {
+          await html5.start({ facingMode: 'user' }, config, onScan, onFail)
+        } catch (e2) {
+          if (!cancelled) setQrErr(e2?.message || 'Không mở được camera. Kiểm tra quyền truy cập.')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      let stopPromise
+      try {
+        stopPromise = html5.stop()
+      } catch {
+        stopPromise = Promise.resolve()
+      }
+      void stopPromise
+        .catch(() => {})
+        .finally(() => {
+          try {
+            html5.clear()
+          } catch {
+            /* ignore */
+          }
+        })
+    }
+  }, [qrOpen, pickerFilters, pickerPageSize])
+
+  function startReExam(row) {
+    if (fromAppointment) {
+      setSaveMsg('')
+      setLookupErr('Không thể tái khám khi đang xác nhận lịch hẹn có sẵn.')
+      return
+    }
+    const did = String(row?.doctorId || row?.doctor?.id || '').trim()
+    if (!did) {
+      setSaveMsg('')
+      setLookupErr('Lịch này chưa gắn bác sĩ, không tái khám được.')
+      return
+    }
+    const hit = doctors.find((d) => String(d?.id) === did)
+    if (!hit) {
+      setSaveMsg('')
+      setLookupErr('Không tìm thấy bác sĩ trong danh sách hiện tại.')
+      return
+    }
+    const sid = String(row?.specialtyId || row?.doctor?.specialtyId || hit?.specialtyID || '').trim()
+    if (sid) setSpecialtyId(sid)
+    setDoctorId(did)
+    setAppointmentDate('')
+    setStartTime('')
+    setFreeSlots([])
+    setSlotsErr('')
+    setLookupErr('')
+    setSaveMsg('Đã chọn bác sĩ từ lịch cũ. Vui lòng chọn ngày và giờ khám.')
+    setLastSaved(null)
+    requestAnimationFrame(() => {
+      document.getElementById('reg-section-appointment')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 
   function applySelectedPatient(patient) {
     if (!patient) return
@@ -1057,14 +1210,16 @@ export default function RegistrationHome() {
             </button>
           </div>
         </header>
-        <div style={{ padding: '2.5rem 1.25rem', textAlign: 'center', maxWidth: 520, margin: '0 auto' }}>
-          <p style={{ color: '#475569', lineHeight: 1.6 }}>
+        <div className="tcl-empty">
+          <p>
             Chưa có thông tin đăng ký. Vào <strong>Lịch hẹn</strong> và bấm <strong>+ Thêm</strong>, hoặc chọn lịch khám và bấm{' '}
             <strong>Tạo đăng ký</strong> để mở phiếu.
           </p>
-          <button type="button" className="tcl-btn tcl-btn--pri" style={{ marginTop: '1rem' }} onClick={() => navigate('/reception')}>
-            Đi tới Lịch hẹn
-          </button>
+          <div className="tcl-empty-actions">
+            <button type="button" className="tcl-btn tcl-btn--pri" onClick={() => navigate('/reception')}>
+              Đi tới Lịch hẹn
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -1151,15 +1306,12 @@ export default function RegistrationHome() {
             ) : (
               <div className="reg-inner-banner">Đăng ký từ lịch hẹn — thông tin bệnh nhân theo vé.</div>
             )}
-            {saveMsg ? <div className="tcl-banner-ok" style={{ margin: '0.65rem 0.75rem 0' }}>{saveMsg}</div> : null}
-            {lookupErr ? (
-              <div style={{ margin: '0.5rem 0.75rem 0', padding: '0.45rem 0.65rem', borderRadius: 4, background: '#fef2f2', color: '#b91c1c', fontSize: '0.82rem' }}>
-                {lookupErr}
-              </div>
-            ) : null}
+            {saveMsg ? <div className="tcl-banner-ok">{saveMsg}</div> : null}
+            {lookupErr ? <div className="tcl-banner-err">{lookupErr}</div> : null}
 
             <section className="tcl-sec">
               <h2 className="tcl-sec-title">
+                <span>1</span>
                 Thông tin người đăng ký
               </h2>
               <div className="tcl-grid-form">
@@ -1279,11 +1431,25 @@ export default function RegistrationHome() {
                       </button>
                     </div>
                     <div className="reg-modal-filter-row">
-                      <input
-                        value={pickerFilters.patientCode}
-                        onChange={(e) => setPickerFilters((s) => ({ ...s, patientCode: e.target.value }))}
-                        placeholder="Mã bệnh nhân"
-                      />
+                      <div className="reg-modal-code-field">
+                        <input
+                          value={pickerFilters.patientCode}
+                          onChange={(e) => setPickerFilters((s) => ({ ...s, patientCode: e.target.value }))}
+                          placeholder="Mã bệnh nhân"
+                        />
+                        <button
+                          type="button"
+                          className="tcl-btn"
+                          title="Mở camera để quét mã QR bệnh nhân"
+                          onClick={() => {
+                            setPickerErr('')
+                            setQrErr('')
+                            setQrOpen(true)
+                          }}
+                        >
+                          Quét QR
+                        </button>
+                      </div>
                       <input
                         value={pickerFilters.name}
                         onChange={(e) => setPickerFilters((s) => ({ ...s, name: e.target.value }))}
@@ -1434,7 +1600,43 @@ export default function RegistrationHome() {
               </div>
             ) : null}
 
-            <section className="tcl-sec">
+            {qrOpen ? (
+              <div
+                className="tcl-qr-modal-backdrop"
+                role="presentation"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setQrOpen(false)
+                }}
+              >
+                <div
+                  className="tcl-qr-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="reg-patient-qr-title"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h2 id="reg-patient-qr-title" className="tcl-qr-modal-title">
+                    Quét mã QR bệnh nhân
+                  </h2>
+                  <p className="tcl-qr-modal-hint">
+                    Đưa mã QR hồ sơ bệnh nhân vào khung hình; hệ thống sẽ điền mã BN và tìm kiếm.
+                  </p>
+                  <div id={QR_READER_ELEMENT_ID} className="tcl-qr-reader-wrap" />
+                  {qrErr ? (
+                    <div className="tcl-banner-err" style={{ marginTop: 8 }}>
+                      {qrErr}
+                    </div>
+                  ) : null}
+                  <div className="tcl-qr-modal-actions">
+                    <button type="button" className="tcl-btn" onClick={() => setQrOpen(false)}>
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <section className="tcl-sec" id="reg-section-appointment">
               <h2 className="tcl-sec-title">
                 <span>2</span>
                 Thông tin đăng ký
@@ -1591,24 +1793,46 @@ export default function RegistrationHome() {
                       <th>Trạng thái</th>
                       <th>Mã LH</th>
                       <th>Ngày đăng ký</th>
-                      <th>Phòng khám</th>
+                      <th>Bác sĩ</th>
                       <th>Chuyên khoa</th>
+                      <th style={{ width: 96 }} />
                     </tr>
                   </thead>
                   <tbody>
-                    {historyRows.map((r) => (
-                      <tr key={r.id}>
-                        <td>{statusLabelVi(r.status)}</td>
-                        <td>{r.ticket || '—'}</td>
-                        <td>{r.createdAt ? formatDateTimeVi(r.createdAt) : '—'}</td>
-                        <td>{r.doctorName || '—'}</td>
-                        <td>{r.specialtyName || '—'}</td>
-                      </tr>
-                    ))}
+                    {historyRows.map((r) => {
+                      const canReExam =
+                        !fromAppointment &&
+                        historyIsExamined(r) &&
+                        Boolean(String(r?.doctorId || r?.doctor?.id || '').trim())
+                      return (
+                        <tr key={r.id}>
+                          <td>{statusLabelVi(r.status)}</td>
+                          <td>{r.ticket || '—'}</td>
+                          <td>{r.createdAt ? formatDateTimeVi(r.createdAt) : '—'}</td>
+                          <td>{historyDoctorLabel(r)}</td>
+                          <td>{historySpecialtyLabel(r)}</td>
+                          <td>
+                            {canReExam ? (
+                              <button
+                                type="button"
+                                className="tcl-btn tcl-btn--pri reg-history-reexam-btn"
+                                onClick={() => startReExam(r)}
+                                disabled={doctorsLoading}
+                                title="Điền bác sĩ và chọn ngày, giờ khám mới"
+                              >
+                                Tái khám
+                              </button>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
                 {historyLoading ? <div className="reg-history-empty">Đang tải lịch sử...</div> : null}
-                {historyErr ? <div className="reg-history-empty" style={{ color: '#b91c1c' }}>{historyErr}</div> : null}
+                {historyErr ? <div className="reg-history-empty is-error">{historyErr}</div> : null}
                 {!historyLoading && !historyErr && !historyRows.length ? (
                   <div className="reg-history-empty">
                     {selectedPatientId ? 'Chưa có lịch sử khám.' : 'Chọn bệnh nhân có sẵn để xem lịch sử khám.'}
@@ -1617,7 +1841,7 @@ export default function RegistrationHome() {
               </div>
             </section>
 
-            <div style={{ padding: '0 0.75rem 1rem' }}>
+            <div className="tcl-detail-foot">
               <button type="button" className="tcl-btn" onClick={() => navigate('/reception')}>
                 ← Quay lại Lịch hẹn
               </button>

@@ -58,9 +58,15 @@ function patientLabel(a) {
   )
 }
 
+function isAppointmentExamined(st) {
+  const s = String(st || '').toLowerCase()
+  return s === 'examined' || s === 'completed' || s === 'done'
+}
+
 function statusLabelVi(st) {
   const s = String(st || '').toLowerCase()
   if (s === 'cancelled') return 'Đã hủy'
+  if (isAppointmentExamined(s)) return 'Đã khám'
   if (s === 'confirmed') return 'Chờ khám'
   if (s === 'pending') return 'Chờ xác nhận'
   return 'Chờ'
@@ -556,7 +562,15 @@ export default function DoctorHome() {
                         const sel = selectedApptId && id === String(selectedApptId)
                         const isCancelled = st === 'cancelled'
                         const dotClass =
-                          st === 'confirmed' ? 'is-wait' : st === 'cancelled' ? 'is-cancelled' : st === 'pending' ? 'is-pending' : ''
+                          st === 'confirmed'
+                            ? 'is-wait'
+                            : st === 'cancelled'
+                              ? 'is-cancelled'
+                              : isAppointmentExamined(st)
+                                ? 'is-examined'
+                                : st === 'pending'
+                                  ? 'is-pending'
+                                  : ''
                         return (
                           <tr
                             key={id || `${i}`}
