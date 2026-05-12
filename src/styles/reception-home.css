@@ -457,9 +457,6 @@
 .tcl-list-table .tcl-cell-ticket {
   width: 7.5rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--text-heading);
 }
 
 .tcl-list-table .tcl-col-source,
@@ -471,7 +468,6 @@
 .tcl-list-table .tcl-cell-code {
   width: 6.5rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8rem;
 }
 
 .tcl-list-table .tcl-col-name,

@@ -501,6 +501,11 @@ export default function RegistrationHome() {
     return String(patientDisplay?.id || '').trim()
   }, [patientDisplay?.id])
 
+  const examinedHistoryRows = useMemo(
+    () => historyRows.filter(historyIsExamined),
+    [historyRows],
+  )
+
   const refreshTodayClinicQueue = useCallback(async () => {
     if (!token) return
     try {
@@ -1799,7 +1804,7 @@ export default function RegistrationHome() {
                     </tr>
                   </thead>
                   <tbody>
-                    {historyRows.map((r) => {
+                    {examinedHistoryRows.map((r) => {
                       const canReExam =
                         !fromAppointment &&
                         historyIsExamined(r) &&
@@ -1833,7 +1838,7 @@ export default function RegistrationHome() {
                 </table>
                 {historyLoading ? <div className="reg-history-empty">Đang tải lịch sử...</div> : null}
                 {historyErr ? <div className="reg-history-empty is-error">{historyErr}</div> : null}
-                {!historyLoading && !historyErr && !historyRows.length ? (
+                {!historyLoading && !historyErr && !examinedHistoryRows.length ? (
                   <div className="reg-history-empty">
                     {selectedPatientId ? 'Chưa có lịch sử khám.' : 'Chọn bệnh nhân có sẵn để xem lịch sử khám.'}
                   </div>

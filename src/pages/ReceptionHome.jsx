@@ -802,10 +802,10 @@ export default function ReceptionHome() {
                   <thead>
                     <tr>
                       <th className="tcl-col-status" scope="col">TT</th>
-                      <th className="tcl-col-ticket" scope="col">Mã LH</th>
+                      <th className="tcl-col-ticket" scope="col">Mã lịch hẹn</th>
                       <th className="tcl-col-source" scope="col">Nguồn</th>
-                      <th className="tcl-col-code" scope="col">Mã BN</th>
-                      <th className="tcl-col-name" scope="col">Tên BN</th>
+                      <th className="tcl-col-code" scope="col">Mã bệnh nhân</th>
+                      <th className="tcl-col-name" scope="col">Tên bệnh nhân</th>
                     </tr>
                   </thead>
                   <tbody>
