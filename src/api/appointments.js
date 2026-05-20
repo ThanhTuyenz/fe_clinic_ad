@@ -1,7 +1,17 @@
-import { getApiBase, parseJsonResponse } from './apiBase.js'
+import { getApiBase, parseJsonResponse, staffFetch } from './apiBase.js'
 
 async function parseJson(res) {
   return parseJsonResponse(res)
+}
+
+async function staffGet(path, { token, query } = {}) {
+  const base = getApiBase()
+  const qs = query ? `?${query.toString()}` : ''
+  const { res, data } = await staffFetch(`${base}${path}${qs}`, { token })
+  if (!res.ok) {
+    throw new Error(data.message || 'Yêu cầu thất bại.')
+  }
+  return data
 }
 
 export async function listDoctorAppointments({ token }) {
@@ -37,7 +47,6 @@ export async function lookupPatientByCode({ token, code }) {
 }
 
 export async function listPatientsReception({ token, page = 1, pageSize = 10, patientCode, name, phone, account }) {
-  const base = getApiBase()
   const qs = new URLSearchParams()
   if (page) qs.set('page', String(page))
   if (pageSize) qs.set('pageSize', String(pageSize))
@@ -45,18 +54,7 @@ export async function listPatientsReception({ token, page = 1, pageSize = 10, pa
   if (name) qs.set('name', String(name).trim())
   if (phone) qs.set('phone', String(phone).trim())
   if (account) qs.set('account', String(account).trim())
-
-  const res = await fetch(`${base}/api/appointments/patients?${qs.toString()}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-  const data = await parseJson(res)
-  if (!res.ok) {
-    throw new Error(data.message || 'Không lấy được danh sách bệnh nhân.')
-  }
-  return data
+  return staffGet('/api/appointments/patients', { token, query: qs })
 }
 
 export async function listPatientHistoryReception({ token, patientId }) {
@@ -130,13 +128,35 @@ export async function listReceptionAppointments({ token, from, to, status, q }) 
   return data?.appointments || []
 }
 
-export async function updateAppointmentStatus({ token, appointmentId, status, cancelReason, cancelledBySystem, note }) {
+/** STT gợi ý kế tiếp theo ngày khám + phòng (max STT đã khám trong phòng + 1). */
+export async function getNextVisitQueueNumber({ token, appointmentDate, clinicRoom, excludeAppointmentId }) {
+  const qs = new URLSearchParams()
+  qs.set('appointmentDate', String(appointmentDate || '').trim().slice(0, 10))
+  qs.set('clinicRoom', String(clinicRoom ?? '').trim())
+  if (excludeAppointmentId) qs.set('excludeAppointmentId', String(excludeAppointmentId).trim())
+  const data = await staffGet('/api/appointments/next-visit-queue', { token, query: qs })
+  const n = data?.nextVisitQueueNumber
+  return Number.isFinite(Number(n)) && Number(n) >= 1 ? Number(n) : 1
+}
+
+export async function updateAppointmentStatus({
+  token,
+  appointmentId,
+  status,
+  cancelReason,
+  cancelledBySystem,
+  note,
+  visitQueueNumber,
+  clinicRoom,
+}) {
   const base = getApiBase()
   const id = String(appointmentId || '').trim()
   const body = { status }
   if (cancelReason != null && String(cancelReason).trim()) body.cancelReason = String(cancelReason).trim()
   if (cancelledBySystem === true) body.cancelledBySystem = true
   if (note !== undefined) body.note = String(note || '')
+  if (visitQueueNumber !== undefined) body.visitQueueNumber = visitQueueNumber
+  if (clinicRoom !== undefined) body.clinicRoom = String(clinicRoom ?? '').trim()
   const res = await fetch(`${base}/api/appointments/${encodeURIComponent(id)}/status`, {
     method: 'PATCH',
     headers: {

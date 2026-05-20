@@ -8,8 +8,7 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
+  background: #fff;
   border-bottom: 1px solid var(--border);
   padding: 0.75rem 1.25rem;
   display: grid;
@@ -132,9 +131,9 @@
 
 .dr-title {
   margin: 1.25rem 0 1.25rem;
-  font-size: 1.7rem;
-  color: #c2410c;
-  font-weight: 900;
+  font-size: 1.5rem;
+  color: var(--text-heading);
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
@@ -142,7 +141,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: var(--shadow);
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -459,8 +458,7 @@
   align-items: center;
   gap: 0.75rem 1rem;
   padding: 0.55rem 1rem;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(10px);
+  background: #fff;
   border-bottom: 1px solid var(--border);
 }
 
@@ -543,8 +541,8 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #2563eb, #0ea5e9);
-  color: #fff;
+  background: var(--clinic-primary-soft);
+  color: var(--clinic-primary-dark);
   font-size: 0.65rem;
   font-weight: 900;
   display: grid;
@@ -577,7 +575,7 @@
 }
 
 .dr-lang button.is-on {
-  color: #2563eb;
+  color: var(--clinic-primary-dark);
 }
 
 .dr-lang-sep {
@@ -1003,14 +1001,14 @@
 }
 
 .dr-btn--primary {
-  border-color: #2563eb;
-  background: #2563eb;
+  border-color: rgba(13, 148, 136, 0.55);
+  background: var(--clinic-primary);
   color: #fff;
 }
 
 .dr-btn--primary:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: var(--clinic-primary-dark);
+  border-color: var(--clinic-primary-dark);
 }
 
 .dr-btn--primary:disabled {

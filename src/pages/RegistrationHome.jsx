@@ -5,11 +5,11 @@ import {
   getAvailability,
   listPatientHistoryReception,
   listPatientsReception,
-  listReceptionAppointments,
   updateAppointmentStatus,
 } from '../api/appointments'
 import { listDoctors } from '../api/doctors.js'
-import { getStaffSession } from '../utils/staffSession.js'
+import { AuthError } from '../api/apiBase.js'
+import { clearStaffSession, getStaffSession, isReceptionStaff } from '../utils/staffSession.js'
 import { Html5Qrcode } from 'html5-qrcode'
 import '../styles/reception-home.css'
 import '../styles/registration-home.css'
@@ -177,82 +177,6 @@ function parseRegistrationNote(note) {
   return { symptom, regNote, priority }
 }
 
-function mapReceptionAppointmentToRegistrationRow(a, seq) {
-  const { symptom, regNote, priority } = parseRegistrationNote(a.note)
-  const aptId = String(a.id ?? a._id ?? '')
-  const ad = isoDateOnly(a.appointmentDate)
-  const p = a.patient
-  const patient = p
-    ? {
-        id: String(p.id ?? ''),
-        patientCode: p.patientCode || '',
-        displayName:
-          String(p.displayName || '').trim() ||
-          [p.lastName, p.firstName].filter(Boolean).join(' ').trim() ||
-          [p.firstName, p.lastName].filter(Boolean).join(' ').trim() ||
-          '',
-        dob: p.dob ?? null,
-        age: p.age ?? null,
-        phone: p.phone || '',
-        gender: p.gender || '',
-        address: p.address || '',
-        email: p.email || '',
-        ticket: a.ticket || '',
-      }
-    : {
-        id: '',
-        patientCode: '',
-        displayName: '',
-        dob: null,
-        age: null,
-        phone: '',
-        gender: '',
-        address: '',
-        email: '',
-        ticket: a.ticket || '',
-      }
-  const d = a.doctor
-  const doctor = d
-    ? {
-        id: String(d.id ?? ''),
-        displayName:
-          String(d.displayName || '').trim() ||
-          [d.lastName, d.firstName].filter(Boolean).join(' ').trim() ||
-          [d.firstName, d.lastName].filter(Boolean).join(' ').trim() ||
-          '',
-        specialtyName: String(d.specialtyName || d.specialty || d.deptName || '').trim(),
-      }
-    : null
-  const created = a.createdAt ? new Date(a.createdAt).getTime() : Date.now()
-  return {
-    id: aptId,
-    seq: String(seq),
-    maKcb: a.ticket || '',
-    createdAt: created,
-    updatedAt: created,
-    symptom,
-    regNote,
-    specialtyId: String(d?.specialtyID ?? d?.specialtyId ?? ''),
-    specialtyName: doctor?.specialtyName || '',
-    doctorId: String(d?.id ?? ''),
-    doctor,
-    appointmentDate: ad,
-    startTime: String(a.startTime || ''),
-    source: a.source || '',
-    bookingSource: a.bookingSource || a.source || '',
-    createdByStaff: a.createdByStaff || null,
-    patient,
-    priority,
-    appointment: {
-      id: aptId,
-      appointmentDate: a.appointmentDate,
-      startTime: a.startTime,
-      status: a.status,
-      source: a.source,
-    },
-  }
-}
-
 export default function RegistrationHome() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -275,8 +199,6 @@ export default function RegistrationHome() {
   const [registeredAt] = useState(() => formatDateTimeNow())
   /** null = chưa lưu lần nào; sau mỗi lưu thành công lưu snapshot để so sánh */
   const [lastSaved, setLastSaved] = useState(null)
-  const [registrations, setRegistrations] = useState([])
-  const [activeRegId, setActiveRegId] = useState(null)
   const [doctorId, setDoctorId] = useState('')
   const [doctors, setDoctors] = useState([])
   const [doctorsLoading, setDoctorsLoading] = useState(false)
@@ -328,17 +250,6 @@ export default function RegistrationHome() {
   const [historyRows, setHistoryRows] = useState([])
 
   const p = payload?.patient
-
-  const nextSeq = useMemo(() => {
-    const max = registrations.reduce((m, r) => Math.max(m, Number(r?.seq || 0) || 0), 0)
-    return String(max + 1)
-  }, [registrations])
-
-  const seq = useMemo(() => {
-    if (!activeRegId) return nextSeq
-    const hit = registrations.find((r) => String(r.id) === String(activeRegId))
-    return hit?.seq ? String(hit.seq) : nextSeq
-  }, [activeRegId, registrations, nextSeq])
 
   const hasUnsavedChanges = useMemo(() => {
     if (lastSaved === null) return true
@@ -449,54 +360,6 @@ export default function RegistrationHome() {
     return String(fromDoctorList?.specialtyName || fromDoctorList?.specialty || '').trim()
   }, [doctorId, doctors, payload?.doctor])
 
-  const appointmentRows = useMemo(() => {
-    if (!fromAppointment) return registrations
-    const ticket = String(payload?.ticket || maKcb || '').trim()
-    const rowId = String(payload?.appointmentId || activeRegId || ticket || 'appointment')
-    const existing = registrations.find((r) => String(r.id) === rowId)
-    return [
-      {
-        ...(existing || {}),
-        id: rowId,
-        ticket,
-        maKcb: existing?.maKcb || ticket,
-        specialtyId: existing?.specialtyId || specialtyId,
-        specialtyName: existing?.specialtyName || appointmentSpecialtyDisplay,
-        doctorId: existing?.doctorId || doctorId,
-        doctor: existing?.doctor || payload?.doctor || null,
-        appointmentDate: existing?.appointmentDate || appointmentDate,
-        startTime: existing?.startTime || startTime,
-        source: existing?.source || payload?.source || payload?.bookingSource || 'unknown',
-        bookingSource: existing?.bookingSource || payload?.bookingSource || payload?.source || 'unknown',
-        createdByStaff: existing?.createdByStaff || payload?.createdByStaff || null,
-        symptom: existing?.symptom || symptom,
-        regNote: existing?.regNote || regNote,
-        priority: existing?.priority || priority,
-        patient: existing?.patient || currentPatientSnapshot(),
-      },
-    ]
-  }, [
-    fromAppointment,
-    registrations,
-    payload?.ticket,
-    payload?.appointmentId,
-    payload?.doctor,
-    payload?.source,
-    payload?.bookingSource,
-    payload?.createdByStaff,
-    maKcb,
-    activeRegId,
-    patientDisplay,
-    specialtyId,
-    appointmentSpecialtyDisplay,
-    doctorId,
-    appointmentDate,
-    startTime,
-    symptom,
-    regNote,
-    priority,
-  ])
-
   const selectedPatientId = useMemo(() => {
     return String(patientDisplay?.id || '').trim()
   }, [patientDisplay?.id])
@@ -506,40 +369,13 @@ export default function RegistrationHome() {
     [historyRows],
   )
 
-  const refreshTodayClinicQueue = useCallback(async () => {
-    if (!token) return
-    try {
-      const day = ymd(new Date())
-      const rows = await listReceptionAppointments({ token, from: day, to: day, status: 'all' })
-      const clinicOnly = (rows || []).filter(
-        (r) => String(r.source || r.bookingSource || '').toLowerCase() === 'clinic',
-      )
-      clinicOnly.sort((x, y) => {
-        const tx = x?.createdAt ? new Date(x.createdAt).getTime() : 0
-        const ty = y?.createdAt ? new Date(y.createdAt).getTime() : 0
-        return tx - ty
-      })
-      const mapped = clinicOnly.map((a, i) => mapReceptionAppointmentToRegistrationRow(a, i + 1))
-      setRegistrations(mapped)
-    } catch (e) {
-      console.error(e)
-    }
-  }, [token])
-
   useEffect(() => {
     if (!token || !user) {
       navigate('/login', { replace: true })
-    } else if (user.userType !== 'receptionist') {
+    } else if (!isReceptionStaff(user)) {
       navigate('/doctor', { replace: true })
     }
   }, [token, user, navigate])
-
-  /** Hàng đợi trái trước đây chỉ nằm trong state — F5 là mất. Tải phiếu đăng ký tại quầy (source clinic) trong ngày từ API. */
-  useEffect(() => {
-    if (!token || !user || user.userType !== 'receptionist') return
-    if (!createNew) return
-    void refreshTodayClinicQueue()
-  }, [token, user, createNew, refreshTodayClinicQueue])
 
   useEffect(() => {
     if (!token || !selectedPatientId) {
@@ -689,7 +525,7 @@ export default function RegistrationHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, doctorId, appointmentDate])
 
-  if (!token || !user || user.userType !== 'receptionist') {
+  if (!token || !user || !isReceptionStaff(user)) {
     return null
   }
 
@@ -806,24 +642,6 @@ export default function RegistrationHome() {
     const phoneTrim = String(patient.phone || '').trim()
     const contact = phoneTrim || ''
 
-    const chosenDoctor = doctorId ? doctors.find((d) => String(d?.id) === String(doctorId)) || null : null
-    const doctor = chosenDoctor
-      ? {
-          id: String(chosenDoctor.id),
-          displayName: String(
-            chosenDoctor.displayName ||
-              [chosenDoctor.lastName, chosenDoctor.firstName].filter(Boolean).join(' ').trim() ||
-              chosenDoctor.email ||
-              '',
-          ).trim(),
-          specialtyName: String(chosenDoctor.specialtyName || chosenDoctor.specialty || '').trim(),
-        }
-      : null
-    const specialtyName = String(
-      (doctors || []).find((d) => String(d?.specialtyID || '').trim() === String(specialtyId).trim())
-        ?.specialtyName || '',
-    ).trim()
-
     setLookupErr('')
     setSaveMsg('')
     setSaving(true)
@@ -848,7 +666,7 @@ export default function RegistrationHome() {
 
       const now = Date.now()
       const savedAppointment = data?.appointment || {}
-      const rowId = String(savedAppointment.id || payload?.appointmentId || activeRegId || `LOCAL-${now.toString(36).toUpperCase()}`)
+      const rowId = String(savedAppointment.id || payload?.appointmentId || `LOCAL-${now.toString(36).toUpperCase()}`)
       const stamp = String(data?.ticket || maKcb || payload?.ticket || rowId)
 
       setMaKcb(stamp)
@@ -857,38 +675,7 @@ export default function RegistrationHome() {
           ? `Đã tạo hồ sơ bệnh nhân tại quầy và lưu lịch hẹn. Mã vé: ${stamp}.`
           : `Đã lưu đăng ký. Mã lịch hẹn: ${stamp}`,
       )
-      setActiveRegId(rowId)
       if (fromAppointment) {
-        setRegistrations((prev) => {
-          const idx = prev.findIndex((r) => String(r.id) === String(rowId))
-          const nextRow = {
-            id: rowId,
-            seq: idx >= 0 ? prev[idx].seq : seq,
-            maKcb: stamp,
-            createdAt: idx >= 0 ? prev[idx].createdAt : now,
-            updatedAt: now,
-            symptom,
-            regNote,
-            specialtyId,
-            specialtyName,
-            priority,
-            doctorId,
-            doctor,
-            appointmentDate,
-            startTime,
-            source: payload?.source || payload?.bookingSource || 'unknown',
-            bookingSource: payload?.bookingSource || payload?.source || 'unknown',
-            createdByStaff: payload?.createdByStaff || null,
-            patient,
-            appointment: savedAppointment,
-          }
-          if (idx >= 0) {
-            const copy = prev.slice()
-            copy[idx] = { ...copy[idx], ...nextRow }
-            return copy
-          }
-          return [...prev, nextRow]
-        })
         // Sau khi "Đăng ký" từ lịch hẹn (xác nhận), nhảy về Lịch hẹn và mở chi tiết theo mã vé.
         const t = String(payload?.ticket || stamp).trim()
         if (t) {
@@ -920,7 +707,6 @@ export default function RegistrationHome() {
           )
           return
         }
-        await refreshTodayClinicQueue()
       }
       setLastSaved(makeSavedSnapshot())
     } catch (e) {
@@ -971,15 +757,19 @@ export default function RegistrationHome() {
         setPickerTotal(Number(data?.total || 0))
         return rows
       } catch (e) {
-        setPickerErr(e?.message || 'Không lấy được danh sách bệnh nhân.')
+        const msg = e?.message || 'Không lấy được danh sách bệnh nhân.'
+        setPickerErr(msg)
         setPickerRows([])
         setPickerTotal(0)
+        if (e instanceof AuthError) {
+          navigate('/login', { replace: true, state: { message: msg } })
+        }
         return []
       } finally {
         setPickerLoading(false)
       }
     },
-    [token],
+    [token, navigate],
   )
 
   loadPickerRef.current = loadPicker
@@ -1105,7 +895,6 @@ export default function RegistrationHome() {
   }
 
   function resetDraftForNew() {
-    setActiveRegId(null)
     setMaKcb('')
     setSaveMsg('')
     setLookupErr('')
@@ -1132,70 +921,20 @@ export default function RegistrationHome() {
     setPriority(false)
   }
 
-  function loadRegistration(r) {
-    if (!r) return
-    setActiveRegId(String(r.id))
-    setMaKcb(String(r.maKcb || ''))
-    setSaveMsg('')
-    setLookupErr('')
-    setDoctorId(String(r.doctorId || ''))
-    setAppointmentDate(String(r.appointmentDate || ''))
-    setStartTime(String(r.startTime || ''))
-
-    setSymptom(String(r.symptom || ''))
-    setRegNote(String(r.regNote || ''))
-    setSpecialtyId(String(r.specialtyId || ''))
-    setPriority(Boolean(r.priority))
-
-    if (createNew) {
-      setDraftPatientId(String(r.patient?.id || ''))
-      setDraftPatientCode(String(r.patient?.patientCode || ''))
-      setDraftName(String(r.patient?.displayName || ''))
-      setDraftDob(r.patient?.dob ? isoDateFromApi(r.patient.dob) : '')
-      setDraftPhone(String(r.patient?.phone || ''))
-      setDraftGender(r.patient?.gender === 'Nam' ? 'male' : r.patient?.gender === 'Nữ' ? 'female' : '')
-      setDraftAddress(String(r.patient?.address || ''))
-    }
-
-    setLastSaved({
-      symptom: String(r.symptom || ''),
-      regNote: String(r.regNote || ''),
-      specialtyId: String(r.specialtyId || ''),
-      priority: Boolean(r.priority),
-      doctorId: String(r.doctorId || ''),
-      appointmentDate: String(r.appointmentDate || ''),
-      startTime: String(r.startTime || ''),
-      ...(createNew
-        ? {
-            draftPatientId: String(r.patient?.id || ''),
-            draftPatientCode: String(r.patient?.patientCode || ''),
-            draftName: String(r.patient?.displayName || ''),
-            draftDob: r.patient?.dob ? isoDateFromApi(r.patient.dob) : '',
-            draftPhone: String(r.patient?.phone || ''),
-            draftGender: r.patient?.gender === 'Nam' ? 'male' : r.patient?.gender === 'Nữ' ? 'female' : '',
-            draftAddress: String(r.patient?.address || ''),
-          }
-        : {}),
-    })
-  }
-
   if (!createNew && !hasPatientFromAppointment) {
     return (
       <div className="tcl-shell">
         <header className="tcl-top">
           <div className="tcl-brand">VITACARE</div>
           <nav className="tcl-nav" aria-label="Module">
+            <button type="button" onClick={() => navigate('/dashboard')}>
+              Thống kê
+            </button>
             <button type="button" onClick={() => navigate('/reception')}>
               Lịch hẹn
             </button>
             <button type="button" className="is-active">
               Đăng ký
-            </button>
-            <button type="button" disabled>
-              Khám bệnh
-            </button>
-            <button type="button" disabled>
-              Báo cáo
             </button>
           </nav>
           <div className="tcl-top-user">
@@ -1204,10 +943,7 @@ export default function RegistrationHome() {
               type="button"
               className="tcl-btn"
               onClick={() => {
-                localStorage.removeItem('token')
-                localStorage.removeItem('user')
-                sessionStorage.removeItem('token')
-                sessionStorage.removeItem('user')
+                clearStaffSession()
                 navigate('/login', { replace: true })
               }}
             >
@@ -1235,17 +971,14 @@ export default function RegistrationHome() {
       <header className="tcl-top">
         <div className="tcl-brand">VITACARE</div>
         <nav className="tcl-nav" aria-label="Module">
+          <button type="button" onClick={() => navigate('/dashboard')}>
+            Thống kê
+          </button>
           <button type="button" onClick={() => navigate('/reception')}>
             Lịch hẹn
           </button>
           <button type="button" className="is-active">
             Đăng ký
-          </button>
-          <button type="button" disabled>
-            Khám bệnh
-          </button>
-          <button type="button" disabled>
-            Báo cáo
           </button>
         </nav>
         <div className="tcl-top-user">
@@ -1254,10 +987,7 @@ export default function RegistrationHome() {
             type="button"
             className="tcl-btn"
             onClick={() => {
-              localStorage.removeItem('token')
-              localStorage.removeItem('user')
-              sessionStorage.removeItem('token')
-              sessionStorage.removeItem('user')
+              clearStaffSession()
               navigate('/login', { replace: true })
             }}
           >
@@ -1295,8 +1025,7 @@ export default function RegistrationHome() {
           </div>
         </div>
 
-        <div className="tcl-split reg-layout--full">
-          <main className="tcl-detail">
+        <main className="tcl-detail">
             <div className="reg-tabs">
               <button type="button" className="reg-tab is-active">
                 Thông tin đăng ký
@@ -1851,8 +1580,7 @@ export default function RegistrationHome() {
                 ← Quay lại Lịch hẹn
               </button>
             </div>
-          </main>
-        </div>
+        </main>
       </div>
     </div>
   )

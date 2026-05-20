@@ -7,10 +7,10 @@
   --muted: #64748b;
   --border: #e2e8f0;
   --surface: #ffffff;
-  --page-bg: linear-gradient(145deg, #f0fdfa 0%, #ecfeff 45%, #f8fafc 100%);
+  --page-bg: #f1f5f9;
   --error: #dc2626;
-  --radius: 12px;
-  --shadow: 0 25px 50px -12px rgba(15, 118, 110, 0.15);
+  --radius: 8px;
+  --shadow: none;
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;

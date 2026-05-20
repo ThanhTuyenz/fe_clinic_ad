@@ -182,8 +182,8 @@ export default function DoctorHome() {
   useEffect(() => {
     if (!token || !user) {
       navigate('/login', { replace: true })
-    } else if (user.userType === 'receptionist') {
-      navigate('/reception', { replace: true })
+    } else if (user.userType === 'receptionist' || user.userType === 'registration') {
+      navigate('/dashboard', { replace: true })
     }
   }, [token, user, navigate])
 
@@ -430,8 +430,8 @@ export default function DoctorHome() {
           <button type="button" className="dr-topnav-item is-disabled" disabled title="Sắp có">
             Thu chi
           </button>
-          <button type="button" className="dr-topnav-item is-disabled" disabled title="Sắp có">
-            Báo cáo
+          <button type="button" className="dr-topnav-item" onClick={() => navigate('/dashboard')}>
+            Thống kê
           </button>
         </nav>
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { login as loginApi } from '../api/auth.js'
+import { clearStaffSession } from '../utils/staffSession.js'
 import '../styles/auth.css'
 
 /** Chỉ lưu lựa chọn UI (có/không ghi nhớ), không lưu mật khẩu. */
@@ -31,11 +32,8 @@ function userTypeLower(user) {
   return String(user?.userType || user?.role || '').trim().toLowerCase()
 }
 
-function redirectPathForUser(user) {
-  const t = userTypeLower(user)
-  if (t === 'receptionist') return '/reception'
-  if (t === 'registration') return '/registration'
-  return '/doctor'
+function redirectPathForUser() {
+  return '/dashboard'
 }
 
 function isStaffUser(user) {
@@ -77,10 +75,7 @@ export default function Login() {
     try {
       const data = await loginApi({ email: emailOrPhone, password })
 
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      sessionStorage.removeItem('token')
-      sessionStorage.removeItem('user')
+      clearStaffSession()
 
       if (!isStaffUser(data?.user)) {
         throw new Error('Chỉ nhân viên/bác sĩ mới được phép đăng nhập tại trang này.')
@@ -107,21 +102,13 @@ export default function Login() {
 
   return (
     <div className="auth-page">
-      <main className="auth-panel" style={{ width: '100%' }}>
+      <main className="auth-panel">
         <div className="auth-card">
           <h2>Đăng nhập</h2>
           <p className="auth-card-sub">Nhập thông tin tài khoản nhân viên.</p>
 
           {info ? (
-            <p
-              className="auth-error"
-              style={{
-                color: 'var(--clinic-primary)',
-                borderColor: 'rgba(13,148,136,0.35)',
-                background: 'rgba(13,148,136,0.08)',
-              }}
-              role="status"
-            >
+            <p className="auth-info" role="status">
               {info}
             </p>
           ) : null}

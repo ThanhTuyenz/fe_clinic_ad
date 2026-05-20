@@ -1,10 +1,6 @@
 
 /* Màn Đăng ký — bổ sung trên nền reception-home.css */
 
-.tcl-split.reg-layout--full {
-  grid-template-columns: 1fr;
-}
-
 .reg-code-row {
   display: flex;
   gap: 0.55rem;
@@ -33,12 +29,12 @@
 .reg-inner-banner {
   margin: 0.75rem 0.95rem 0;
   padding: 0.6rem 0.8rem;
-  border-radius: 10px;
-  background: rgba(13, 148, 136, 0.1);
-  border: 1px solid rgba(13, 148, 136, 0.22);
-  color: var(--clinic-primary-dark);
+  border-radius: var(--radius);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  color: var(--text-heading);
   font-size: 0.86rem;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.5;
 }
 

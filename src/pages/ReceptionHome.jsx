@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
+  getNextVisitQueueNumber,
   listReceptionAppointments,
   lookupAppointmentByTicket,
   updateAppointmentStatus,
@@ -12,7 +13,8 @@ import {
   appointmentSourceValue,
 } from '../utils/appointmentSource.js'
 import { isPendingAppointmentPastSlot } from '../utils/appointmentExpiry.js'
-import { getStaffSession } from '../utils/staffSession.js'
+import { clearStaffSession, getStaffSession, staffRole } from '../utils/staffSession.js'
+import { listClinicRooms } from '../api/clinicRooms.js'
 import { Html5Qrcode } from 'html5-qrcode'
 import '../styles/reception-home.css'
 
@@ -202,9 +204,9 @@ export default function ReceptionHome() {
   const [fromDate, setFromDate] = useState(() => ymd(new Date()))
   const [toDate, setToDate] = useState(() => ymd(new Date()))
   const [statusFilter, setStatusFilter] = useState('all')
-  const [filterTicket, setFilterTicket] = useState('')
-  const [filterPatientCode, setFilterPatientCode] = useState('')
-  const [filterName, setFilterName] = useState('')
+  /** Tìm nhanh trong danh sách đã tải: mã lịch hẹn, mã BN hoặc tên. */
+  const [listSearch, setListSearch] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const [list, setList] = useState([])
   const [listLoading, setListLoading] = useState(false)
@@ -222,15 +224,23 @@ export default function ReceptionHome() {
   const [saveErr, setSaveErr] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const [visitQueueDraft, setVisitQueueDraft] = useState('')
+  const [clinicRoomDraft, setClinicRoomDraft] = useState('')
+  const [clinicRooms, setClinicRooms] = useState([])
+  const [clinicRoomsErr, setClinicRoomsErr] = useState('')
+  const [visitErr, setVisitErr] = useState('')
+
   const [ticket, setTicket] = useState('')
   const [ticketErr, setTicketErr] = useState('')
   const [lookupLoading, setLookupLoading] = useState(false)
 
   const [qrOpen, setQrOpen] = useState(false)
   const [qrErr, setQrErr] = useState('')
-  const runLookupRef = useRef(async () => {})
+  const [qrListFocusTicket, setQrListFocusTicket] = useState('')
+  const runLookupRef = useRef(async () => ({ ok: false }))
   const qrScanDoneRef = useRef(false)
   const didAutoLookupRef = useRef(false)
+  const roomSttReqRef = useRef(0)
 
   const [flashOk, setFlashOk] = useState('')
   const [flashErr, setFlashErr] = useState('')
@@ -240,7 +250,7 @@ export default function ReceptionHome() {
       navigate('/login', { replace: true })
       return
     }
-    if (user.userType !== 'receptionist') {
+    if (staffRole(user) !== 'receptionist') {
       navigate('/doctor', { replace: true })
     }
   }, [token, user, navigate])
@@ -280,6 +290,10 @@ export default function ReceptionHome() {
   }, [loadList])
 
   useEffect(() => {
+    setPage(0)
+  }, [listSearch])
+
+  useEffect(() => {
     if (!token) return undefined
     const t = setInterval(() => {
       void loadList()
@@ -288,16 +302,24 @@ export default function ReceptionHome() {
   }, [token, loadList])
 
   const filteredRows = useMemo(() => {
-    const ft = filterTicket.trim().toLowerCase()
-    const fp = filterPatientCode.trim().toLowerCase()
-    const fn = filterName.trim().toLowerCase()
+    const focus = qrListFocusTicket.trim().toLowerCase()
+    if (focus) {
+      const hits = (list || []).filter((r) => String(r.ticket || '').toLowerCase() === focus)
+      if (hits.length) return hits
+      if (lookupDetail && String(lookupDetail.ticket || '').toLowerCase() === focus) {
+        return [lookupDetail]
+      }
+      return []
+    }
+    const q = listSearch.trim().toLowerCase()
+    if (!q) return list || []
     return (list || []).filter((r) => {
-      if (ft && !String(r.ticket || '').toLowerCase().includes(ft)) return false
-      if (fp && !String(r.patient?.patientCode || '').toLowerCase().includes(fp)) return false
-      if (fn && !patientListDisplayName(r.patient).toLowerCase().includes(fn)) return false
-      return true
+      const ticket = String(r.ticket || '').toLowerCase()
+      const code = String(r.patient?.patientCode || '').toLowerCase()
+      const name = patientListDisplayName(r.patient).toLowerCase()
+      return ticket.includes(q) || code.includes(q) || name.includes(q)
     })
-  }, [list, filterTicket, filterPatientCode, filterName])
+  }, [list, lookupDetail, qrListFocusTicket, listSearch])
 
   const pageRows = useMemo(() => {
     const start = page * PAGE_SIZE
@@ -320,6 +342,8 @@ export default function ReceptionHome() {
           cancelledBy: row.cancelledBy,
           confirmedAt: row.confirmedAt,
           confirmedBy: row.confirmedBy,
+          visitQueueNumber: row.visitQueueNumber ?? cached.visitQueueNumber,
+          clinicRoom: row.clinicRoom != null ? row.clinicRoom : cached.clinicRoom,
         }
       }
       if (cached) return cached
@@ -331,6 +355,55 @@ export default function ReceptionHome() {
 
   const currentStatus = useMemo(() => normalizeStatus(activeDetail?.status), [activeDetail?.status])
   const canEditStatus = currentStatus === 'pending'
+  /** Chỉnh phòng / STT khi lịch còn Chờ — ghi DB khi Xác nhận + Lưu (mục 3). */
+  const canEditVisit = currentStatus === 'pending'
+
+  const applyClinicRoomSelection = useCallback(
+    async (roomValue) => {
+      const r = String(roomValue ?? '').trim()
+      if (!r) {
+        setVisitQueueDraft('')
+        return
+      }
+      if (!token || !activeDetail?.id) return
+      const dateStr = String(activeDetail.appointmentDate || '').trim().slice(0, 10)
+      if (!dateStr || dateStr.length < 10) return
+      setVisitErr('')
+      const reqId = ++roomSttReqRef.current
+      try {
+        const next = await getNextVisitQueueNumber({
+          token,
+          appointmentDate: dateStr,
+          clinicRoom: r,
+          excludeAppointmentId: activeDetail.id,
+        })
+        if (reqId !== roomSttReqRef.current) return
+        setVisitQueueDraft(String(next))
+      } catch (e) {
+        if (reqId !== roomSttReqRef.current) return
+        setVisitErr(e?.message || 'Không lấy được số thứ tự gợi ý.')
+      }
+    },
+    [token, activeDetail?.id, activeDetail?.appointmentDate],
+  )
+
+  useEffect(() => {
+    let alive = true
+    setClinicRoomsErr('')
+    listClinicRooms()
+      .then((rows) => {
+        if (alive) setClinicRooms(Array.isArray(rows) ? rows : [])
+      })
+      .catch((e) => {
+        if (alive) {
+          setClinicRooms([])
+          setClinicRoomsErr(e?.message || 'Không tải được danh sách phòng.')
+        }
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const lastDetailIdRef = useRef(null)
   useEffect(() => {
@@ -340,6 +413,23 @@ export default function ReceptionHome() {
     lastDetailIdRef.current = currentId
     setDetailStatus(normalizeStatus(activeDetail.status || 'pending'))
   }, [activeDetail])
+
+  useEffect(() => {
+    if (!activeDetail?.id) {
+      setVisitQueueDraft('')
+      setClinicRoomDraft('')
+      return
+    }
+    const q = activeDetail.visitQueueNumber
+    setVisitQueueDraft(q != null && q !== '' ? String(q) : '')
+    const savedRoom = String(activeDetail.clinicRoom || '').trim()
+    if (savedRoom) {
+      setClinicRoomDraft(savedRoom)
+    } else {
+      const dr = String(activeDetail.doctor?.clinicRoomID || '').trim()
+      setClinicRoomDraft(dr)
+    }
+  }, [activeDetail?.id, activeDetail?.visitQueueNumber, activeDetail?.clinicRoom, activeDetail?.doctor?.clinicRoomID])
 
   function normalizeLookup(data) {
     return {
@@ -359,6 +449,8 @@ export default function ReceptionHome() {
       confirmedAt: data.appointment.confirmedAt ?? null,
       confirmedBy: data.appointment.confirmedBy ?? null,
       createdAt: data.appointment.createdAt,
+      visitQueueNumber: data.appointment.visitQueueNumber ?? null,
+      clinicRoom: data.appointment.clinicRoom || '',
       patient: data.patient
         ? {
             ...data.patient,
@@ -370,7 +462,7 @@ export default function ReceptionHome() {
   }
 
   const runLookup = useCallback(
-    async (raw) => {
+    async (raw, options = {}) => {
       const t = String(raw != null ? raw : ticket).trim()
       setTicketErr('')
       setLookupLoading(true)
@@ -378,11 +470,12 @@ export default function ReceptionHome() {
       if (!t) {
         setTicketErr('Vui lòng nhập mã vé (YMA…).')
         setLookupLoading(false)
-        return
+        return { ok: false }
       }
       try {
         const data = await lookupAppointmentByTicket({ token, ticket: t })
         const norm = normalizeLookup(data)
+        const ticketCode = String(norm.ticket || t).trim()
         setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
         const found = list.find((r) => String(r.id) === String(norm.id))
         if (found) {
@@ -392,11 +485,21 @@ export default function ReceptionHome() {
           setSelectedId(null)
           setLookupDetail(norm)
         }
+        if (options.focusList) {
+          setQrListFocusTicket(ticketCode)
+          setFilterTicket(ticketCode)
+          setFilterPatientCode('')
+          setFilterName('')
+          setPage(0)
+        }
         setSaveMsg('')
         setSaveErr('')
+        setVisitErr('')
+        return { ok: true, norm, ticket: ticketCode }
       } catch (e) {
         setTicketErr(e?.message || 'Không tra cứu được.')
         setLookupDetail(null)
+        return { ok: false }
       } finally {
         setLookupLoading(false)
       }
@@ -461,7 +564,7 @@ export default function ReceptionHome() {
       setQrOpen(false)
       setTicket(code)
       try {
-        await runLookupRef.current(code)
+        await runLookupRef.current(code, { focusList: true })
       } catch {
         /* lỗi đã xử lý trong runLookup */
       }
@@ -508,6 +611,7 @@ export default function ReceptionHome() {
     if (!activeDetail?.id) return
     setSaveErr('')
     setSaveMsg('')
+    setVisitErr('')
     if (!canEditStatus) {
       setSaveErr('Chỉ có thể xác nhận/hủy khi lịch ở trạng thái Chờ xác nhận.')
       return
@@ -517,12 +621,29 @@ export default function ReceptionHome() {
       setSaveErr('Vui lòng chọn Xác nhận hoặc Hủy.')
       return
     }
+
+    const visitExtra = {}
+    if (next === 'confirmed') {
+      const qStr = String(visitQueueDraft || '').trim()
+      if (qStr) {
+        const n = parseInt(qStr, 10)
+        if (!Number.isFinite(n) || n < 1) {
+          setSaveErr('Số thứ tự phải là số nguyên dương hoặc để trống.')
+          return
+        }
+        visitExtra.visitQueueNumber = n
+      }
+      const room = String(clinicRoomDraft || '').trim()
+      if (room) visitExtra.clinicRoom = room
+    }
+
     setSaving(true)
     try {
       const saveRes = await updateAppointmentStatus({
         token,
         appointmentId: activeDetail.id,
         status: next,
+        ...visitExtra,
       })
       setSaveMsg('Đã lưu trạng thái lịch hẹn.')
       const ap = saveRes?.appointment
@@ -537,6 +658,8 @@ export default function ReceptionHome() {
             cancelledBy: ap.cancelledBy ?? cur.cancelledBy,
             confirmedAt: null,
             confirmedBy: null,
+            visitQueueNumber: null,
+            clinicRoom: '',
           }
         } else if (next === 'confirmed' && ap) {
           patch = {
@@ -545,6 +668,8 @@ export default function ReceptionHome() {
             cancelledBy: null,
             confirmedAt: ap.confirmedAt ?? cur.confirmedAt,
             confirmedBy: ap.confirmedBy ?? cur.confirmedBy,
+            visitQueueNumber: ap.visitQueueNumber ?? cur.visitQueueNumber,
+            clinicRoom: ap.clinicRoom != null ? ap.clinicRoom : cur.clinicRoom,
           }
         }
         return { ...prev, [key]: { ...cur, status: next, ...patch } }
@@ -566,6 +691,7 @@ export default function ReceptionHome() {
     setSelectedId(id)
     setSaveMsg('')
     setSaveErr('')
+    setVisitErr('')
     setDetailErr('')
     setTicket(String(row.ticket || ''))
 
@@ -636,24 +762,21 @@ export default function ReceptionHome() {
     })
   }
 
-  if (!token || !user || user.userType !== 'receptionist') return null
+  if (!token || !user || staffRole(user) !== 'receptionist') return null
 
   return (
     <div className="tcl-shell">
       <header className="tcl-top">
         <div className="tcl-brand">VITACARE</div>
         <nav className="tcl-nav" aria-label="Module">
+          <button type="button" onClick={() => navigate('/dashboard')}>
+            Thống kê
+          </button>
           <button type="button" className="is-active">
             Lịch hẹn
           </button>
           <button type="button" onClick={() => navigate('/registration', { state: { createNew: true } })}>
             Đăng ký
-          </button>
-          <button type="button" disabled>
-            Khám bệnh
-          </button>
-          <button type="button" disabled>
-            Báo cáo
           </button>
         </nav>
         <div className="tcl-top-user">
@@ -662,10 +785,7 @@ export default function ReceptionHome() {
             type="button"
             className="tcl-btn"
             onClick={() => {
-              localStorage.removeItem('token')
-              localStorage.removeItem('user')
-              sessionStorage.removeItem('token')
-              sessionStorage.removeItem('user')
+              clearStaffSession()
               navigate('/login', { replace: true })
             }}
           >
@@ -700,63 +820,66 @@ export default function ReceptionHome() {
         <div className="tcl-split">
           <aside className="tcl-sidebar">
             <div className="tcl-filters">
-              <div className="tcl-filters-head">
-                <h2 className="tcl-filters-title">Bộ lọc danh sách</h2>
-                <p className="tcl-filters-desc">Lọc theo trạng thái, mã vé, bệnh nhân và khoảng ngày.</p>
+              <div className="tcl-search-filter-row">
+                <input
+                  id="reception-list-search"
+                  className="tcl-list-search-input"
+                  type="search"
+                  value={listSearch}
+                  onChange={(e) => {
+                    setListSearch(e.target.value)
+                    setQrListFocusTicket('')
+                  }}
+                  placeholder="Tìm mã lịch hẹn, mã BN hoặc tên…"
+                  autoComplete="off"
+                  enterKeyHint="search"
+                  aria-label="Tìm trong danh sách đã tải"
+                />
+                <button
+                  type="button"
+                  className={`tcl-btn tcl-btn--filter-toggle${filtersOpen ? ' is-open' : ''}`}
+                  aria-expanded={filtersOpen}
+                  aria-controls="reception-advanced-filters"
+                  onClick={() => setFiltersOpen((o) => !o)}
+                >
+                  Lọc
+                </button>
               </div>
-              <div className="tcl-filters-body">
-                <div className="tcl-filter-field">
-                  <label htmlFor="reception-status-filter">Trạng thái</label>
-                  <select
-                    id="reception-status-filter"
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                  >
-                    <option value="all">Tất cả</option>
-                    <option value="pending">Chờ</option>
-                    <option value="confirmed">Đã xác nhận</option>
-                    <option value="cancelled">Đã hủy</option>
-                  </select>
+              {filtersOpen ? (
+                <div
+                  id="reception-advanced-filters"
+                  className="tcl-filters-advanced"
+                  role="region"
+                  aria-label="Lọc theo trạng thái và khoảng ngày"
+                >
+                  <p className="tcl-filters-advanced-hint">
+                    Trạng thái và khoảng ngày dùng để tải danh sách từ máy chủ; ô phía trên lọc nhanh trong dữ liệu đã tải.
+                  </p>
+                  <div className="tcl-filters-body tcl-filters-body--advanced">
+                    <div className="tcl-filter-field">
+                      <label htmlFor="reception-status-filter">Trạng thái</label>
+                      <select
+                        id="reception-status-filter"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                      >
+                        <option value="all">Tất cả</option>
+                        <option value="pending">Chờ</option>
+                        <option value="confirmed">Đã xác nhận</option>
+                        <option value="cancelled">Đã hủy</option>
+                      </select>
+                    </div>
+                    <div className="tcl-filter-field">
+                      <label htmlFor="reception-from-date">Từ ngày</label>
+                      <input id="reception-from-date" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+                    </div>
+                    <div className="tcl-filter-field">
+                      <label htmlFor="reception-to-date">Đến ngày</label>
+                      <input id="reception-to-date" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                    </div>
+                  </div>
                 </div>
-                <div className="tcl-filter-field">
-                  <label htmlFor="reception-ticket-filter">Mã lịch hẹn</label>
-                  <input
-                    id="reception-ticket-filter"
-                    value={filterTicket}
-                    onChange={(e) => setFilterTicket(e.target.value)}
-                    placeholder="YMA…"
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="tcl-filter-field">
-                  <label htmlFor="reception-patient-code-filter">Mã bệnh nhân</label>
-                  <input
-                    id="reception-patient-code-filter"
-                    value={filterPatientCode}
-                    onChange={(e) => setFilterPatientCode(e.target.value)}
-                    placeholder="YM…"
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="tcl-filter-field">
-                  <label htmlFor="reception-name-filter">Họ tên</label>
-                  <input
-                    id="reception-name-filter"
-                    value={filterName}
-                    onChange={(e) => setFilterName(e.target.value)}
-                    placeholder="Tên BN"
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="tcl-filter-field">
-                  <label htmlFor="reception-from-date">Từ ngày</label>
-                  <input id="reception-from-date" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                </div>
-                <div className="tcl-filter-field">
-                  <label htmlFor="reception-to-date">Đến ngày</label>
-                  <input id="reception-to-date" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-                </div>
-              </div>
+              ) : null}
             </div>
 
             <div className="tcl-lookup-block">
@@ -792,7 +915,7 @@ export default function ReceptionHome() {
                 <div>
                   <h3 className="tcl-list-title">Danh sách lịch hẹn</h3>
                   <p className="tcl-list-meta">
-                    {listLoading ? 'Đang tải…' : `${filteredRows.length} lịch phù hợp bộ lọc`}
+                    {listLoading ? 'Đang tải…' : `${filteredRows.length} lịch${listSearch.trim() ? ' phù hợp tìm kiếm' : ''}`}
                   </p>
                 </div>
                 <span className="tcl-list-page">Trang {page + 1}/{pageCount}</span>
@@ -992,9 +1115,69 @@ export default function ReceptionHome() {
                       <input readOnly value={doctorSpecialtyDisplay(activeDetail.doctor)} />
                     </div>
                     <div className="tcl-f tcl-f--full">
+                      <label htmlFor="reception-clinic-room">Phòng khám</label>
+                      {clinicRoomsErr ? <div className="tcl-banner-err" style={{ marginBottom: 8 }}>{clinicRoomsErr}</div> : null}
+                      <select
+                        id="reception-clinic-room"
+                        value={clinicRoomDraft}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setClinicRoomDraft(v)
+                          if (!canEditVisit) return
+                          void applyClinicRoomSelection(v)
+                        }}
+                        disabled={!canEditVisit}
+                      >
+                        <option value="">— Chọn phòng —</option>
+                        {clinicRoomDraft &&
+                        !clinicRooms.some((r) => String(r.roomID) === String(clinicRoomDraft)) ? (
+                          <option value={clinicRoomDraft}>
+                            {clinicRoomDraft} (giá trị hiện tại / ngoài danh mục)
+                          </option>
+                        ) : null}
+                        {clinicRooms.map((r) => (
+                          <option key={r.roomID} value={r.roomID}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="tcl-f tcl-f--full">
                       <label>Triệu chứng / Ghi chú</label>
                       <textarea readOnly rows={3} value={activeDetail.note || ''} placeholder="—" />
                     </div>
+                    {currentStatus !== 'cancelled' && currentStatus !== 'examined' ? (
+                      <>
+                        {currentStatus === 'pending' ? (
+                          <div className="tcl-f tcl-f--full">
+                            <p className="tcl-muted" style={{ margin: 0, fontSize: '0.86rem' }}>
+                              Chọn <strong>phòng khám</strong> và <strong>số thứ tự</strong> chỉ là bản nháp trên màn hình. Để ghi
+                              vào hệ thống, chọn <strong>Xác nhận</strong> rồi bấm <strong>Lưu</strong> ở mục Thông tin xác
+                              nhận bên dưới. Chỉ chọn phòng mà chưa xác nhận thì chưa lưu được.
+                            </p>
+                          </div>
+                        ) : null}
+                        {visitErr ? (
+                          <div className="tcl-f tcl-f--full">
+                            <div className="tcl-banner-err">{visitErr}</div>
+                          </div>
+                        ) : null}
+                        <div className="tcl-f">
+                          <label htmlFor="reception-visit-queue">Số thứ tự</label>
+                          <input
+                            id="reception-visit-queue"
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={visitQueueDraft}
+                            onChange={(e) => setVisitQueueDraft(e.target.value)}
+                            disabled={!canEditVisit}
+                            placeholder="Để trống = tự gán theo phòng"
+                            autoComplete="off"
+                          />
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </section>
 
