@@ -650,7 +650,7 @@ export default function RegistrationHome() {
         ? await updateAppointmentStatus({
             token,
             appointmentId: payload?.appointmentId,
-            status: 'confirmed',
+            status: 'pending',
             note: buildAppointmentNote(),
           })
         : await createAppointmentReception({
@@ -673,10 +673,12 @@ export default function RegistrationHome() {
       setSaveMsg(
         data?.patientCreated
           ? `Đã tạo hồ sơ bệnh nhân tại quầy và lưu lịch hẹn. Mã vé: ${stamp}.`
-          : `Đã lưu đăng ký. Mã lịch hẹn: ${stamp}`,
+          : fromAppointment
+            ? `Đã cập nhật thông tin đăng ký. Mã lịch hẹn: ${stamp}.`
+            : `Đã lưu đăng ký. Mã lịch hẹn: ${stamp}`,
       )
       if (fromAppointment) {
-        // Sau khi "Đăng ký" từ lịch hẹn (xác nhận), nhảy về Lịch hẹn và mở chi tiết theo mã vé.
+        // Sau khi cập nhật từ lịch hẹn, quay về Lịch hẹn để thu phí và xác nhận.
         const t = String(payload?.ticket || stamp).trim()
         if (t) {
           navigate(
@@ -684,7 +686,7 @@ export default function RegistrationHome() {
             {
               state: {
                 lookupTicket: t,
-                flash: { type: 'ok', message: `Đăng ký thành công. Mã lịch hẹn: ${t}` },
+                flash: { type: 'ok', message: `Đã cập nhật đăng ký. Vui lòng thu phí và xác nhận tại Lịch hẹn. Mã: ${t}` },
               },
               replace: true,
             },
@@ -700,7 +702,7 @@ export default function RegistrationHome() {
             {
               state: {
                 lookupTicket: t,
-                flash: { type: 'ok', message: `Đăng ký thành công. Mã lịch hẹn: ${t}` },
+                flash: { type: 'ok', message: `Đăng ký thành công. Vui lòng thu phí và xác nhận tại Lịch hẹn. Mã: ${t}` },
               },
               replace: true,
             },

@@ -15,7 +15,9 @@ import {
 import { isPendingAppointmentPastSlot } from '../utils/appointmentExpiry.js'
 import { clearStaffSession, getStaffSession, staffRole } from '../utils/staffSession.js'
 import { listClinicRooms } from '../api/clinicRooms.js'
+import { recordAppointmentPayment } from '../api/payments.js'
 import { Html5Qrcode } from 'html5-qrcode'
+import { resolveConsultationFee } from '../utils/consultationFee.js'
 import '../styles/reception-home.css'
 
 const QR_READER_ELEMENT_ID = 'tcl-ticket-qr-reader'
@@ -86,6 +88,33 @@ function formatConfirmedByLine(confirmedBy) {
   if (!confirmedBy || typeof confirmedBy !== 'object') return '—'
   const name = String(confirmedBy.displayName || '').trim() || String(confirmedBy.email || '').trim()
   return name || '—'
+}
+
+function formatVnd(amount) {
+  const n = Number(amount)
+  if (!Number.isFinite(n)) return '—'
+  return `${n.toLocaleString('vi-VN')} đ`
+}
+
+function paymentMethodLabel(method) {
+  const m = String(method || '').trim().toLowerCase()
+  if (m === 'cash') return 'Tiền mặt'
+  if (m === 'transfer') return 'Chuyển khoản'
+  return '—'
+}
+
+function formatPaidByLine(paidBy) {
+  if (!paidBy || typeof paidBy !== 'object') return '—'
+  const name = String(paidBy.displayName || '').trim() || String(paidBy.email || '').trim()
+  return name || '—'
+}
+
+/** Ưu tiên bản đã thu khi gộp payment từ list + cache chi tiết. */
+function mergePayment(primary, secondary) {
+  const isPaid = (p) => String(p?.status || 'unpaid').trim().toLowerCase() === 'paid'
+  if (isPaid(primary)) return primary
+  if (isPaid(secondary)) return secondary
+  return primary ?? secondary ?? null
 }
 
 function formatDob(iso) {
@@ -167,6 +196,42 @@ function normalizeStatus(st) {
   return s || 'pending'
 }
 
+function readReceptionNavState(location) {
+  const today = ymd(new Date())
+  const from = String(location?.state?.fromDate || '').trim()
+  const to = String(location?.state?.toDate || '').trim()
+  const st = String(location?.state?.statusFilter || '').trim()
+  const dashFilter = String(location?.state?.dashFilter || '').trim()
+  return {
+    fromDate: from || today,
+    toDate: to || today,
+    statusFilter: st || 'all',
+    dashFilter,
+    filtersOpen: Boolean(from || to || st || dashFilter),
+  }
+}
+
+function dashFilterLabelVi(key) {
+  if (key === 'unpaid') return 'Chưa thu phí'
+  if (key === 'noRoom') return 'Chưa chọn phòng'
+  if (key === 'ready') return 'Sẵn sàng xác nhận'
+  if (key === 'expiring') return 'Quá giờ — sắp tự hủy'
+  return ''
+}
+
+function matchesDashFilter(row, dashFilter) {
+  const f = String(dashFilter || '').trim()
+  if (!f) return true
+  if (normalizeStatus(row?.status) !== 'pending') return false
+  const isPaid = String(row?.payment?.status || '').toLowerCase() === 'paid'
+  const room = String(row?.clinicRoom || '').trim()
+  if (f === 'unpaid') return !isPaid
+  if (f === 'noRoom') return !room
+  if (f === 'ready') return isPaid && Boolean(room)
+  if (f === 'expiring') return isPendingAppointmentPastSlot(row)
+  return true
+}
+
 /** Quét pending trong khoảng ngày; hủy các lịch đã quá hết khung giờ mà chưa được xác nhận. */
 async function expireStalePendingInRange({ token, from, to }) {
   const pendingRows = await listReceptionAppointments({
@@ -200,13 +265,15 @@ export default function ReceptionHome() {
   const navigate = useNavigate()
   const location = useLocation()
   const { token, user } = getSession()
+  const navInit = useMemo(() => readReceptionNavState(location), [])
 
-  const [fromDate, setFromDate] = useState(() => ymd(new Date()))
-  const [toDate, setToDate] = useState(() => ymd(new Date()))
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [fromDate, setFromDate] = useState(navInit.fromDate)
+  const [toDate, setToDate] = useState(navInit.toDate)
+  const [statusFilter, setStatusFilter] = useState(navInit.statusFilter)
+  const [dashFilter, setDashFilter] = useState(navInit.dashFilter)
   /** Tìm nhanh trong danh sách đã tải: mã lịch hẹn, mã BN hoặc tên. */
   const [listSearch, setListSearch] = useState('')
-  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(navInit.filtersOpen)
 
   const [list, setList] = useState([])
   const [listLoading, setListLoading] = useState(false)
@@ -229,6 +296,10 @@ export default function ReceptionHome() {
   const [clinicRooms, setClinicRooms] = useState([])
   const [clinicRoomsErr, setClinicRoomsErr] = useState('')
   const [visitErr, setVisitErr] = useState('')
+
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [paymentSaving, setPaymentSaving] = useState(false)
+  const [paymentErr, setPaymentErr] = useState('')
 
   const [ticket, setTicket] = useState('')
   const [ticketErr, setTicketErr] = useState('')
@@ -302,9 +373,12 @@ export default function ReceptionHome() {
   }, [token, loadList])
 
   const filteredRows = useMemo(() => {
+    let base = list || []
+    if (dashFilter) base = base.filter((r) => matchesDashFilter(r, dashFilter))
+
     const focus = qrListFocusTicket.trim().toLowerCase()
     if (focus) {
-      const hits = (list || []).filter((r) => String(r.ticket || '').toLowerCase() === focus)
+      const hits = base.filter((r) => String(r.ticket || '').toLowerCase() === focus)
       if (hits.length) return hits
       if (lookupDetail && String(lookupDetail.ticket || '').toLowerCase() === focus) {
         return [lookupDetail]
@@ -312,14 +386,14 @@ export default function ReceptionHome() {
       return []
     }
     const q = listSearch.trim().toLowerCase()
-    if (!q) return list || []
-    return (list || []).filter((r) => {
+    if (!q) return base
+    return base.filter((r) => {
       const ticket = String(r.ticket || '').toLowerCase()
       const code = String(r.patient?.patientCode || '').toLowerCase()
       const name = patientListDisplayName(r.patient).toLowerCase()
       return ticket.includes(q) || code.includes(q) || name.includes(q)
     })
-  }, [list, lookupDetail, qrListFocusTicket, listSearch])
+  }, [list, lookupDetail, qrListFocusTicket, listSearch, dashFilter])
 
   const pageRows = useMemo(() => {
     const start = page * PAGE_SIZE
@@ -344,19 +418,46 @@ export default function ReceptionHome() {
           confirmedBy: row.confirmedBy,
           visitQueueNumber: row.visitQueueNumber ?? cached.visitQueueNumber,
           clinicRoom: row.clinicRoom != null ? row.clinicRoom : cached.clinicRoom,
+          payment: mergePayment(row.payment, cached.payment),
         }
       }
       if (cached) return cached
       if (row) return row
     }
-    if (lookupDetail) return lookupDetail
+    if (lookupDetail) {
+      const cached = detailById[String(lookupDetail.id)]
+      if (cached) {
+        return {
+          ...lookupDetail,
+          ...cached,
+          payment: mergePayment(lookupDetail.payment, cached.payment),
+        }
+      }
+      return lookupDetail
+    }
     return null
   }, [selectedId, list, lookupDetail, detailById])
 
   const currentStatus = useMemo(() => normalizeStatus(activeDetail?.status), [activeDetail?.status])
   const canEditStatus = currentStatus === 'pending'
-  /** Chỉnh phòng / STT khi lịch còn Chờ — ghi DB khi Xác nhận + Lưu (mục 3). */
+  /** Chỉnh phòng / STT khi lịch còn Chờ — ghi DB khi Xác nhận + Lưu. */
   const canEditVisit = currentStatus === 'pending'
+  const paymentStatus = String(activeDetail?.payment?.status || 'unpaid').toLowerCase()
+  const isPaid = paymentStatus === 'paid'
+  const hasClinicRoom = Boolean(String(clinicRoomDraft || '').trim())
+  const consultationFee = resolveConsultationFee(
+    activeDetail?.payment?.amount,
+    activeDetail?.consultationFee ?? activeDetail?.doctor?.consultationFee,
+  )
+  const canConfirm = canEditStatus && isPaid && hasClinicRoom
+  const canSaveStatus =
+    canEditStatus && (detailStatus !== 'confirmed' || (isPaid && hasClinicRoom))
+  const confirmBlockTitle =
+    !isPaid && canEditStatus
+      ? 'Cần thu phí khám trước'
+      : !hasClinicRoom && canEditStatus && isPaid
+        ? 'Cần chọn phòng khám trước'
+        : undefined
 
   const applyClinicRoomSelection = useCallback(
     async (roomValue) => {
@@ -431,6 +532,12 @@ export default function ReceptionHome() {
     }
   }, [activeDetail?.id, activeDetail?.visitQueueNumber, activeDetail?.clinicRoom, activeDetail?.doctor?.clinicRoomID])
 
+  useEffect(() => {
+    if (!activeDetail?.id) return
+    setPaymentMethod('cash')
+    setPaymentErr('')
+  }, [activeDetail?.id])
+
   function normalizeLookup(data) {
     return {
       id: data.appointment.id,
@@ -451,6 +558,8 @@ export default function ReceptionHome() {
       createdAt: data.appointment.createdAt,
       visitQueueNumber: data.appointment.visitQueueNumber ?? null,
       clinicRoom: data.appointment.clinicRoom || '',
+      payment: data.appointment.payment || null,
+      consultationFee: data.consultationFee ?? data.doctor?.consultationFee ?? null,
       patient: data.patient
         ? {
             ...data.patient,
@@ -487,9 +596,7 @@ export default function ReceptionHome() {
         }
         if (options.focusList) {
           setQrListFocusTicket(ticketCode)
-          setFilterTicket(ticketCode)
-          setFilterPatientCode('')
-          setFilterName('')
+          setListSearch(ticketCode)
           setPage(0)
         }
         setSaveMsg('')
@@ -538,6 +645,21 @@ export default function ReceptionHome() {
     }, 4500)
     return () => clearTimeout(t)
   }, [location.state])
+
+  // Bộ lọc từ trang Thống kê (Dashboard) — mỗi lần bấm ô KPI áp dụng lại
+  useEffect(() => {
+    const navAt = location.state?.dashNavAt
+    if (navAt == null || navAt === '') return
+    const n = readReceptionNavState(location)
+    setFromDate(n.fromDate)
+    setToDate(n.toDate)
+    setStatusFilter(n.statusFilter)
+    setDashFilter(n.dashFilter)
+    setFiltersOpen(n.filtersOpen)
+    setListSearch('')
+    setQrListFocusTicket('')
+    setPage(0)
+  }, [location.state?.dashNavAt])
 
   useEffect(() => {
     if (!qrOpen) return undefined
@@ -607,6 +729,75 @@ export default function ReceptionHome() {
     }
   }, [qrOpen])
 
+  const applyPaymentToCaches = useCallback((id, payment, norm = null) => {
+    const key = String(id)
+    if (!key || !payment) return
+    setDetailById((prev) => ({
+      ...prev,
+      [key]: norm
+        ? { ...(prev[key] || {}), ...norm, payment }
+        : { ...(prev[key] || activeDetail || {}), payment },
+    }))
+    setList((prev) => prev.map((r) => (String(r.id) === key ? { ...r, payment } : r)))
+    setLookupDetail((prev) =>
+      prev && String(prev.id) === key
+        ? { ...prev, ...(norm || {}), payment }
+        : prev,
+    )
+  }, [activeDetail])
+
+  const refreshPaymentFromServer = useCallback(
+    async (ticket) => {
+      const t = String(ticket || activeDetail?.ticket || '').trim()
+      if (!t || !token) return false
+      try {
+        const data = await lookupAppointmentByTicket({ token, ticket: t })
+        const norm = normalizeLookup(data)
+        if (norm?.payment) {
+          applyPaymentToCaches(norm.id, norm.payment, norm)
+          return true
+        }
+      } catch {
+        /* bỏ qua */
+      }
+      return false
+    },
+    [token, activeDetail?.ticket, applyPaymentToCaches],
+  )
+
+  async function handleRecordPayment() {
+    if (!activeDetail?.id || !canEditStatus || isPaid) return
+    setPaymentErr('')
+    setSaveMsg('')
+    setPaymentSaving(true)
+    try {
+      const data = await recordAppointmentPayment({
+        token,
+        appointmentId: activeDetail.id,
+        method: paymentMethod,
+        amount: consultationFee,
+      })
+      const ap = data?.appointment
+      const paid = ap?.payment || null
+      if (paid) {
+        applyPaymentToCaches(activeDetail.id, paid, ap ? { ...activeDetail, ...ap, payment: paid } : null)
+      }
+      setPaymentErr('')
+      setSaveMsg('Đã ghi nhận thanh toán phí khám.')
+    } catch (e) {
+      const msg = e?.message || 'Không ghi nhận được thanh toán.'
+      if (/đã được ghi nhận thanh toán/i.test(msg)) {
+        const synced = await refreshPaymentFromServer(activeDetail.ticket)
+        setPaymentErr('')
+        setSaveMsg(synced ? 'Lịch này đã được ghi nhận thanh toán.' : msg)
+      } else {
+        setPaymentErr(msg)
+      }
+    } finally {
+      setPaymentSaving(false)
+    }
+  }
+
   async function handleSaveStatus() {
     if (!activeDetail?.id) return
     setSaveErr('')
@@ -621,9 +812,19 @@ export default function ReceptionHome() {
       setSaveErr('Vui lòng chọn Xác nhận hoặc Hủy.')
       return
     }
+    if (next === 'confirmed' && !isPaid) {
+      setSaveErr('Chưa thu phí khám. Vui lòng ghi nhận thanh toán trước khi xác nhận.')
+      return
+    }
 
     const visitExtra = {}
     if (next === 'confirmed') {
+      const room = String(clinicRoomDraft || '').trim()
+      if (!room) {
+        setSaveErr('Vui lòng chọn phòng khám trước khi xác nhận.')
+        return
+      }
+      visitExtra.clinicRoom = room
       const qStr = String(visitQueueDraft || '').trim()
       if (qStr) {
         const n = parseInt(qStr, 10)
@@ -633,8 +834,6 @@ export default function ReceptionHome() {
         }
         visitExtra.visitQueueNumber = n
       }
-      const room = String(clinicRoomDraft || '').trim()
-      if (room) visitExtra.clinicRoom = room
     }
 
     setSaving(true)
@@ -806,7 +1005,7 @@ export default function ReceptionHome() {
             <button
               type="button"
               className="tcl-btn tcl-btn--pri"
-              disabled={!activeDetail || saving || !canEditStatus}
+              disabled={!activeDetail || saving || !canSaveStatus}
               onClick={() => void handleSaveStatus()}
             >
               {saving ? 'Đang lưu…' : 'Lưu'}
@@ -844,7 +1043,21 @@ export default function ReceptionHome() {
                 >
                   Lọc
                 </button>
+                <button
+                  type="button"
+                  className="tcl-btn"
+                  title="Mở camera để quét mã QR lịch hẹn"
+                  disabled={lookupLoading}
+                  onClick={() => {
+                    setTicketErr('')
+                    setQrErr('')
+                    setQrOpen(true)
+                  }}
+                >
+                  {lookupLoading ? '…' : 'Quét QR'}
+                </button>
               </div>
+              {ticketErr ? <div className="tcl-banner-err">{ticketErr}</div> : null}
               {filtersOpen ? (
                 <div
                   id="reception-advanced-filters"
@@ -861,11 +1074,15 @@ export default function ReceptionHome() {
                       <select
                         id="reception-status-filter"
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
+                        onChange={(e) => {
+                          setStatusFilter(e.target.value)
+                          setDashFilter('')
+                        }}
                       >
                         <option value="all">Tất cả</option>
                         <option value="pending">Chờ</option>
                         <option value="confirmed">Đã xác nhận</option>
+                        <option value="examined">Đã khám</option>
                         <option value="cancelled">Đã hủy</option>
                       </select>
                     </div>
@@ -882,40 +1099,35 @@ export default function ReceptionHome() {
               ) : null}
             </div>
 
-            <div className="tcl-lookup-block">
-              <strong className="tcl-lookup-label">Tra cứu mã vé</strong>
-              <div className="tcl-lookup-row">
-                <input
-                  value={ticket}
-                  onChange={(e) => setTicket(e.target.value)}
-                  placeholder="YMA…"
-                  autoComplete="off"
-                />
+            {dashFilter ? (
+              <div className="tcl-dash-filter-banner" role="status">
+                <span>
+                  Lọc từ Thống kê: <strong>{dashFilterLabelVi(dashFilter)}</strong>
+                  {' · '}
+                  {formatDateVi(fromDate)}
+                  {statusFilter !== 'all' ? ` · ${statusLabelVi(statusFilter)}` : ''}
+                </span>
                 <button
                   type="button"
                   className="tcl-btn"
-                  title="Mở camera để quét mã QR lịch hẹn"
                   onClick={() => {
-                    setTicketErr('')
-                    setQrErr('')
-                    setQrOpen(true)
+                    setDashFilter('')
+                    setListSearch('')
                   }}
                 >
-                  Quét QR
-                </button>
-                <button type="button" className="tcl-btn tcl-btn--pri" onClick={() => void runLookup()} disabled={lookupLoading}>
-                  {lookupLoading ? '…' : 'Tìm'}
+                  Bỏ lọc
                 </button>
               </div>
-              {ticketErr ? <div className="tcl-banner-err">{ticketErr}</div> : null}
-            </div>
+            ) : null}
 
             <div className="tcl-list-panel">
               <div className="tcl-list-head">
                 <div>
                   <h3 className="tcl-list-title">Danh sách lịch hẹn</h3>
                   <p className="tcl-list-meta">
-                    {listLoading ? 'Đang tải…' : `${filteredRows.length} lịch${listSearch.trim() ? ' phù hợp tìm kiếm' : ''}`}
+                    {listLoading
+                      ? 'Đang tải…'
+                      : `${filteredRows.length} lịch${dashFilter ? ` · ${dashFilterLabelVi(dashFilter)}` : ''}${listSearch.trim() ? ' · tìm kiếm' : ''}`}
                   </p>
                 </div>
                 <span className="tcl-list-page">Trang {page + 1}/{pageCount}</span>
@@ -1151,9 +1363,9 @@ export default function ReceptionHome() {
                         {currentStatus === 'pending' ? (
                           <div className="tcl-f tcl-f--full">
                             <p className="tcl-muted" style={{ margin: 0, fontSize: '0.86rem' }}>
-                              Chọn <strong>phòng khám</strong> và <strong>số thứ tự</strong> chỉ là bản nháp trên màn hình. Để ghi
-                              vào hệ thống, chọn <strong>Xác nhận</strong> rồi bấm <strong>Lưu</strong> ở mục Thông tin xác
-                              nhận bên dưới. Chỉ chọn phòng mà chưa xác nhận thì chưa lưu được.
+                              Cần <strong>thu phí khám</strong> và <strong>chọn phòng khám</strong> trước khi chọn{' '}
+                              <strong>Xác nhận</strong>. <strong>Số thứ tự</strong> có thể để trống (hệ thống tự gán theo phòng).
+                              Bấm <strong>Lưu</strong> để ghi trạng thái, phòng và STT vào hệ thống.
                             </p>
                           </div>
                         ) : null}
@@ -1184,6 +1396,100 @@ export default function ReceptionHome() {
                 <section className="tcl-sec">
                   <h2 className="tcl-sec-title">
                     <span>3</span>
+                    Thanh toán
+                  </h2>
+                  {currentStatus === 'pending' ? (
+                    <>
+                      <div className="tcl-payment-summary">
+                        <span className="tcl-payment-label">Phí khám</span>
+                        <strong className="tcl-payment-amount">{formatVnd(consultationFee)}</strong>
+                      </div>
+                      {isPaid ? (
+                        <div className="tcl-grid-form tcl-payment-readonly">
+                          <div className="tcl-f tcl-f--full">
+                            <span className="tcl-payment-badge">Đã thu phí — không thể chỉnh sửa</span>
+                          </div>
+                          <div className="tcl-f">
+                            <label>Số tiền</label>
+                            <input readOnly value={formatVnd(activeDetail.payment?.amount ?? consultationFee)} />
+                          </div>
+                          <div className="tcl-f">
+                            <label>Phương thức</label>
+                            <input readOnly value={paymentMethodLabel(activeDetail.payment?.method)} />
+                          </div>
+                          <div className="tcl-f">
+                            <label>Thu bởi</label>
+                            <input readOnly value={formatPaidByLine(activeDetail.payment?.paidBy)} />
+                          </div>
+                          <div className="tcl-f">
+                            <label>Thời điểm thu</label>
+                            <input
+                              readOnly
+                              value={
+                                activeDetail.payment?.paidAt
+                                  ? formatDateTimeVi(activeDetail.payment.paidAt)
+                                  : '—'
+                              }
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="tcl-grid-form">
+                            <div className="tcl-f">
+                              <label htmlFor="reception-payment-method">Phương thức</label>
+                              <select
+                                id="reception-payment-method"
+                                value={paymentMethod}
+                                onChange={(e) => setPaymentMethod(e.target.value)}
+                                disabled={paymentSaving || isPaid}
+                              >
+                                <option value="cash">Tiền mặt</option>
+                                <option value="transfer">Chuyển khoản</option>
+                              </select>
+                            </div>
+                          </div>
+                          {paymentErr ? <div className="tcl-banner-err">{paymentErr}</div> : null}
+                          <div className="tcl-payment-actions">
+                            <button
+                              type="button"
+                              className="tcl-btn tcl-btn--pri"
+                              disabled={paymentSaving || !canEditStatus || isPaid}
+                              onClick={() => void handleRecordPayment()}
+                            >
+                              {paymentSaving ? 'Đang ghi nhận…' : 'Xác nhận đã thu'}
+                            </button>
+                          </div>
+                          <p className="tcl-payment-hint">
+                            Cần ghi nhận thanh toán và chọn phòng khám trước khi chọn <strong>Xác nhận</strong> ở mục
+                            bên dưới.
+                          </p>
+                        </>
+                      )}
+                    </>
+                  ) : isPaid ? (
+                    <div className="tcl-grid-form">
+                      <div className="tcl-f">
+                        <label>Trạng thái thu</label>
+                        <input readOnly value="Đã thu phí" />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Số tiền</label>
+                        <input readOnly value={formatVnd(activeDetail.payment?.amount ?? consultationFee)} />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Phương thức</label>
+                        <input readOnly value={paymentMethodLabel(activeDetail.payment?.method)} />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="tcl-payment-hint">Chưa ghi nhận thanh toán cho lịch này.</p>
+                  )}
+                </section>
+
+                <section className="tcl-sec">
+                  <h2 className="tcl-sec-title">
+                    <span>4</span>
                     Thông tin xác nhận
                   </h2>
                   <div className="tcl-f" style={{ marginBottom: '0.65rem' }}>
@@ -1209,13 +1515,13 @@ export default function ReceptionHome() {
                         />
                         Hủy
                       </label>
-                      <label>
+                      <label title={confirmBlockTitle}>
                         <input
                           type="radio"
                           name={`st-${String(activeDetail?.id ?? 'x')}`}
                           checked={detailStatus === 'confirmed'}
-                          disabled={!canEditStatus}
-                          onChange={() => canEditStatus && setDetailStatus('confirmed')}
+                          disabled={!canConfirm}
+                          onChange={() => canConfirm && setDetailStatus('confirmed')}
                         />
                         Xác nhận
                       </label>
@@ -1238,6 +1544,8 @@ export default function ReceptionHome() {
                         }
                       >
                         {canEditStatus ? 'Chờ (tự hủy nếu quá giờ)' : `Đã khóa: ${statusLabelVi(currentStatus)}`}
+                        {canEditStatus && !isPaid ? ' · Chưa thu phí' : ''}
+                        {canEditStatus && isPaid && !hasClinicRoom ? ' · Chưa chọn phòng' : ''}
                       </span>
                     </div>
                   </div>
@@ -1304,7 +1612,7 @@ export default function ReceptionHome() {
                     <button
                       type="button"
                       className="tcl-btn tcl-btn--pri"
-                      disabled={!activeDetail || saving || !canEditStatus}
+                      disabled={!activeDetail || saving || !canSaveStatus}
                       onClick={() => void handleSaveStatus()}
                     >
                       {saving ? 'Đang lưu…' : 'Lưu'}
@@ -1314,7 +1622,7 @@ export default function ReceptionHome() {
               </>
             ) : (
               <div className="tcl-empty">
-                Chọn một dòng trong danh sách hoặc nhập mã vé để tra cứu chi tiết.
+                Chọn một dòng trong danh sách hoặc quét mã QR để tra cứu chi tiết.
               </div>
             )}
           </main>

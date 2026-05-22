@@ -194,6 +194,25 @@
   background: #f8fafc;
 }
 
+.tcl-dash-filter-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.65rem 0.85rem 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  font-size: 0.86rem;
+  color: var(--text);
+}
+
+.tcl-dash-filter-banner strong {
+  color: var(--text-heading);
+}
+
 .tcl-search-filter-row {
   display: flex;
   align-items: center;
@@ -306,44 +325,64 @@
   box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
 }
 
-.tcl-lookup-block {
-  padding: 0.75rem 0.95rem;
-  border-top: 1px solid var(--border);
-  background: #f8fafc;
-}
-
-.tcl-lookup-label {
-  display: block;
-  font-size: 0.82rem;
-  font-weight: 800;
-  color: var(--text-heading);
-}
-
-.tcl-lookup-row {
+.tcl-payment-summary {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: #f0fdfa;
+  border: 1px solid rgba(13, 148, 136, 0.18);
+}
+
+.tcl-payment-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tcl-payment-amount {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--clinic-primary-dark, #0f766e);
+}
+
+.tcl-payment-badge {
+  display: inline-flex;
   align-items: center;
-  margin-top: 0.45rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #047857;
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
-.tcl-lookup-row input {
-  flex: 1;
-  min-width: 120px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 0.42rem 0.55rem;
-  font-size: 0.86rem;
+.tcl-payment-actions {
+  margin-top: 0.55rem;
 }
 
-.tcl-lookup-row input:focus {
-  outline: none;
-  border-color: rgba(13, 148, 136, 0.55);
-  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+.tcl-payment-hint {
+  margin: 0.55rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
-.tcl-lookup-block .tcl-banner-err {
-  margin: 0.45rem 0 0;
+.tcl-payment-readonly input,
+.tcl-payment-readonly select,
+.tcl-payment-readonly textarea {
+  background: #f8fafc;
+  cursor: default;
+}
+
+.tcl-filters .tcl-banner-err {
+  margin: 0.45rem 0.95rem 0;
 }
 
 .tcl-qr-modal-backdrop {
