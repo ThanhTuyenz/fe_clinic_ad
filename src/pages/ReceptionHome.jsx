@@ -18,24 +18,11 @@ import { listClinicRooms } from '../api/clinicRooms.js'
 import { recordAppointmentPayment } from '../api/payments.js'
 import { Html5Qrcode } from 'html5-qrcode'
 import { resolveConsultationFee } from '../utils/consultationFee.js'
+import { printVisitSlip } from '../utils/printVisitSlip.js'
+import { ticketFromQrPayload } from '../utils/ticketQr.js'
 import '../styles/reception-home.css'
 
 const QR_READER_ELEMENT_ID = 'tcl-ticket-qr-reader'
-
-/** Lấy mã vé từ nội dung QR (plain YMA… hoặc URL có ticket/code). */
-function ticketFromQrPayload(text) {
-  const raw = String(text || '').trim()
-  if (!raw) return ''
-  try {
-    const u = new URL(raw)
-    const q = u.searchParams.get('ticket') || u.searchParams.get('code')
-    if (q) return String(q).trim()
-  } catch {
-    /* không phải URL */
-  }
-  const m = raw.match(/YMA[a-zA-Z0-9]+/i)
-  return (m ? m[0] : raw).trim()
-}
 
 function getSession() {
   return getStaffSession()
@@ -130,6 +117,29 @@ function buildPatientCode(userId) {
 }
 
 /** Hiển thị chuyên khoa — đồng bộ với be_clinic doctorEmbed / fe_clinic khi API thiếu specialtyName. */
+function doctorDisplayName(d) {
+  if (!d) return '—'
+  const name = String(d.displayName || '').trim()
+  if (name) return name
+  const last = String(d.lastName || '').trim()
+  const first = String(d.firstName || '').trim()
+  return `${last} ${first}`.trim() || String(d.email || '').trim() || '—'
+}
+
+function clinicRoomLabel(roomId, rooms) {
+  const id = String(roomId || '').trim()
+  if (!id) return '—'
+  const hit = (rooms || []).find((r) => String(r.roomID) === id)
+  return hit?.name ? String(hit.name).trim() : id
+}
+
+function formatExamTimeLine(start, end) {
+  const s = String(start || '').trim().slice(0, 5)
+  if (!s) return '—'
+  const e = String(end || '').trim().slice(0, 5)
+  return e && e !== s ? `${s} – ${e}` : s
+}
+
 function doctorSpecialtyDisplay(d) {
   if (!d || typeof d !== 'object') return '—'
   const direct = String(d.specialtyName || d.specialty || '').trim()
@@ -452,6 +462,19 @@ export default function ReceptionHome() {
   const canConfirm = canEditStatus && isPaid && hasClinicRoom
   const canSaveStatus =
     canEditStatus && (detailStatus !== 'confirmed' || (isPaid && hasClinicRoom))
+  const canPrintVisitSlip = currentStatus === 'confirmed'
+  const visitSlipView = useMemo(() => {
+    if (!activeDetail || !canPrintVisitSlip) return null
+    const q = activeDetail.visitQueueNumber
+    return {
+      queueNumber: q != null && q !== '' ? String(q) : '—',
+      clinicRoom: clinicRoomLabel(activeDetail.clinicRoom, clinicRooms),
+      doctorName: doctorDisplayName(activeDetail.doctor),
+      examTime: formatExamTimeLine(activeDetail.startTime, activeDetail.endTime),
+      examDate: formatDateVi(activeDetail.appointmentDate),
+      ticket: activeDetail.ticket || '—',
+    }
+  }, [activeDetail, canPrintVisitSlip, clinicRooms])
   const confirmBlockTitle =
     !isPaid && canEditStatus
       ? 'Cần thu phí khám trước'
@@ -537,6 +560,12 @@ export default function ReceptionHome() {
     setPaymentMethod('cash')
     setPaymentErr('')
   }, [activeDetail?.id])
+
+  function handlePrintVisitSlip() {
+    if (!visitSlipView) return
+    const ok = printVisitSlip(visitSlipView)
+    if (!ok) setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
+  }
 
   function normalizeLookup(data) {
     return {
@@ -1307,20 +1336,7 @@ export default function ReceptionHome() {
                     </div>
                     <div className="tcl-f">
                       <label>Bác sĩ</label>
-                      <input
-                        readOnly
-                        value={
-                          (() => {
-                            const d = activeDetail.doctor
-                            if (!d) return '—'
-                            const name = String(d.displayName || '').trim()
-                            if (name) return name
-                            const last = String(d.lastName || '').trim()
-                            const first = String(d.firstName || '').trim()
-                            return `${last} ${first}`.trim() || String(d.email || '').trim() || '—'
-                          })()
-                        }
-                      />
+                      <input readOnly value={doctorDisplayName(activeDetail.doctor)} />
                     </div>
                     <div className="tcl-f">
                       <label>Chuyên khoa</label>
@@ -1608,7 +1624,7 @@ export default function ReceptionHome() {
                       </div>
                     </div>
                   )}
-                  <div style={{ marginTop: '0.75rem', textAlign: 'right' }}>
+                  <div className="tcl-confirm-actions">
                     <button
                       type="button"
                       className="tcl-btn tcl-btn--pri"
@@ -1617,6 +1633,15 @@ export default function ReceptionHome() {
                     >
                       {saving ? 'Đang lưu…' : 'Lưu'}
                     </button>
+                    {canPrintVisitSlip && visitSlipView ? (
+                      <button
+                        type="button"
+                        className="tcl-btn tcl-btn--print"
+                        onClick={handlePrintVisitSlip}
+                      >
+                        In phiếu khám
+                      </button>
+                    ) : null}
                   </div>
                 </section>
               </>

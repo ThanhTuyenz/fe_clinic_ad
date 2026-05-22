@@ -835,3 +835,21 @@
   background: var(--clinic-primary-soft);
   color: var(--clinic-primary-dark);
 }
+
+.tcl-confirm-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.tcl-btn--print {
+  background: #fff;
+  border: 1px solid var(--clinic-primary);
+  color: var(--clinic-primary-dark);
+}
+
+.tcl-btn--print:hover {
+  background: var(--clinic-primary-soft);
+}

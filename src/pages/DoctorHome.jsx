@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Html5Qrcode } from 'html5-qrcode'
 import { finishExamAppointment, listDoctorAppointments } from '../api/appointments.js'
 import { getExaminationByAppointment, saveExamination } from '../api/examinations.js'
 import { appointmentSourceLabel, appointmentSourceTitle, appointmentSourceValue } from '../utils/appointmentSource.js'
 import { getStaffSession } from '../utils/staffSession.js'
+import { ticketFromQrPayload } from '../utils/ticketQr.js'
 import '../styles/auth.css'
 import '../styles/doctor-home.css'
+
+const DR_QR_READER_ELEMENT_ID = 'dr-ticket-qr-reader'
 
 function getSession() {
   return getStaffSession()
@@ -147,6 +151,11 @@ export default function DoctorHome() {
   const [examSaveErr, setExamSaveErr] = useState('')
   const flashTimerRef = useRef(null)
   const examLoadSeqRef = useRef(0)
+  const itemsRef = useRef([])
+  const qrScanDoneRef = useRef(false)
+
+  const [qrOpen, setQrOpen] = useState(false)
+  const [qrErr, setQrErr] = useState('')
 
   function clearFlashTimer() {
     if (flashTimerRef.current) {
@@ -178,6 +187,88 @@ export default function DoctorHome() {
   useEffect(() => {
     return () => clearFlashTimer()
   }, [])
+
+  useEffect(() => {
+    itemsRef.current = items
+  }, [items])
+
+  const applyTicketFromQr = useCallback((raw) => {
+    const code = ticketFromQrPayload(raw)
+    if (!code) return
+    setFilterTicket(code)
+    setPage(1)
+    const hit = (itemsRef.current || []).find(
+      (a) => String(a?.ticket || '').trim().toLowerCase() === code.toLowerCase(),
+    )
+    if (hit) {
+      setSelectedApptId(String(hit?.id || hit?._id || ''))
+      flashOk(`Đã mở lịch ${code}`)
+    } else {
+      flashErr(`Không thấy lịch ${code} trong danh sách của bạn. Kiểm tra ngày khám hoặc bộ lọc.`)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!qrOpen) return undefined
+    setQrErr('')
+    qrScanDoneRef.current = false
+    const html5 = new Html5Qrcode(DR_QR_READER_ELEMENT_ID, { verbose: false })
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } }
+
+    const onScan = async (decodedText) => {
+      if (qrScanDoneRef.current) return
+      const code = ticketFromQrPayload(decodedText)
+      if (!code) return
+      qrScanDoneRef.current = true
+      try {
+        await html5.stop()
+      } catch {
+        /* ignore */
+      }
+      try {
+        html5.clear()
+      } catch {
+        /* ignore */
+      }
+      setQrOpen(false)
+      applyTicketFromQr(code)
+    }
+
+    const onFail = () => {}
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        await html5.start({ facingMode: 'environment' }, config, onScan, onFail)
+      } catch {
+        if (cancelled) return
+        try {
+          await html5.start({ facingMode: 'user' }, config, onScan, onFail)
+        } catch (e2) {
+          if (!cancelled) setQrErr(e2?.message || 'Không mở được camera.')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      let stopPromise
+      try {
+        stopPromise = html5.stop()
+      } catch {
+        stopPromise = Promise.resolve()
+      }
+      void stopPromise
+        .catch(() => {})
+        .finally(() => {
+          try {
+            html5.clear()
+          } catch {
+            /* ignore */
+          }
+        })
+    }
+  }, [qrOpen, applyTicketFromQr])
 
   useEffect(() => {
     if (!token || !user) {
@@ -460,14 +551,27 @@ export default function DoctorHome() {
                     <option value="examined">Đã khám</option>
                   </select>
                 </label>
-                <label className="dr-field">
-                  <span className="dr-field-label">Mã KCB</span>
-                  <input
-                    className="dr-input"
-                    value={filterTicket}
-                    onChange={(e) => setFilterTicket(e.target.value)}
-                    placeholder="Mã vé / KCB"
-                  />
+                <label className="dr-field dr-field--ticket">
+                  <span className="dr-field-label">Mã KCB / QR</span>
+                  <div className="dr-ticket-row">
+                    <input
+                      className="dr-input"
+                      value={filterTicket}
+                      onChange={(e) => setFilterTicket(e.target.value)}
+                      placeholder="Mã vé YMA…"
+                    />
+                    <button
+                      type="button"
+                      className="dr-btn dr-btn--ghost dr-btn--qr"
+                      title="Quét mã QR trên phiếu khám"
+                      onClick={() => {
+                        setQrErr('')
+                        setQrOpen(true)
+                      }}
+                    >
+                      Quét QR
+                    </button>
+                  </div>
                 </label>
                 <label className="dr-field">
                   <span className="dr-field-label">Từ ngày</span>
@@ -833,6 +937,36 @@ export default function DoctorHome() {
             </section>
           </div>
       </main>
+
+      {qrOpen ? (
+        <div
+          className="dr-qr-modal-backdrop"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setQrOpen(false)
+          }}
+        >
+          <div
+            className="dr-qr-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dr-qr-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="dr-qr-title" className="dr-qr-modal-title">
+              Quét phiếu khám
+            </h2>
+            <p className="dr-qr-modal-hint">Quét mã QR trên phiếu — hệ thống tìm lịch theo mã vé (YMA…).</p>
+            <div id={DR_QR_READER_ELEMENT_ID} className="dr-qr-reader-wrap" />
+            {qrErr ? <div className="dr-banner dr-banner--error" style={{ marginTop: 8 }}>{qrErr}</div> : null}
+            <div className="dr-qr-modal-actions">
+              <button type="button" className="dr-btn dr-btn--ghost" onClick={() => setQrOpen(false)}>
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

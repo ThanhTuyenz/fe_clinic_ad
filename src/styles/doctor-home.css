@@ -1298,3 +1298,73 @@
   }
 }
 
+.dr-field--ticket .dr-ticket-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: stretch;
+}
+
+.dr-field--ticket .dr-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dr-btn--qr {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.65rem;
+}
+
+.dr-qr-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.dr-qr-modal {
+  width: 100%;
+  max-width: 420px;
+  padding: 1.15rem 1.2rem;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
+}
+
+.dr-qr-modal-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-heading);
+}
+
+.dr-qr-modal-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.dr-qr-reader-wrap {
+  min-height: 260px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.dr-qr-reader-wrap video {
+  border-radius: 10px;
+}
+
+.dr-qr-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
