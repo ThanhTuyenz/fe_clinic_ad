@@ -18,6 +18,8 @@ import { listClinicRooms } from '../api/clinicRooms.js'
 import { recordAppointmentPayment } from '../api/payments.js'
 import { Html5Qrcode } from 'html5-qrcode'
 import { resolveConsultationFee } from '../utils/consultationFee.js'
+import { buildPaymentInvoiceView } from '../utils/paymentInvoiceView.js'
+import { printPaymentInvoice, printPaymentThenVisitSlip } from '../utils/printPaymentInvoice.js'
 import { printVisitSlip } from '../utils/printVisitSlip.js'
 import { ticketFromQrPayload } from '../utils/ticketQr.js'
 import '../styles/reception-home.css'
@@ -133,6 +135,72 @@ function clinicRoomLabel(roomId, rooms) {
   return hit?.name ? String(hit.name).trim() : id
 }
 
+function mergeReceptionDetail(cached, row) {
+  if (!row) return cached ?? null
+  if (!cached) return row
+  const rowRoom = String(row.clinicRoom ?? '').trim()
+  const cachedRoom = String(cached.clinicRoom ?? '').trim()
+  const rowPatient = row.patient
+  const rowDoctor = row.doctor
+  return {
+    ...cached,
+    status: row.status ?? cached.status,
+    cancelReason: row.cancelReason ?? cached.cancelReason,
+    cancelledAt: row.cancelledAt ?? cached.cancelledAt,
+    cancelledBy: row.cancelledBy ?? cached.cancelledBy,
+    confirmedAt: row.confirmedAt ?? cached.confirmedAt,
+    confirmedBy: row.confirmedBy ?? cached.confirmedBy,
+    visitQueueNumber:
+      row.visitQueueNumber != null && row.visitQueueNumber !== ''
+        ? row.visitQueueNumber
+        : cached.visitQueueNumber,
+    clinicRoom: rowRoom || cachedRoom,
+    payment: mergePayment(row.payment, cached.payment),
+    patient:
+      rowPatient && (rowPatient.id || rowPatient.patientCode || rowPatient.phone)
+        ? { ...cached.patient, ...rowPatient }
+        : cached.patient,
+    doctor:
+      rowDoctor && (rowDoctor.id || rowDoctor.email || rowDoctor.displayName)
+        ? { ...cached.doctor, ...rowDoctor }
+        : cached.doctor,
+    ticket: row.ticket || cached.ticket,
+    appointmentDate: row.appointmentDate || cached.appointmentDate,
+    startTime: row.startTime || cached.startTime,
+    endTime: row.endTime != null && row.endTime !== '' ? row.endTime : cached.endTime,
+  }
+}
+
+function detailMissingForSlip(detail) {
+  if (!detail) return true
+  if (patientListDisplayName(detail.patient) === '—') return true
+  if (doctorDisplayName(detail.doctor) === '—') return true
+  if (!String(detail.startTime || '').trim()) return true
+  return false
+}
+
+function buildVisitSlipView(detail, rooms, overrides = {}) {
+  if (!detail) return null
+  const roomId = String(overrides.clinicRoom ?? detail.clinicRoom ?? '').trim()
+  let q = overrides.visitQueueNumber ?? detail.visitQueueNumber
+  if (q === '' || q == null) q = null
+  const patientName = patientListDisplayName(detail.patient)
+  const clinicRoom = roomId ? clinicRoomLabel(roomId, rooms) : '—'
+  const doctorName = doctorDisplayName(detail.doctor)
+  const examTime = formatExamTimeLine(detail.startTime, detail.endTime)
+  const examDate = formatDateVi(detail.appointmentDate)
+  const ticket = String(detail.ticket || '').trim() || '—'
+  return {
+    queueNumber: q != null && q !== '' ? String(q) : '—',
+    patientName: patientName === '—' ? '—' : patientName,
+    clinicRoom: clinicRoom === '—' ? '—' : clinicRoom,
+    doctorName: doctorName === '—' ? '—' : doctorName,
+    examTime: examTime === '—' ? '—' : examTime,
+    examDate: examDate === '—' ? '—' : examDate,
+    ticket,
+  }
+}
+
 function formatExamTimeLine(start, end) {
   const s = String(start || '').trim().slice(0, 5)
   if (!s) return '—'
@@ -235,10 +303,12 @@ function matchesDashFilter(row, dashFilter) {
   if (normalizeStatus(row?.status) !== 'pending') return false
   const isPaid = String(row?.payment?.status || '').toLowerCase() === 'paid'
   const room = String(row?.clinicRoom || '').trim()
+  const expiring = isPendingAppointmentPastSlot(row)
+  if (f === 'expiring') return expiring
+  if (expiring) return false
   if (f === 'unpaid') return !isPaid
-  if (f === 'noRoom') return !room
+  if (f === 'noRoom') return isPaid && !room
   if (f === 'ready') return isPaid && Boolean(room)
-  if (f === 'expiring') return isPendingAppointmentPastSlot(row)
   return true
 }
 
@@ -418,18 +488,7 @@ export default function ReceptionHome() {
       const cached = detailById[idStr]
       const row = list.find((a) => String(a.id) === idStr)
       if (cached && row) {
-        return {
-          ...cached,
-          status: row.status,
-          cancelReason: row.cancelReason,
-          cancelledAt: row.cancelledAt,
-          cancelledBy: row.cancelledBy,
-          confirmedAt: row.confirmedAt,
-          confirmedBy: row.confirmedBy,
-          visitQueueNumber: row.visitQueueNumber ?? cached.visitQueueNumber,
-          clinicRoom: row.clinicRoom != null ? row.clinicRoom : cached.clinicRoom,
-          payment: mergePayment(row.payment, cached.payment),
-        }
+        return mergeReceptionDetail(cached, row)
       }
       if (cached) return cached
       if (row) return row
@@ -459,22 +518,30 @@ export default function ReceptionHome() {
     activeDetail?.payment?.amount,
     activeDetail?.consultationFee ?? activeDetail?.doctor?.consultationFee,
   )
-  const canConfirm = canEditStatus && isPaid && hasClinicRoom
-  const canSaveStatus =
-    canEditStatus && (detailStatus !== 'confirmed' || (isPaid && hasClinicRoom))
+  /** Thu phí + xác nhận lịch: cần chọn phòng trước (một nút «Xác nhận đã thu»). */
+  const canRecordPayment = canEditStatus && !isPaid && hasClinicRoom
+  /** Lịch đã thu phí nhưng chưa xác nhận (dữ liệu cũ / lỗi tách bước). */
+  const canFinishConfirm = canEditStatus && isPaid && hasClinicRoom
   const canPrintVisitSlip = currentStatus === 'confirmed'
+  const slipOverrides = useMemo(
+    () => ({
+      clinicRoom: clinicRoomDraft || activeDetail?.clinicRoom,
+      visitQueueNumber:
+        visitQueueDraft !== '' && visitQueueDraft != null
+          ? visitQueueDraft
+          : activeDetail?.visitQueueNumber,
+    }),
+    [activeDetail?.clinicRoom, activeDetail?.visitQueueNumber, clinicRoomDraft, visitQueueDraft],
+  )
   const visitSlipView = useMemo(() => {
     if (!activeDetail || !canPrintVisitSlip) return null
-    const q = activeDetail.visitQueueNumber
-    return {
-      queueNumber: q != null && q !== '' ? String(q) : '—',
-      clinicRoom: clinicRoomLabel(activeDetail.clinicRoom, clinicRooms),
-      doctorName: doctorDisplayName(activeDetail.doctor),
-      examTime: formatExamTimeLine(activeDetail.startTime, activeDetail.endTime),
-      examDate: formatDateVi(activeDetail.appointmentDate),
-      ticket: activeDetail.ticket || '—',
-    }
-  }, [activeDetail, canPrintVisitSlip, clinicRooms])
+    return buildVisitSlipView(activeDetail, clinicRooms, slipOverrides)
+  }, [activeDetail, canPrintVisitSlip, clinicRooms, slipOverrides])
+  const canPrintPaymentInvoice = isPaid
+  const paymentInvoiceView = useMemo(() => {
+    if (!activeDetail || !canPrintPaymentInvoice) return null
+    return buildPaymentInvoiceView(activeDetail, slipOverrides)
+  }, [activeDetail, canPrintPaymentInvoice, slipOverrides])
   const confirmBlockTitle =
     !isPaid && canEditStatus
       ? 'Cần thu phí khám trước'
@@ -561,10 +628,67 @@ export default function ReceptionHome() {
     setPaymentErr('')
   }, [activeDetail?.id])
 
-  function handlePrintVisitSlip() {
-    if (!visitSlipView) return
-    const ok = printVisitSlip(visitSlipView)
+  async function handlePrintVisitSlip() {
+    if (!activeDetail?.id) return false
+    if (!canPrintVisitSlip) {
+      setSaveErr('Chỉ in phiếu khi lịch đã xác nhận.')
+      return false
+    }
+    setSaveErr('')
+    let detail = activeDetail
+    const ticket = String(detail.ticket || '').trim()
+    if (detailMissingForSlip(detail) && ticket && token) {
+      setDetailLoadingId(String(detail.id))
+      try {
+        const data = await lookupAppointmentByTicket({ token, ticket })
+        const norm = normalizeLookup(data)
+        setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
+        detail = mergeReceptionDetail(norm, list.find((r) => String(r.id) === String(norm.id)))
+      } catch (e) {
+        setSaveErr(e?.message || 'Không tải được dữ liệu lịch hẹn để in.')
+        return false
+      } finally {
+        setDetailLoadingId(null)
+      }
+    }
+    const view = buildVisitSlipView(detail, clinicRooms, {
+      clinicRoom: clinicRoomDraft || detail.clinicRoom,
+      visitQueueNumber:
+        visitQueueDraft !== '' && visitQueueDraft != null
+          ? visitQueueDraft
+          : detail.visitQueueNumber,
+    })
+    if (!view) {
+      setSaveErr('Không tạo được phiếu khám.')
+      return false
+    }
+    const ok = printVisitSlip(view)
     if (!ok) setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
+    return ok
+  }
+
+  function handlePrintPaymentInvoice() {
+    if (!activeDetail?.id || !isPaid) {
+      setSaveErr('Chỉ in hóa đơn khi đã thu phí.')
+      return false
+    }
+    setSaveErr('')
+    const view = buildPaymentInvoiceView(activeDetail, slipOverrides)
+    if (!view) {
+      setSaveErr('Không tạo được hóa đơn — thiếu thông tin thanh toán.')
+      return false
+    }
+    const ok = printPaymentInvoice(view)
+    if (!ok) setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
+    return ok
+  }
+
+  function printAfterConfirm({ visitSlip, invoice }) {
+    return printPaymentThenVisitSlip({
+      invoice,
+      visitSlip,
+      printVisitSlip,
+    })
   }
 
   function normalizeLookup(data) {
@@ -691,6 +815,13 @@ export default function ReceptionHome() {
   }, [location.state?.dashNavAt])
 
   useEffect(() => {
+    if (!location.state?.openQrScan) return
+    setTicketErr('')
+    setQrErr('')
+    setQrOpen(true)
+  }, [location.state?.qrNavAt, location.state?.openQrScan])
+
+  useEffect(() => {
     if (!qrOpen) return undefined
     setQrErr('')
     qrScanDoneRef.current = false
@@ -794,10 +925,143 @@ export default function ReceptionHome() {
     [token, activeDetail?.ticket, applyPaymentToCaches],
   )
 
+  function staffConfirmFallback() {
+    return {
+      displayName: displayName(user),
+      email: String(user?.email || '').trim(),
+    }
+  }
+
+  async function persistAppointmentStatus(next, options = {}) {
+    if (!activeDetail?.id) return
+    const status = normalizeStatus(next)
+    if (status !== 'confirmed' && status !== 'cancelled') {
+      throw new Error('Trạng thái không hợp lệ.')
+    }
+    if (!canEditStatus) {
+      throw new Error('Chỉ có thể xác nhận/hủy khi lịch ở trạng thái Chờ xác nhận.')
+    }
+    if (status === 'confirmed' && !options.afterPayment && !isPaid) {
+      throw new Error('Chưa thu phí khám.')
+    }
+
+    const visitExtra = {}
+    if (status === 'confirmed') {
+      const room = String(clinicRoomDraft || '').trim()
+      if (!room) {
+        throw new Error('Vui lòng chọn phòng khám trước khi xác nhận.')
+      }
+      visitExtra.clinicRoom = room
+      const qStr = String(visitQueueDraft || '').trim()
+      if (qStr) {
+        const n = parseInt(qStr, 10)
+        if (!Number.isFinite(n) || n < 1) {
+          throw new Error('Số thứ tự phải là số nguyên dương hoặc để trống.')
+        }
+        visitExtra.visitQueueNumber = n
+      }
+    }
+
+    const saveRes = await updateAppointmentStatus({
+      token,
+      appointmentId: activeDetail.id,
+      status,
+      ...visitExtra,
+    })
+    const ap = saveRes?.appointment
+    const key = String(activeDetail.id)
+    const fallbackConfirm = staffConfirmFallback()
+    const nowIso = new Date().toISOString()
+    const paymentPatch = options.payment ? { payment: options.payment } : {}
+    let patch = {}
+    if (status === 'cancelled' && ap) {
+      patch = {
+        cancelReason: ap.cancelReason ?? activeDetail.cancelReason,
+        cancelledAt: ap.cancelledAt ?? activeDetail.cancelledAt,
+        cancelledBy: ap.cancelledBy ?? activeDetail.cancelledBy,
+        confirmedAt: null,
+        confirmedBy: null,
+        visitQueueNumber: null,
+        clinicRoom: '',
+      }
+    } else if (status === 'confirmed') {
+      const qFromDraft = (() => {
+        const qStr = String(visitQueueDraft || '').trim()
+        if (!qStr) return undefined
+        const n = parseInt(qStr, 10)
+        return Number.isFinite(n) && n >= 1 ? n : undefined
+      })()
+      patch = {
+        cancelReason: '',
+        cancelledAt: null,
+        cancelledBy: null,
+        confirmedAt: ap?.confirmedAt ?? nowIso,
+        confirmedBy: ap?.confirmedBy ?? fallbackConfirm,
+        visitQueueNumber: ap?.visitQueueNumber ?? qFromDraft ?? activeDetail.visitQueueNumber,
+        clinicRoom: ap?.clinicRoom != null ? ap.clinicRoom : clinicRoomDraft || activeDetail.clinicRoom,
+      }
+    }
+
+    setDetailById((prev) => {
+      const cur = prev[key] || activeDetail
+      return { ...prev, [key]: { ...cur, status, ...paymentPatch, ...patch } }
+    })
+    setList((prev) =>
+      prev.map((r) => {
+        if (String(r.id) !== key) return r
+        if (status === 'confirmed') {
+          return {
+            ...r,
+            status,
+            payment: options.payment ?? r.payment,
+            clinicRoom:
+              (ap?.clinicRoom != null && String(ap.clinicRoom).trim() ? ap.clinicRoom : null) ??
+              patch.clinicRoom ??
+              r.clinicRoom,
+            visitQueueNumber: ap?.visitQueueNumber ?? patch.visitQueueNumber ?? r.visitQueueNumber,
+            confirmedAt: ap?.confirmedAt ?? nowIso,
+            confirmedBy: ap?.confirmedBy ?? fallbackConfirm,
+          }
+        }
+        if (status === 'cancelled' && ap) {
+          return {
+            ...r,
+            status,
+            cancelReason: ap.cancelReason ?? r.cancelReason,
+            cancelledAt: ap.cancelledAt ?? r.cancelledAt,
+            cancelledBy: ap.cancelledBy ?? r.cancelledBy,
+          }
+        }
+        return { ...r, status }
+      }),
+    )
+    setDetailStatus(status)
+    await loadList()
+    setLookupDetail(null)
+    setSelectedId(key)
+
+    if (status !== 'confirmed') return null
+    const merged = { ...activeDetail, status, ...paymentPatch, ...patch }
+    const slipOverridesNext = {
+      clinicRoom: patch.clinicRoom,
+      visitQueueNumber: patch.visitQueueNumber,
+    }
+    return {
+      visitSlip: buildVisitSlipView(merged, clinicRooms, slipOverridesNext),
+      invoice: buildPaymentInvoiceView(merged, slipOverridesNext),
+    }
+  }
+
   async function handleRecordPayment() {
     if (!activeDetail?.id || !canEditStatus || isPaid) return
+    if (!hasClinicRoom) {
+      setPaymentErr('Vui lòng chọn phòng khám trước khi thu phí.')
+      return
+    }
     setPaymentErr('')
+    setSaveErr('')
     setSaveMsg('')
+    setVisitErr('')
     setPaymentSaving(true)
     try {
       const data = await recordAppointmentPayment({
@@ -811,14 +1075,42 @@ export default function ReceptionHome() {
       if (paid) {
         applyPaymentToCaches(activeDetail.id, paid, ap ? { ...activeDetail, ...ap, payment: paid } : null)
       }
+      const docs = await persistAppointmentStatus('confirmed', { afterPayment: true, payment: paid })
       setPaymentErr('')
-      setSaveMsg('Đã ghi nhận thanh toán phí khám.')
+      if (docs && printAfterConfirm(docs)) {
+        setSaveMsg('Đã thu phí, xác nhận lịch và mở in hóa đơn + phiếu khám.')
+      } else if (docs?.visitSlip || docs?.invoice) {
+        setSaveMsg('Đã thu phí và xác nhận lịch. Không mở được cửa sổ in — bấm «In hóa đơn» hoặc «In phiếu khám».')
+        setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
+      } else {
+        setSaveMsg('Đã thu phí và xác nhận lịch hẹn.')
+      }
     } catch (e) {
       const msg = e?.message || 'Không ghi nhận được thanh toán.'
       if (/đã được ghi nhận thanh toán/i.test(msg)) {
         const synced = await refreshPaymentFromServer(activeDetail.ticket)
-        setPaymentErr('')
-        setSaveMsg(synced ? 'Lịch này đã được ghi nhận thanh toán.' : msg)
+        if (synced) {
+          try {
+            const docs = await persistAppointmentStatus('confirmed', { afterPayment: true })
+            setPaymentErr('')
+            if (docs && printAfterConfirm(docs)) {
+              setSaveMsg('Lịch đã thu phí, đã xác nhận và mở in hóa đơn + phiếu khám.')
+            } else if (docs?.visitSlip || docs?.invoice) {
+              setSaveMsg('Lịch đã thu phí và xác nhận. Không mở được cửa sổ in — bấm «In hóa đơn» hoặc «In phiếu khám».')
+              setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
+            } else {
+              setSaveMsg('Lịch đã thu phí — đã xác nhận lịch hẹn.')
+            }
+          } catch (e2) {
+            setPaymentErr('')
+            setSaveMsg('Đã thu phí. Chưa xác nhận được lịch — bấm «Hoàn tất xác nhận» bên dưới.')
+            setSaveErr(e2?.message || 'Không xác nhận được lịch.')
+          }
+        } else {
+          setPaymentErr(msg)
+        }
+      } else if (/chưa thu phí|chọn phòng|số thứ tự|chờ xác nhận/i.test(msg)) {
+        setSaveErr(msg)
       } else {
         setPaymentErr(msg)
       }
@@ -827,86 +1119,41 @@ export default function ReceptionHome() {
     }
   }
 
-  async function handleSaveStatus() {
-    if (!activeDetail?.id) return
+  async function handleFinishConfirm() {
+    if (!canFinishConfirm) return
     setSaveErr('')
     setSaveMsg('')
     setVisitErr('')
-    if (!canEditStatus) {
-      setSaveErr('Chỉ có thể xác nhận/hủy khi lịch ở trạng thái Chờ xác nhận.')
-      return
-    }
-    const next = normalizeStatus(detailStatus || '')
-    if (next !== 'confirmed' && next !== 'cancelled') {
-      setSaveErr('Vui lòng chọn Xác nhận hoặc Hủy.')
-      return
-    }
-    if (next === 'confirmed' && !isPaid) {
-      setSaveErr('Chưa thu phí khám. Vui lòng ghi nhận thanh toán trước khi xác nhận.')
-      return
-    }
-
-    const visitExtra = {}
-    if (next === 'confirmed') {
-      const room = String(clinicRoomDraft || '').trim()
-      if (!room) {
-        setSaveErr('Vui lòng chọn phòng khám trước khi xác nhận.')
-        return
-      }
-      visitExtra.clinicRoom = room
-      const qStr = String(visitQueueDraft || '').trim()
-      if (qStr) {
-        const n = parseInt(qStr, 10)
-        if (!Number.isFinite(n) || n < 1) {
-          setSaveErr('Số thứ tự phải là số nguyên dương hoặc để trống.')
-          return
-        }
-        visitExtra.visitQueueNumber = n
-      }
-    }
-
     setSaving(true)
     try {
-      const saveRes = await updateAppointmentStatus({
-        token,
-        appointmentId: activeDetail.id,
-        status: next,
-        ...visitExtra,
-      })
-      setSaveMsg('Đã lưu trạng thái lịch hẹn.')
-      const ap = saveRes?.appointment
-      setDetailById((prev) => {
-        const key = String(activeDetail.id)
-        const cur = prev[key] || activeDetail
-        let patch = {}
-        if (next === 'cancelled' && ap) {
-          patch = {
-            cancelReason: ap.cancelReason ?? cur.cancelReason,
-            cancelledAt: ap.cancelledAt ?? cur.cancelledAt,
-            cancelledBy: ap.cancelledBy ?? cur.cancelledBy,
-            confirmedAt: null,
-            confirmedBy: null,
-            visitQueueNumber: null,
-            clinicRoom: '',
-          }
-        } else if (next === 'confirmed' && ap) {
-          patch = {
-            cancelReason: '',
-            cancelledAt: null,
-            cancelledBy: null,
-            confirmedAt: ap.confirmedAt ?? cur.confirmedAt,
-            confirmedBy: ap.confirmedBy ?? cur.confirmedBy,
-            visitQueueNumber: ap.visitQueueNumber ?? cur.visitQueueNumber,
-            clinicRoom: ap.clinicRoom != null ? ap.clinicRoom : cur.clinicRoom,
-          }
-        }
-        return { ...prev, [key]: { ...cur, status: next, ...patch } }
-      })
-      await loadList()
-      setLookupDetail(null)
-      setSelectedId(String(activeDetail.id))
+      const docs = await persistAppointmentStatus('confirmed')
+      if (docs && printAfterConfirm(docs)) {
+        setSaveMsg('Đã xác nhận lịch và mở in hóa đơn + phiếu khám.')
+      } else if (docs?.visitSlip || docs?.invoice) {
+        setSaveMsg('Đã xác nhận lịch. Không mở được cửa sổ in — bấm «In hóa đơn» hoặc «In phiếu khám».')
+        setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
+      } else {
+        setSaveMsg('Đã xác nhận lịch hẹn.')
+      }
     } catch (e) {
-      setSaveErr(e?.message || 'Không lưu được.')
+      setSaveErr(e?.message || 'Không xác nhận được lịch.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCancelAppointment() {
+    if (!activeDetail?.id || !canEditStatus) return
+    const ticket = String(activeDetail.ticket || '').trim()
+    if (!window.confirm(ticket ? `Hủy lịch hẹn ${ticket}?` : 'Hủy lịch hẹn này?')) return
+    setSaveErr('')
+    setSaveMsg('')
+    setSaving(true)
+    try {
+      await persistAppointmentStatus('cancelled')
+      setSaveMsg('Đã hủy lịch hẹn.')
+    } catch (e) {
+      setSaveErr(e?.message || 'Không hủy được lịch.')
     } finally {
       setSaving(false)
     }
@@ -924,7 +1171,8 @@ export default function ReceptionHome() {
     setTicket(String(row.ticket || ''))
 
     if (!row.ticket || !token) return
-    if (detailById[id]) return
+    const cached = detailById[id]
+    if (cached && !detailMissingForSlip(cached)) return
 
     setDetailLoadingId(id)
     try {
@@ -1034,10 +1282,10 @@ export default function ReceptionHome() {
             <button
               type="button"
               className="tcl-btn tcl-btn--pri"
-              disabled={!activeDetail || saving || !canSaveStatus}
-              onClick={() => void handleSaveStatus()}
+              disabled
+              title="Dùng «Xác nhận đã thu» (đã chọn phòng) hoặc «Hủy lịch» trong chi tiết"
             >
-              {saving ? 'Đang lưu…' : 'Lưu'}
+              Lưu
             </button>
             <button type="button" className="tcl-btn tcl-btn--danger" disabled title="Chưa hỗ trợ">
               Xóa
@@ -1243,14 +1491,18 @@ export default function ReceptionHome() {
           <main className="tcl-detail">
             {activeDetail ? (
               <>
-                <div className="tcl-banner-ok">Bạn đang xem thông tin lịch hẹn</div>
-                {detailErr ? <div className="tcl-banner-err">{detailErr}</div> : null}
-                {detailLoadingId && String(activeDetail?.id) === String(detailLoadingId) ? (
-                  <div className="tcl-banner-ok">Đang tải chi tiết…</div>
-                ) : null}
-                {saveErr ? <div className="tcl-banner-err">{saveErr}</div> : null}
-                {saveMsg ? <div className="tcl-banner-ok">{saveMsg}</div> : null}
+                <div className="tcl-detail-head">
+                  <div className="tcl-banner-ok">Bạn đang xem thông tin lịch hẹn</div>
+                  {detailErr ? <div className="tcl-banner-err">{detailErr}</div> : null}
+                  {detailLoadingId && String(activeDetail?.id) === String(detailLoadingId) ? (
+                    <div className="tcl-banner-ok">Đang tải chi tiết…</div>
+                  ) : null}
+                  {saveErr ? <div className="tcl-banner-err">{saveErr}</div> : null}
+                  {saveMsg ? <div className="tcl-banner-ok">{saveMsg}</div> : null}
+                </div>
 
+                <div className="tcl-detail-layout">
+                  <div className="tcl-detail-col tcl-detail-col--info">
                 <section className="tcl-sec">
                   <h2 className="tcl-sec-title">
                     <span>1</span>
@@ -1334,6 +1586,14 @@ export default function ReceptionHome() {
                       <label>Giờ khám</label>
                       <input readOnly value={String(activeDetail.startTime || '').slice(0, 5)} />
                     </div>
+                  </div>
+                </section>
+                  </div>
+
+                  <div className="tcl-detail-col tcl-detail-col--actions">
+                <section className="tcl-sec tcl-sec--room">
+                  <h2 className="tcl-sec-title tcl-sec-title--plain">Xếp phòng khám</h2>
+                  <div className="tcl-grid-form">
                     <div className="tcl-f">
                       <label>Bác sĩ</label>
                       <input readOnly value={doctorDisplayName(activeDetail.doctor)} />
@@ -1342,55 +1602,47 @@ export default function ReceptionHome() {
                       <label>Chuyên khoa</label>
                       <input readOnly value={doctorSpecialtyDisplay(activeDetail.doctor)} />
                     </div>
-                    <div className="tcl-f tcl-f--full">
-                      <label htmlFor="reception-clinic-room">Phòng khám</label>
-                      {clinicRoomsErr ? <div className="tcl-banner-err" style={{ marginBottom: 8 }}>{clinicRoomsErr}</div> : null}
-                      <select
-                        id="reception-clinic-room"
-                        value={clinicRoomDraft}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          setClinicRoomDraft(v)
-                          if (!canEditVisit) return
-                          void applyClinicRoomSelection(v)
-                        }}
-                        disabled={!canEditVisit}
-                      >
-                        <option value="">— Chọn phòng —</option>
-                        {clinicRoomDraft &&
-                        !clinicRooms.some((r) => String(r.roomID) === String(clinicRoomDraft)) ? (
-                          <option value={clinicRoomDraft}>
-                            {clinicRoomDraft} (giá trị hiện tại / ngoài danh mục)
-                          </option>
-                        ) : null}
-                        {clinicRooms.map((r) => (
-                          <option key={r.roomID} value={r.roomID}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="tcl-f tcl-f--full">
-                      <label>Triệu chứng / Ghi chú</label>
-                      <textarea readOnly rows={3} value={activeDetail.note || ''} placeholder="—" />
-                    </div>
-                    {currentStatus !== 'cancelled' && currentStatus !== 'examined' ? (
-                      <>
-                        {currentStatus === 'pending' ? (
-                          <div className="tcl-f tcl-f--full">
-                            <p className="tcl-muted" style={{ margin: 0, fontSize: '0.86rem' }}>
-                              Cần <strong>thu phí khám</strong> và <strong>chọn phòng khám</strong> trước khi chọn{' '}
-                              <strong>Xác nhận</strong>. <strong>Số thứ tự</strong> có thể để trống (hệ thống tự gán theo phòng).
-                              Bấm <strong>Lưu</strong> để ghi trạng thái, phòng và STT vào hệ thống.
-                            </p>
+                    <div
+                      className={`tcl-room-queue-row tcl-f--full${
+                        currentStatus === 'cancelled' || currentStatus === 'examined'
+                          ? ' tcl-room-queue-row--room-only'
+                          : ''
+                      }`}
+                    >
+                      <div className="tcl-f tcl-room-queue-row__room">
+                        <label htmlFor="reception-clinic-room">Chọn phòng</label>
+                        {clinicRoomsErr ? (
+                          <div className="tcl-banner-err" style={{ marginBottom: 8 }}>
+                            {clinicRoomsErr}
                           </div>
                         ) : null}
-                        {visitErr ? (
-                          <div className="tcl-f tcl-f--full">
-                            <div className="tcl-banner-err">{visitErr}</div>
-                          </div>
-                        ) : null}
-                        <div className="tcl-f">
+                        <select
+                          id="reception-clinic-room"
+                          value={clinicRoomDraft}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            setClinicRoomDraft(v)
+                            if (!canEditVisit) return
+                            void applyClinicRoomSelection(v)
+                          }}
+                          disabled={!canEditVisit}
+                        >
+                          <option value="">— Chọn phòng —</option>
+                          {clinicRoomDraft &&
+                          !clinicRooms.some((r) => String(r.roomID) === String(clinicRoomDraft)) ? (
+                            <option value={clinicRoomDraft}>
+                              {clinicRoomDraft} (giá trị hiện tại / ngoài danh mục)
+                            </option>
+                          ) : null}
+                          {clinicRooms.map((r) => (
+                            <option key={r.roomID} value={r.roomID}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {currentStatus !== 'cancelled' && currentStatus !== 'examined' ? (
+                        <div className="tcl-f tcl-room-queue-row__queue">
                           <label htmlFor="reception-visit-queue">Số thứ tự</label>
                           <input
                             id="reception-visit-queue"
@@ -1400,10 +1652,32 @@ export default function ReceptionHome() {
                             value={visitQueueDraft}
                             onChange={(e) => setVisitQueueDraft(e.target.value)}
                             disabled={!canEditVisit}
-                            placeholder="Để trống = tự gán theo phòng"
+                            placeholder="Tự gán"
+                            title="Để trống = tự gán theo phòng"
                             autoComplete="off"
                           />
                         </div>
+                      ) : null}
+                    </div>
+                    <div className="tcl-f tcl-f--full">
+                      <label>Triệu chứng / Ghi chú</label>
+                      <textarea readOnly rows={2} value={activeDetail.note || ''} placeholder="—" />
+                    </div>
+                    {currentStatus !== 'cancelled' && currentStatus !== 'examined' ? (
+                      <>
+                        {currentStatus === 'pending' ? (
+                          <div className="tcl-f tcl-f--full">
+                            <p className="tcl-muted" style={{ margin: 0, fontSize: '0.86rem' }}>
+                              Chọn <strong>phòng khám</strong>, sau đó bấm <strong>Xác nhận đã thu</strong> ở mục Thanh toán để
+                              thu phí và xác nhận lịch. <strong>Số thứ tự</strong> có thể để trống (tự gán theo phòng).
+                            </p>
+                          </div>
+                        ) : null}
+                        {visitErr ? (
+                          <div className="tcl-f tcl-f--full">
+                            <div className="tcl-banner-err">{visitErr}</div>
+                          </div>
+                        ) : null}
                       </>
                     ) : null}
                   </div>
@@ -1448,6 +1722,23 @@ export default function ReceptionHome() {
                               }
                             />
                           </div>
+                          {activeDetail.payment?.invoiceNo ? (
+                            <div className="tcl-f">
+                              <label>Số hóa đơn</label>
+                              <input readOnly value={activeDetail.payment.invoiceNo} />
+                            </div>
+                          ) : null}
+                          {paymentInvoiceView ? (
+                            <div className="tcl-f tcl-f--full tcl-payment-actions">
+                              <button
+                                type="button"
+                                className="tcl-btn tcl-btn--print"
+                                onClick={() => handlePrintPaymentInvoice()}
+                              >
+                                In hóa đơn
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
                         <>
@@ -1470,15 +1761,20 @@ export default function ReceptionHome() {
                             <button
                               type="button"
                               className="tcl-btn tcl-btn--pri"
-                              disabled={paymentSaving || !canEditStatus || isPaid}
+                              disabled={paymentSaving || saving || !canRecordPayment}
+                              title={
+                                !hasClinicRoom && canEditStatus && !isPaid
+                                  ? 'Chọn phòng khám trước'
+                                  : undefined
+                              }
                               onClick={() => void handleRecordPayment()}
                             >
-                              {paymentSaving ? 'Đang ghi nhận…' : 'Xác nhận đã thu'}
+                              {paymentSaving ? 'Đang xử lý…' : 'Xác nhận đã thu'}
                             </button>
                           </div>
                           <p className="tcl-payment-hint">
-                            Cần ghi nhận thanh toán và chọn phòng khám trước khi chọn <strong>Xác nhận</strong> ở mục
-                            bên dưới.
+                            Chọn phòng khám trước. Bấm <strong>Xác nhận đã thu</strong> để thu phí, xác nhận lịch và in{' '}
+                            <strong>hóa đơn</strong> + <strong>phiếu khám</strong>.
                           </p>
                         </>
                       )}
@@ -1497,6 +1793,23 @@ export default function ReceptionHome() {
                         <label>Phương thức</label>
                         <input readOnly value={paymentMethodLabel(activeDetail.payment?.method)} />
                       </div>
+                      {activeDetail.payment?.invoiceNo ? (
+                        <div className="tcl-f">
+                          <label>Số hóa đơn</label>
+                          <input readOnly value={activeDetail.payment.invoiceNo} />
+                        </div>
+                      ) : null}
+                      {paymentInvoiceView ? (
+                        <div className="tcl-f tcl-f--full tcl-payment-actions">
+                          <button
+                            type="button"
+                            className="tcl-btn tcl-btn--print"
+                            onClick={() => handlePrintPaymentInvoice()}
+                          >
+                            In hóa đơn
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <p className="tcl-payment-hint">Chưa ghi nhận thanh toán cho lịch này.</p>
@@ -1510,34 +1823,34 @@ export default function ReceptionHome() {
                   </h2>
                   <div className="tcl-f" style={{ marginBottom: '0.65rem' }}>
                     <label>Trạng thái</label>
-                    <div className="tcl-status-row">
-                      <label title="Chỉ hiển thị">
+                    <div className="tcl-status-row tcl-status-row--readonly" aria-readonly="true">
+                      <label title="Chỉ hiển thị — thay đổi qua «Xác nhận đã thu» hoặc «Hủy lịch»">
                         <input
                           type="radio"
                           name={`st-${String(activeDetail?.id ?? 'x')}`}
-                          checked={detailStatus === 'pending'}
+                          checked={currentStatus === 'pending'}
                           disabled
                           readOnly
                         />
                         Chờ xác nhận
                       </label>
-                      <label>
+                      <label title="Chỉ hiển thị">
                         <input
                           type="radio"
                           name={`st-${String(activeDetail?.id ?? 'x')}`}
-                          checked={detailStatus === 'cancelled'}
-                          disabled={!canEditStatus}
-                          onChange={() => canEditStatus && setDetailStatus('cancelled')}
+                          checked={currentStatus === 'cancelled'}
+                          disabled
+                          readOnly
                         />
                         Hủy
                       </label>
-                      <label title={confirmBlockTitle}>
+                      <label title={confirmBlockTitle || 'Chỉ hiển thị — xác nhận qua «Xác nhận đã thu»'}>
                         <input
                           type="radio"
                           name={`st-${String(activeDetail?.id ?? 'x')}`}
-                          checked={detailStatus === 'confirmed'}
-                          disabled={!canConfirm}
-                          onChange={() => canConfirm && setDetailStatus('confirmed')}
+                          checked={currentStatus === 'confirmed'}
+                          disabled
+                          readOnly
                         />
                         Xác nhận
                       </label>
@@ -1545,7 +1858,7 @@ export default function ReceptionHome() {
                         <input
                           type="radio"
                           name={`st-${String(activeDetail?.id ?? 'x')}`}
-                          checked={detailStatus === 'examined'}
+                          checked={currentStatus === 'examined'}
                           disabled
                           readOnly
                         />
@@ -1556,12 +1869,12 @@ export default function ReceptionHome() {
                         title={
                           canEditStatus
                             ? 'Quá hết khung giờ mà chưa xác nhận — hệ thống tự hủy'
-                            : 'Lịch không còn ở trạng thái Chờ xác nhận nên không thể thay đổi.'
+                            : 'Trạng thái do hệ thống cập nhật, không chỉnh tay.'
                         }
                       >
-                        {canEditStatus ? 'Chờ (tự hủy nếu quá giờ)' : `Đã khóa: ${statusLabelVi(currentStatus)}`}
-                        {canEditStatus && !isPaid ? ' · Chưa thu phí' : ''}
-                        {canEditStatus && isPaid && !hasClinicRoom ? ' · Chưa chọn phòng' : ''}
+                        {canEditStatus ? 'Chỉ xem — dùng nút thu phí / hủy lịch' : `Đã khóa: ${statusLabelVi(currentStatus)}`}
+                        {canEditStatus && !hasClinicRoom ? ' · Chưa chọn phòng' : ''}
+                        {canEditStatus && hasClinicRoom && !isPaid ? ' · Chưa thu phí' : ''}
                       </span>
                     </div>
                   </div>
@@ -1599,7 +1912,7 @@ export default function ReceptionHome() {
                         <input
                           readOnly
                           value={
-                            String(activeDetail?.status || '').toLowerCase() === 'confirmed'
+                            currentStatus === 'confirmed'
                               ? formatConfirmedByLine(activeDetail.confirmedBy)
                               : '—'
                           }
@@ -1610,7 +1923,7 @@ export default function ReceptionHome() {
                         <input
                           readOnly
                           value={
-                            String(activeDetail?.status || '').toLowerCase() === 'confirmed' &&
+                            currentStatus === 'confirmed' &&
                             activeDetail.confirmedAt != null &&
                             activeDetail.confirmedAt !== ''
                               ? formatDateTimeVi(activeDetail.confirmedAt)
@@ -1625,25 +1938,48 @@ export default function ReceptionHome() {
                     </div>
                   )}
                   <div className="tcl-confirm-actions">
-                    <button
-                      type="button"
-                      className="tcl-btn tcl-btn--pri"
-                      disabled={!activeDetail || saving || !canSaveStatus}
-                      onClick={() => void handleSaveStatus()}
-                    >
-                      {saving ? 'Đang lưu…' : 'Lưu'}
-                    </button>
+                    {canFinishConfirm ? (
+                      <button
+                        type="button"
+                        className="tcl-btn tcl-btn--pri"
+                        disabled={saving || paymentSaving}
+                        onClick={() => void handleFinishConfirm()}
+                      >
+                        {saving ? 'Đang xác nhận…' : 'Hoàn tất xác nhận'}
+                      </button>
+                    ) : null}
+                    {canEditStatus ? (
+                      <button
+                        type="button"
+                        className="tcl-btn tcl-btn--danger"
+                        disabled={saving || paymentSaving}
+                        onClick={() => void handleCancelAppointment()}
+                      >
+                        {saving ? 'Đang hủy…' : 'Hủy lịch'}
+                      </button>
+                    ) : null}
+                    {canPrintPaymentInvoice && paymentInvoiceView ? (
+                      <button
+                        type="button"
+                        className="tcl-btn tcl-btn--print"
+                        onClick={() => handlePrintPaymentInvoice()}
+                      >
+                        In hóa đơn
+                      </button>
+                    ) : null}
                     {canPrintVisitSlip && visitSlipView ? (
                       <button
                         type="button"
                         className="tcl-btn tcl-btn--print"
-                        onClick={handlePrintVisitSlip}
+                        onClick={() => void handlePrintVisitSlip()}
                       >
                         In phiếu khám
                       </button>
                     ) : null}
                   </div>
                 </section>
+                  </div>
+                </div>
               </>
             ) : (
               <div className="tcl-empty">

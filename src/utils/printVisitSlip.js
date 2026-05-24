@@ -1,14 +1,15 @@
 import { qrCodeImageUrl } from './ticketQr.js'
 
 function escapeHtml(value) {
-  return String(value ?? '—')
+  const s = value == null || String(value).trim() === '' ? '—' : String(value)
+  return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 }
 
-/* Một tờ ở Scale 100%. Muốn to hơn: chỉ tăng Scale trình duyệt (vd. 150), tránh phóng kép trong CSS. */
+/* Phiếu khám: STT + tên BN nổi bật; QR góc dưới cho máy quét. */
 const PRINT_STYLES = `
   @page {
     size: portrait;
@@ -34,103 +35,145 @@ const PRINT_STYLES = `
     padding: 0;
   }
   .slip {
+    position: relative;
     width: 80mm;
     max-width: 80mm;
-    padding: 6mm 5mm 7mm;
+    padding: 5mm 5mm 22mm;
     border: 1.5px solid #0f172a;
     background: #fff;
-    font-size: 12pt;
+    font-size: 11pt;
     line-height: 1.3;
     page-break-inside: avoid;
     break-inside: avoid;
   }
+  .slip-stt {
+    text-align: center;
+    padding: 2mm 0 3mm;
+    margin-bottom: 2mm;
+    border-bottom: 2px solid #0f172a;
+  }
+  .slip-stt-label {
+    display: block;
+    margin: 0 0 1mm;
+    font-size: 10pt;
+    font-weight: 800;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .slip-stt-num {
+    margin: 0;
+    font-size: 40pt;
+    font-weight: 900;
+    color: #0f766e;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .slip-patient {
+    text-align: center;
+    margin-bottom: 3mm;
+    padding-bottom: 2.5mm;
+    border-bottom: 1px dashed #cbd5e1;
+  }
+  .slip-patient-label {
+    display: block;
+    margin: 0 0 1mm;
+    font-size: 9pt;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .slip-patient-name {
+    margin: 0;
+    font-size: 15pt;
+    font-weight: 800;
+    line-height: 1.25;
+    word-break: break-word;
+  }
   .slip-head {
     text-align: center;
-    margin-bottom: 4mm;
-    padding-bottom: 3mm;
-    border-bottom: 2px solid #0f172a;
+    margin-bottom: 3mm;
+    padding-bottom: 2mm;
+    border-bottom: 1px solid #e2e8f0;
   }
   .slip-brand {
     font-weight: 900;
     letter-spacing: 0.12em;
-    font-size: 11pt;
+    font-size: 9pt;
+    color: #0f766e;
   }
   .slip-title {
-    margin: 2mm 0 0;
-    font-size: 16pt;
+    margin: 1mm 0 0;
+    font-size: 11pt;
     font-weight: 800;
+    color: #334155;
   }
   .slip-meta {
-    margin: 2mm 0 0;
-    font-size: 10pt;
-    color: #334155;
-    font-weight: 600;
-  }
-  .slip-qr {
-    text-align: center;
-    margin-bottom: 4mm;
-    padding-bottom: 3mm;
-    border-bottom: 1px dashed #cbd5e1;
-  }
-  .slip-qr img {
-    display: block;
-    width: 28mm;
-    height: 28mm;
-    margin: 0 auto;
-  }
-  .slip-qr-code {
     margin: 1.5mm 0 0;
     font-size: 9pt;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    word-break: break-all;
+    color: #64748b;
+    font-weight: 600;
   }
   .slip-rows { margin: 0; }
   .slip-row {
-    padding: 2.5mm 0;
-    border-bottom: 1px dashed #cbd5e1;
+    padding: 2mm 0;
+    border-bottom: 1px dashed #e2e8f0;
   }
   .slip-row:last-child {
     border-bottom: none;
     padding-bottom: 0;
   }
   .slip-row dt {
-    margin: 0 0 1mm;
-    font-size: 10pt;
+    margin: 0 0 0.5mm;
+    font-size: 8.5pt;
     font-weight: 700;
-    color: #475569;
+    color: #64748b;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
   .slip-row dd {
     margin: 0;
-    font-size: 14pt;
+    font-size: 12pt;
     font-weight: 800;
     word-break: break-word;
   }
-  .slip-row--stt {
+  .slip-qr-corner {
+    position: absolute;
+    right: 3mm;
+    bottom: 3mm;
+    width: 20mm;
     text-align: center;
-    padding: 3mm 0 4mm;
-    border-bottom: 2px solid #0f172a;
   }
-  .slip-row--stt dd {
-    font-size: 36pt;
-    font-weight: 900;
-    color: #0f766e;
-    line-height: 1.05;
+  .slip-qr-corner img {
+    display: block;
+    width: 18mm;
+    height: 18mm;
+    margin: 0 auto;
+  }
+  .slip-qr-code {
+    margin: 0.5mm 0 0;
+    font-size: 6.5pt;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    word-break: break-all;
+    color: #475569;
+    line-height: 1.2;
   }
 `
 
 function buildVisitSlipDocument(view) {
   const meta =
-    view.ticket && view.ticket !== '—' ? `${escapeHtml(view.examDate)} · ${escapeHtml(view.ticket)}` : escapeHtml(view.examDate)
+    view.ticket && view.ticket !== '—'
+      ? `${escapeHtml(view.examDate)} · ${escapeHtml(view.ticket)}`
+      : escapeHtml(view.examDate)
   const ticketCode = String(view.ticket || '').trim()
-  const qrUrl = qrCodeImageUrl(ticketCode, 140)
+  const qrUrl = qrCodeImageUrl(ticketCode, 100)
   const qrBlock = qrUrl
-    ? `<div class="slip-qr">
-        <img src="${escapeHtml(qrUrl)}" alt="" width="140" height="140" />
+    ? `<aside class="slip-qr-corner" aria-label="Mã QR lịch hẹn">
+        <img src="${escapeHtml(qrUrl)}" alt="" width="100" height="100" />
         <p class="slip-qr-code">${escapeHtml(ticketCode)}</p>
-      </div>`
+      </aside>`
     : ''
 
   return `<!DOCTYPE html>
@@ -142,17 +185,20 @@ function buildVisitSlipDocument(view) {
 </head>
 <body>
   <article class="slip">
+    <div class="slip-stt">
+      <span class="slip-stt-label">Số thứ tự</span>
+      <p class="slip-stt-num">${escapeHtml(view.queueNumber)}</p>
+    </div>
+    <div class="slip-patient">
+      <span class="slip-patient-label">Bệnh nhân</span>
+      <p class="slip-patient-name">${escapeHtml(view.patientName)}</p>
+    </div>
     <header class="slip-head">
       <div class="slip-brand">VITACARE</div>
       <h1 class="slip-title">Phiếu khám</h1>
       <p class="slip-meta">${meta}</p>
     </header>
-    ${qrBlock}
     <dl class="slip-rows">
-      <div class="slip-row slip-row--stt">
-        <dt>Số thứ tự</dt>
-        <dd>${escapeHtml(view.queueNumber)}</dd>
-      </div>
       <div class="slip-row">
         <dt>Phòng khám</dt>
         <dd>${escapeHtml(view.clinicRoom)}</dd>
@@ -166,6 +212,7 @@ function buildVisitSlipDocument(view) {
         <dd>${escapeHtml(view.examTime)}</dd>
       </div>
     </dl>
+    ${qrBlock}
   </article>
 </body>
 </html>`

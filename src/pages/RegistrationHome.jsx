@@ -62,6 +62,32 @@ function ymd(d) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
 
+function todayIsoDate() {
+  return ymd(new Date())
+}
+
+/** Ngày sinh: không sau hôm nay. */
+function clampIsoDateMaxToday(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return ''
+  const today = todayIsoDate()
+  return iso > today ? today : iso
+}
+
+/** Ngày khám: không trước hôm nay. */
+function clampIsoDateMinToday(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return ''
+  const today = todayIsoDate()
+  return iso < today ? today : iso
+}
+
+function isIsoDateNotAfterToday(iso) {
+  return Boolean(iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) && iso <= todayIsoDate())
+}
+
+function isIsoDateNotBeforeToday(iso) {
+  return Boolean(iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) && iso >= todayIsoDate())
+}
+
 function formatDateVi(isoOrDate) {
   if (!isoOrDate) return ''
   const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)
@@ -69,12 +95,15 @@ function formatDateVi(isoOrDate) {
   return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`
 }
 
+/** Tuổi hiện tại từ ngày sinh ISO (so với hôm nay). */
 function ageFromIsoDate(iso) {
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return ''
-  const d = new Date(`${iso}T12:00:00`)
-  if (Number.isNaN(d.getTime())) return ''
-  const diff = Date.now() - d.getTime()
-  return String(Math.max(0, Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000))))
+  const [y, m, d] = iso.split('-').map(Number)
+  const today = new Date()
+  let age = today.getFullYear() - y
+  const monthDiff = today.getMonth() + 1 - m
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < d)) age -= 1
+  return age >= 0 ? String(age) : ''
 }
 
 function isoDateFromApi(dob) {
@@ -102,11 +131,6 @@ function readDisplayNameFromPatient(pat) {
   const last = String(pat.lastName || '').trim()
   const first = String(pat.firstName || '').trim()
   return `${last} ${first}`.trim() || `${first} ${last}`.trim() || ''
-}
-
-function formatDateTimeNow() {
-  const d = new Date()
-  return `${formatDateVi(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
 function formatDateTimeVi(value) {
@@ -195,8 +219,7 @@ export default function RegistrationHome() {
   const [saveMsg, setSaveMsg] = useState('')
   const [saving, setSaving] = useState(false)
   const [maKcb, setMaKcb] = useState('')
-  const [todayIso] = useState(() => ymd(new Date()))
-  const [registeredAt] = useState(() => formatDateTimeNow())
+  const todayIso = todayIsoDate()
   /** null = chưa lưu lần nào; sau mỗi lưu thành công lưu snapshot để so sánh */
   const [lastSaved, setLastSaved] = useState(null)
   const [doctorId, setDoctorId] = useState('')
@@ -456,8 +479,10 @@ export default function RegistrationHome() {
   }, [doctors])
 
   const doctorOptions = useMemo(() => {
+    if (!specialtyId) return []
+    const sid = String(specialtyId).trim()
     return (doctors || [])
-      .filter((d) => (specialtyId ? String(d?.specialtyID || '').trim() === String(specialtyId).trim() : true))
+      .filter((d) => String(d?.specialtyID || '').trim() === sid)
       .map((d) => {
         const name = String(
           d?.displayName || [d?.lastName, d?.firstName].filter(Boolean).join(' ').trim() || d?.email || '',
@@ -487,12 +512,18 @@ export default function RegistrationHome() {
 
   useEffect(() => {
     if (fromAppointment) return
-    // changing doctor invalidates date/time selection
+    setAppointmentDate('')
     setStartTime('')
     setFreeSlots([])
     setSlotsErr('')
-    // keep appointmentDate as-is (user may want same date), but it will refetch slots
   }, [doctorId, fromAppointment])
+
+  useEffect(() => {
+    if (fromAppointment) return
+    setStartTime('')
+    setFreeSlots([])
+    setSlotsErr('')
+  }, [appointmentDate, fromAppointment])
 
   useEffect(() => {
     if (fromAppointment) return
@@ -527,6 +558,32 @@ export default function RegistrationHome() {
 
   if (!token || !user || !isReceptionStaff(user)) {
     return null
+  }
+
+  function resetAppointmentSchedule() {
+    setAppointmentDate('')
+    setStartTime('')
+    setFreeSlots([])
+    setSlotsErr('')
+  }
+
+  function handleSpecialtyChange(nextSpecialtyId) {
+    setSpecialtyId(nextSpecialtyId)
+    setDoctorId('')
+    resetAppointmentSchedule()
+  }
+
+  function handleDoctorChange(nextDoctorId) {
+    setDoctorId(nextDoctorId)
+    resetAppointmentSchedule()
+  }
+
+  function handleDraftDobChange(nextDob) {
+    setDraftDob(nextDob ? clampIsoDateMaxToday(nextDob) : '')
+  }
+
+  function handleAppointmentDateChange(nextDate) {
+    setAppointmentDate(nextDate ? clampIsoDateMinToday(nextDate) : '')
   }
 
   function currentPatientSnapshot() {
@@ -611,6 +668,11 @@ export default function RegistrationHome() {
         setLookupErr('Vui lòng chọn ngày sinh.')
         return
       }
+      if (!isIsoDateNotAfterToday(draftDob)) {
+        setSaveMsg('')
+        setLookupErr('Ngày sinh không được ở tương lai.')
+        return
+      }
       if (!String(draftPhone || '').trim()) {
         setSaveMsg('')
         setLookupErr('Vui lòng nhập số điện thoại.')
@@ -629,6 +691,11 @@ export default function RegistrationHome() {
       if (!appointmentDate) {
         setSaveMsg('')
         setLookupErr('Vui lòng chọn ngày khám.')
+        return
+      }
+      if (!isIsoDateNotBeforeToday(appointmentDate)) {
+        setSaveMsg('')
+        setLookupErr('Ngày khám phải là hôm nay hoặc ngày trong tương lai.')
         return
       }
       if (!startTime) {
@@ -1050,89 +1117,120 @@ export default function RegistrationHome() {
                 <span>1</span>
                 Thông tin người đăng ký
               </h2>
-              <div className="tcl-grid-form">
+              <div className="reg-form-grid">
                 {p ? (
                   <>
-                    <div className="tcl-f">
-                      <label>Mã bệnh nhân</label>
-                      <input readOnly value={patientDisplay?.patientCode || ''} title="Mã BN theo lịch hẹn, không chỉnh sửa" />
+                    <div className="reg-form-row reg-form-row--40-60">
+                      <div className="tcl-f">
+                        <label>Mã bệnh nhân</label>
+                        <input readOnly value={patientDisplay?.patientCode || ''} title="Mã BN theo lịch hẹn, không chỉnh sửa" />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Họ tên *</label>
+                        <input readOnly value={patientDisplay?.displayName || ''} />
+                      </div>
                     </div>
-                    <div className="tcl-f">
-                      <label>Họ tên *</label>
-                      <input readOnly value={patientDisplay?.displayName || ''} />
+                    <div className="reg-form-row reg-form-row--thirds">
+                      <div className="tcl-f">
+                        <label>Ngày sinh *</label>
+                        <input readOnly value={patientDisplay?.dobLabel || ''} />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Độ tuổi</label>
+                        <input readOnly value={patientDisplay?.age || ''} />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Giới tính</label>
+                        <input readOnly value={patientDisplay?.gender || ''} />
+                      </div>
                     </div>
-                    <div className="tcl-f">
-                      <label>Ngày sinh *</label>
-                      <input readOnly value={patientDisplay?.dobLabel || ''} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Độ tuổi</label>
-                      <input readOnly value={patientDisplay?.age || ''} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Điện thoại *</label>
-                      <input readOnly value={patientDisplay?.phone || ''} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Giới tính</label>
-                      <input readOnly value={patientDisplay?.gender || ''} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Tài khoản (email)</label>
-                      <input readOnly value={patientDisplay?.email || ''} placeholder="—" />
-                    </div>
-                    <div className="tcl-f tcl-f--full">
-                      <label>Địa chỉ</label>
-                      <input readOnly value={patientDisplay?.address || ''} />
+                    <div className="reg-form-row reg-form-row--40-60">
+                      <div className="tcl-f">
+                        <label>Điện thoại *</label>
+                        <input readOnly value={patientDisplay?.phone || ''} />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Địa chỉ</label>
+                        <input readOnly value={patientDisplay?.address || ''} />
+                      </div>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="tcl-f">
-                      <label>Mã bệnh nhân</label>
-                      <div className="reg-code-row">
-                        <input
-                          readOnly
-                          value={effectiveDraftPatientCode}
-                          placeholder="Mã bệnh nhân"
-                          title="Không nhập tay mã: chọn BN trong Danh sách, hoặc điền họ tên và SĐT để xem mã dự kiến (BN mới tại quầy)."
-                          autoComplete="off"
-                          className="reg-patient-code-readonly"
-                        />
-                        <div className="reg-code-row-actions">
-                          <button type="button" className="tcl-btn" onClick={openPicker}>
-                            Danh sách
-                          </button>
+                    <div className="reg-form-row reg-form-row--40-60">
+                      <div className="tcl-f">
+                        <label>Mã bệnh nhân</label>
+                        <div className="reg-code-row">
+                          <div className="reg-code-input-wrap">
+                            <input
+                              readOnly
+                              value={effectiveDraftPatientCode}
+                              placeholder="Mã bệnh nhân"
+                              title="Không nhập tay mã: bấm kính lúp để tìm BN theo mã, họ tên hoặc SĐT."
+                              autoComplete="off"
+                              className="reg-patient-code-readonly"
+                            />
+                            <button
+                              type="button"
+                              className="reg-code-search-btn"
+                              onClick={openPicker}
+                              aria-label="Tìm bệnh nhân theo mã, họ tên hoặc điện thoại"
+                              title="Tìm bệnh nhân (họ tên, SĐT, mã BN)"
+                            >
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                                <path d="M20 20L16.5 16.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                       </div>
+                      <div className="tcl-f">
+                        <label>Họ tên *</label>
+                        <input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="Họ và tên" />
+                      </div>
                     </div>
-                    <div className="tcl-f">
-                      <label>Họ tên *</label>
-                      <input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="Họ và tên" />
+                    <div className="reg-form-row reg-form-row--thirds">
+                      <div className="tcl-f">
+                        <label>Ngày sinh *</label>
+                        <input
+                          type="date"
+                          value={draftDob}
+                          max={todayIso}
+                          onChange={(e) => handleDraftDobChange(e.target.value)}
+                          onBlur={(e) => handleDraftDobChange(e.target.value)}
+                          title="Không chọn ngày ở tương lai"
+                        />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Độ tuổi</label>
+                        <input
+                          readOnly
+                          tabIndex={-1}
+                          aria-readonly="true"
+                          value={draftDob ? ageFromIsoDate(draftDob) : ''}
+                          placeholder="Tự tính từ ngày sinh"
+                          title="Tự động tính từ ngày sinh, không nhập tay"
+                        />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Giới tính</label>
+                        <select value={draftGender} onChange={(e) => setDraftGender(e.target.value)}>
+                          <option value="">—</option>
+                          <option value="male">Nam</option>
+                          <option value="female">Nữ</option>
+                        </select>
+                      </div>
                     </div>
-                    <div className="tcl-f">
-                      <label>Ngày sinh *</label>
-                      <input type="date" value={draftDob} onChange={(e) => setDraftDob(e.target.value)} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Độ tuổi</label>
-                      <input readOnly value={draftDob ? ageFromIsoDate(draftDob) : ''} placeholder="Tự tính từ ngày sinh" />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Điện thoại *</label>
-                      <input type="tel" value={draftPhone} onChange={(e) => setDraftPhone(e.target.value)} placeholder="Số điện thoại" />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Giới tính</label>
-                      <select value={draftGender} onChange={(e) => setDraftGender(e.target.value)}>
-                        <option value="">—</option>
-                        <option value="male">Nam</option>
-                        <option value="female">Nữ</option>
-                      </select>
-                    </div>
-                    <div className="tcl-f tcl-f--full">
-                      <label>Địa chỉ</label>
-                      <input value={draftAddress} onChange={(e) => setDraftAddress(e.target.value)} placeholder="Địa chỉ" />
+                    <div className="reg-form-row reg-form-row--40-60">
+                      <div className="tcl-f">
+                        <label>Điện thoại *</label>
+                        <input type="tel" value={draftPhone} onChange={(e) => setDraftPhone(e.target.value)} placeholder="Số điện thoại" />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Địa chỉ</label>
+                        <input value={draftAddress} onChange={(e) => setDraftAddress(e.target.value)} placeholder="Địa chỉ" />
+                      </div>
                     </div>
                   </>
                 )}
@@ -1377,140 +1475,133 @@ export default function RegistrationHome() {
                 <span>2</span>
                 Thông tin đăng ký
               </h2>
-              <div className="tcl-grid-form">
+              <div className="reg-form-grid">
                 {fromAppointment ? (
                   <>
-                    <div className="tcl-f">
-                      <label>Mã lịch hẹn</label>
-                      <input readOnly value={payload?.ticket || '—'} />
+                    <div className="reg-form-row reg-form-row--half">
+                      <div className="tcl-f">
+                        <label>Chuyên khoa</label>
+                        <input readOnly value={appointmentSpecialtyDisplay || '—'} />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Bác sĩ</label>
+                        <input readOnly value={appointmentDoctorDisplay || '—'} />
+                      </div>
                     </div>
-                    <div className="tcl-f">
-                      <label>Ngày đặt lịch</label>
-                      <input readOnly value={payload?.createdAt ? formatDateTimeVi(payload.createdAt) : '—'} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Ngày khám</label>
-                      <input readOnly value={appointmentDate ? formatDateVi(`${appointmentDate}T12:00:00`) : '—'} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Giờ khám</label>
-                      <input readOnly value={startTime || '—'} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Bác sĩ</label>
-                      <input readOnly value={appointmentDoctorDisplay || '—'} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Chuyên khoa</label>
-                      <input readOnly value={appointmentSpecialtyDisplay || '—'} />
+                    <div className="reg-form-row reg-form-row--half">
+                      <div className="tcl-f">
+                        <label>Ngày khám</label>
+                        <input readOnly value={appointmentDate ? formatDateVi(`${appointmentDate}T12:00:00`) : '—'} />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Giờ khám</label>
+                        <input readOnly value={startTime || '—'} />
+                      </div>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="tcl-f">
-                      <label>Mã LH</label>
-                      <input readOnly value={maKcb || ''} placeholder="Lưu để sinh mã lịch hẹn" />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Chuyên khoa</label>
-                      <select
-                        value={specialtyId}
-                        onChange={(e) => {
-                          setSpecialtyId(e.target.value)
-                          setDoctorId('')
-                        }}
-                        disabled={doctorsLoading}
-                        title={doctorsErr || undefined}
-                      >
-                        <option value="">{doctorsLoading ? 'Đang tải…' : '— Chọn chuyên khoa —'}</option>
-                        {specialtyOptions.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
+                    <div className="reg-form-row reg-form-row--half">
+                      <div className="tcl-f">
+                        <label>Chuyên khoa</label>
+                        <select
+                          value={specialtyId}
+                          onChange={(e) => handleSpecialtyChange(e.target.value)}
+                          disabled={doctorsLoading}
+                          title={doctorsErr || 'Chọn chuyên khoa trước, sau đó chọn bác sĩ'}
+                        >
+                          <option value="">{doctorsLoading ? 'Đang tải…' : '— Chọn chuyên khoa —'}</option>
+                          {specialtyOptions.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="tcl-f">
+                        <label>Bác sĩ</label>
+                        <select
+                          value={doctorId}
+                          onChange={(e) => handleDoctorChange(e.target.value)}
+                          disabled={doctorsLoading || !specialtyId}
+                          title={
+                            doctorsErr ||
+                            (!specialtyId ? 'Chọn chuyên khoa trước' : 'Chỉ hiển thị bác sĩ thuộc chuyên khoa đã chọn')
+                          }
+                        >
+                          <option value="">
+                            {doctorsLoading
+                              ? 'Đang tải…'
+                              : specialtyId
+                                ? '— Chọn bác sĩ —'
+                                : 'Chọn chuyên khoa trước'}
                           </option>
-                        ))}
-                      </select>
+                          {doctorOptions.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    <div className="tcl-f">
-                      <label>Bác sĩ</label>
-                      <select
-                        value={doctorId}
-                        onChange={(e) => setDoctorId(e.target.value)}
-                        disabled={doctorsLoading || !specialtyId}
-                        title={doctorsErr || undefined}
-                      >
-                        <option value="">
-                          {doctorsLoading
-                            ? 'Đang tải…'
-                            : specialtyId
-                              ? '— Chọn bác sĩ —'
-                              : 'Chọn chuyên khoa trước'}
-                        </option>
-                        {doctorOptions.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.label}
+                    <div className="reg-form-row reg-form-row--half">
+                      <div className="tcl-f">
+                        <label>Ngày khám</label>
+                        <input
+                          type="date"
+                          value={appointmentDate}
+                          onChange={(e) => handleAppointmentDateChange(e.target.value)}
+                          onBlur={(e) => handleAppointmentDateChange(e.target.value)}
+                          min={todayIso}
+                          disabled={!doctorId}
+                          title={
+                            !doctorId
+                              ? 'Chọn bác sĩ trước'
+                              : 'Chỉ chọn hôm nay hoặc ngày tương lai; không chọn ngày đã qua'
+                          }
+                        />
+                      </div>
+                      <div className="tcl-f">
+                        <label>Giờ khám (trống)</label>
+                        <select
+                          value={startTime}
+                          onChange={(e) => setStartTime(e.target.value)}
+                          disabled={!doctorId || !appointmentDate || slotsLoading}
+                          title={
+                            slotsErr ||
+                            (!doctorId
+                              ? 'Chọn bác sĩ trước'
+                              : !appointmentDate
+                                ? 'Chọn ngày khám trước'
+                                : 'Chỉ hiển thị giờ còn trống của bác sĩ trong ngày đã chọn')
+                          }
+                        >
+                          <option value="">
+                            {slotsLoading
+                              ? 'Đang tải giờ…'
+                              : slotsErr
+                                ? 'Không lấy được giờ'
+                                : !doctorId || !appointmentDate
+                                  ? 'Chọn bác sĩ + ngày trước'
+                                  : freeSlots.length
+                                    ? '— Chọn giờ —'
+                                    : 'Không còn giờ trống'}
                           </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="tcl-f">
-                      <label>Ngày khám</label>
-                      <input
-                        type="date"
-                        value={appointmentDate}
-                        onChange={(e) => {
-                          setAppointmentDate(e.target.value)
-                          setStartTime('')
-                          setSlotsErr('')
-                        }}
-                        min={todayIso}
-                        disabled={!doctorId}
-                        title={!doctorId ? 'Chọn bác sĩ trước' : undefined}
-                      />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Giờ khám (trống)</label>
-                      <select
-                        value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
-                        disabled={!doctorId || !appointmentDate || slotsLoading || !freeSlots.length}
-                        title={
-                          slotsErr ||
-                          (!doctorId
-                            ? 'Chọn bác sĩ trước'
-                            : !appointmentDate
-                              ? 'Chọn ngày khám trước'
-                              : undefined)
-                        }
-                      >
-                        <option value="">
-                          {slotsLoading
-                            ? 'Đang tải giờ…'
-                            : slotsErr
-                              ? 'Không lấy được giờ'
-                              : !doctorId || !appointmentDate
-                                ? 'Chọn bác sĩ + ngày trước'
-                                : freeSlots.length
-                                  ? '— Chọn giờ —'
-                                  : 'Không còn giờ trống'}
-                        </option>
-                        {freeSlots.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="tcl-f">
-                      <label>Ngày đăng ký</label>
-                      <input readOnly value={registeredAt} />
+                          {freeSlots.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </>
                 )}
-                <div className="tcl-f tcl-f--full">
+                <div className="tcl-f">
                   <label>Triệu chứng</label>
                   <textarea rows={2} value={symptom} onChange={(e) => setSymptom(e.target.value)} placeholder="VD: Đau bụng" />
                 </div>
-                <div className="tcl-f tcl-f--full">
+                <div className="tcl-f">
                   <label>Ghi chú</label>
                   <textarea rows={2} value={regNote} onChange={(e) => setRegNote(e.target.value)} placeholder="Ghi chú thêm" />
                 </div>
@@ -1577,9 +1668,18 @@ export default function RegistrationHome() {
               </div>
             </section>
 
-            <div className="tcl-detail-foot">
+            <div className="tcl-detail-foot reg-detail-foot">
               <button type="button" className="tcl-btn" onClick={() => navigate('/reception')}>
                 ← Quay lại Lịch hẹn
+              </button>
+              <button
+                type="button"
+                className="tcl-btn tcl-btn--pri reg-save-foot-btn"
+                onClick={handleSave}
+                disabled={!hasUnsavedChanges || saving}
+                title={!hasUnsavedChanges ? 'Không có thay đổi so với bản đã lưu' : undefined}
+              >
+                {saving ? 'Đang lưu…' : createNew && !fromAppointment ? 'Đăng ký khám' : 'Lưu phiếu'}
               </button>
             </div>
         </main>

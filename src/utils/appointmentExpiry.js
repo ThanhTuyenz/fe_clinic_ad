@@ -28,8 +28,16 @@ export function getSlotEndDate(row, slotMinutes = DEFAULT_SLOT_MINUTES) {
   return d
 }
 
+function normalizeAppointmentStatus(st) {
+  const s = String(st || '').toLowerCase()
+  if (s === 'done' || s === 'completed') return 'examined'
+  if (s === 'cancelled' || s === 'canceled') return 'cancelled'
+  if (s === 'confirmed') return 'confirmed'
+  return 'pending'
+}
+
 export function isPendingAppointmentPastSlot(row, slotMinutes = DEFAULT_SLOT_MINUTES) {
-  if (String(row?.status || '').toLowerCase() !== 'pending') return false
+  if (normalizeAppointmentStatus(row?.status) !== 'pending') return false
   const end = getSlotEndDate(row, slotMinutes)
   if (!end) return false
   return end.getTime() < Date.now()

@@ -1,15 +1,52 @@
 
 /* Màn Đăng ký — bổ sung trên nền reception-home.css */
 
-.reg-code-row {
+.reg-form-grid {
   display: flex;
-  gap: 0.55rem;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.7rem;
 }
 
-.reg-code-row input {
+.reg-form-row {
+  display: grid;
+  gap: 0.7rem 1.1rem;
+}
+
+.reg-form-row--40-60 {
+  grid-template-columns: 2fr 3fr;
+}
+
+.reg-form-row--thirds {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.reg-form-row--half {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .reg-form-row--40-60,
+  .reg-form-row--thirds,
+  .reg-form-row--half {
+    grid-template-columns: 1fr;
+  }
+}
+
+.reg-code-row {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.reg-code-input-wrap {
+  position: relative;
   flex: 1;
   min-width: 0;
+}
+
+.reg-code-input-wrap input {
+  width: 100%;
+  padding-right: 2.65rem;
 }
 
 .reg-code-row input.reg-patient-code-readonly {
@@ -19,11 +56,47 @@
   font-weight: 650;
 }
 
-.reg-code-row-actions {
+.reg-code-search-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--clinic-primary-dark);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.reg-code-search-btn:hover {
+  background: var(--clinic-primary-soft);
+  color: var(--clinic-primary);
+}
+
+.reg-code-search-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
+}
+
+.reg-detail-foot {
   display: flex;
-  gap: 0.4rem;
-  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   flex-wrap: wrap;
+  padding-bottom: 1.25rem;
+}
+
+.reg-save-foot-btn {
+  min-width: 10.5rem;
+  font-weight: 750;
 }
 
 .reg-inner-banner {

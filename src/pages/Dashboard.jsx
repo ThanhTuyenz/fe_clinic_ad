@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchDashboardStats } from '../api/stats.js'
+import DoctorAppHeader from '../components/DoctorAppHeader.jsx'
 import { clearStaffSession, getStaffSession, isReceptionStaff, staffRole } from '../utils/staffSession.js'
+import '../styles/auth.css'
+import '../styles/doctor-home.css'
 import '../styles/reception-home.css'
 import '../styles/dashboard.css'
 
@@ -55,17 +58,39 @@ function pct(part, total) {
   return Math.round((Number(part) / t) * 100)
 }
 
-function StatusBars({ counts, maxOverride }) {
-  const total = Number(counts?.total) || 0
+/** Tổng chờ xác nhận = tổng 4 nhóm việc cần xử lý (khớp KPI "Chờ xác nhận"). */
+function pendingFromActions(actions) {
+  if (!actions || typeof actions !== 'object') return null
+  if (Number.isFinite(Number(actions.pendingTotal))) {
+    return Number(actions.pendingTotal)
+  }
+  return (
+    (Number(actions.unpaidPending) || 0) +
+    (Number(actions.pendingNoRoom) || 0) +
+    (Number(actions.readyToConfirm) || 0) +
+    (Number(actions.expiringSoon) || 0)
+  )
+}
+
+function activeAppointmentTotal(counts) {
+  return (
+    (Number(counts?.pending) || 0) +
+    (Number(counts?.confirmed) || 0) +
+    (Number(counts?.examined) || 0)
+  )
+}
+
+function StatusBars({ counts, maxOverride, pendingLabel = 'Chờ xác nhận', hideCancelled = false }) {
+  const total = hideCancelled ? activeAppointmentTotal(counts) : Number(counts?.total) || 0
   const max = maxOverride || total || 1
   const rows = [
-    { key: 'pending', label: 'Chờ xác nhận', fill: 'dash-bar-fill--pending' },
-    { key: 'confirmed', label: 'Đã xác nhận', fill: '' },
-    { key: 'examined', label: 'Đã khám', fill: '' },
-    { key: 'cancelled', label: 'Đã hủy', fill: 'dash-bar-fill--cancelled' },
+    { key: 'pending', label: pendingLabel, fill: 'dash-bar-fill--pending' },
+    { key: 'confirmed', label: 'Đang chờ khám', fill: 'dash-bar-fill--confirmed' },
+    { key: 'examined', label: 'Đã khám', fill: 'dash-bar-fill--examined' },
+    ...(hideCancelled ? [] : [{ key: 'cancelled', label: 'Đã hủy', fill: 'dash-bar-fill--cancelled' }]),
   ]
   return (
-    <div className="dash-bars">
+    <div className="dash-chart-body dash-bars">
       {rows.map(({ key, label, fill }) => {
         const n = Number(counts?.[key]) || 0
         return (
@@ -94,7 +119,7 @@ function SourceBars({ sources, total }) {
     { key: 'other', label: 'Khác' },
   ]
   return (
-    <div>
+    <div className="dash-chart-body dash-source-list">
       {items.map(({ key, label }) => {
         const n = Number(sources?.[key]) || 0
         if (key === 'other' && n === 0) return null
@@ -117,18 +142,68 @@ function SourceBars({ sources, total }) {
   )
 }
 
-function KpiCard({ label, value, meta, tone, onClick, disabled }) {
+function ShortcutIcon({ name }) {
+  if (name === 'user-plus') {
+    return (
+      <svg className="dash-shortcut-icon" viewBox="0 0 24 24" aria-hidden focusable="false">
+        <path
+          d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+  return (
+    <svg className="dash-shortcut-icon" viewBox="0 0 24 24" aria-hidden focusable="false">
+      <path
+        d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h.01M12 12h.01M17 12h.01M7 16h.01M12 16h.01M17 16h.01"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function DashShortcut({ icon, label, onClick }) {
+  return (
+    <button type="button" className="dash-shortcut-btn" onClick={onClick}>
+      <ShortcutIcon name={icon} />
+      <span className="dash-shortcut-label">{label}</span>
+    </button>
+  )
+}
+
+/** Phụ đề thẻ KPI — góc nhìn bác sĩ. */
+const DOCTOR_KPI_META = {
+  total: 'Bấm để mở phòng khám',
+  pending: 'Bệnh nhân chưa đến quầy',
+  confirmed: 'Bác sĩ gọi vào khám ngay',
+  examined: 'Đã hoàn thành',
+}
+
+function KpiCard({ label, value, meta, metaBold, tone, onClick, disabled, title }) {
   return (
     <button
       type="button"
       className={`dash-kpi${tone ? ` dash-kpi--${tone}` : ''}`}
       onClick={onClick}
       disabled={disabled || !onClick}
-      title={onClick ? 'Mở Lịch hẹn với bộ lọc tương ứng' : undefined}
+      title={title}
     >
       <span className="dash-kpi-label">{label}</span>
       <span className="dash-kpi-value">{value}</span>
-      {meta ? <span className="dash-kpi-meta">{meta}</span> : null}
+      {meta ? (
+        <span className="dash-kpi-meta">
+          {metaBold ? <strong>{meta}</strong> : meta}
+        </span>
+      ) : null}
     </button>
   )
 }
@@ -183,10 +258,26 @@ export default function Dashboard() {
     }
   }, [token, user, navigate, loadStats])
 
+  const goDoctor = useCallback(
+    (statusFilter = 'confirmed') => {
+      const day = stats?.today || ''
+      navigate('/doctor', {
+        state: {
+          fromDate: day,
+          toDate: day,
+          statusFilter,
+          dashNavAt: Date.now(),
+        },
+      })
+    },
+    [navigate, stats?.today],
+  )
+
   const goReception = useCallback(
     (arg = 'all') => {
       if (isDoctor) {
-        navigate('/doctor')
+        const st = typeof arg === 'string' ? arg : arg?.statusFilter || 'all'
+        goDoctor(st)
         return
       }
       const opts = typeof arg === 'string' ? { statusFilter: arg } : arg || {}
@@ -201,13 +292,13 @@ export default function Dashboard() {
         },
       })
     },
-    [navigate, stats?.today, isDoctor],
+    [navigate, stats?.today, isDoctor, goDoctor],
   )
 
   const openTicket = useCallback(
     (ticket) => {
       if (isDoctor) {
-        navigate('/doctor')
+        goDoctor('confirmed')
         return
       }
       const t = String(ticket || '').trim()
@@ -217,7 +308,7 @@ export default function Dashboard() {
       }
       navigate('/reception', { state: { lookupTicket: t } })
     },
-    [goReception, navigate, isDoctor],
+    [goReception, navigate, isDoctor, goDoctor],
   )
 
   if (!token || !user) return null
@@ -228,50 +319,67 @@ export default function Dashboard() {
   const actions = stats?.todayActions
   const revenue = stats?.revenueToday
   const byRoom = stats?.byRoomToday
-  const todayTotal = Number(today?.total) || 0
+  const pendingActionTotal = showStaffExtras ? pendingFromActions(actions) : null
+  const pendingToday =
+    pendingActionTotal != null ? pendingActionTotal : Number(today?.pending) || 0
+  const todayTotal =
+    pendingActionTotal != null
+      ? pendingToday +
+        (Number(today?.confirmed) || 0) +
+        (Number(today?.examined) || 0) +
+        (Number(today?.cancelled) || 0)
+      : Number(today?.total) || 0
   const weekTotal = Number(week?.total) || 0
   const cancelRateWeek = pct(week?.cancelled, weekTotal)
+  const kpiClickTitle = isDoctor ? 'Mở Khám bệnh — lọc theo trạng thái' : 'Mở Lịch hẹn với bộ lọc tương ứng'
+  const waitingToday = Number(today?.confirmed) || 0
+  const doctorTodayTotal = activeAppointmentTotal(today)
+  const doctorWeekTotal = activeAppointmentTotal(week)
+
+  function logout() {
+    clearStaffSession()
+    navigate('/login', { replace: true })
+  }
 
   return (
-    <div className="tcl-shell">
-      <header className="tcl-top">
-        <div className="tcl-brand">VITACARE</div>
-        <nav className="tcl-nav" aria-label="Module">
-          <button type="button" className="is-active">
-            Thống kê
-          </button>
-          {showStaffExtras ? (
-            <>
-              <button type="button" onClick={() => navigate('/reception')}>
-                Lịch hẹn
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/registration', { state: { createNew: true } })}
-              >
-                Đăng ký
-              </button>
-            </>
-          ) : (
-            <button type="button" onClick={() => navigate('/doctor')}>
-              Khám bệnh
+    <div className={isDoctor ? 'dr-desk' : 'tcl-shell'}>
+      {isDoctor ? (
+        <DoctorAppHeader
+          activeTab="stats"
+          user={user}
+          onLogout={logout}
+          examBadge={waitingToday}
+          onExamNavigate={() => goDoctor(waitingToday > 0 ? 'confirmed' : 'all')}
+        />
+      ) : (
+        <header className="tcl-top">
+          <div className="tcl-brand">VITACARE</div>
+          <nav className="tcl-nav" aria-label="Module">
+            <button type="button" className="is-active">
+              Thống kê
             </button>
-          )}
-        </nav>
-        <div className="tcl-top-user">
-          <span>{displayName(user)}</span>
-          <button
-            type="button"
-            className="tcl-btn"
-            onClick={() => {
-              clearStaffSession()
-              navigate('/login', { replace: true })
-            }}
-          >
-            Đăng xuất
-          </button>
-        </div>
-      </header>
+            {showStaffExtras ? (
+              <>
+                <button type="button" onClick={() => navigate('/reception')}>
+                  Lịch hẹn
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/registration', { state: { createNew: true } })}
+                >
+                  Đăng ký
+                </button>
+              </>
+            ) : null}
+          </nav>
+          <div className="tcl-top-user">
+            <span>{displayName(user)}</span>
+            <button type="button" className="tcl-btn" onClick={logout}>
+              Đăng xuất
+            </button>
+          </div>
+        </header>
+      )}
 
       <main className="dash-page">
         <div className="dash-intro">
@@ -313,38 +421,83 @@ export default function Dashboard() {
                   Tổng {stats.patientsTotal.toLocaleString('vi-VN')} bệnh nhân trong hệ thống.
                 </p>
               ) : null}
-              <div className="dash-kpi-grid">
-                <KpiCard
-                  label="Tổng lịch"
-                  value={todayTotal}
-                  meta={isDoctor ? 'Mở Khám bệnh' : 'Bấm để xem danh sách'}
-                  onClick={() => goReception('all')}
-                />
-                <KpiCard
-                  label="Chờ xác nhận"
-                  value={today?.pending ?? 0}
-                  tone="warn"
-                  meta="Cần thu phí / chọn phòng"
-                  onClick={() => goReception('pending')}
-                />
-                <KpiCard
-                  label="Đang chờ khám"
-                  value={today?.confirmed ?? 0}
-                  tone="accent"
-                  meta="Đã xác nhận"
-                  onClick={() => goReception('confirmed')}
-                />
-                <KpiCard
-                  label="Đã khám"
-                  value={today?.examined ?? 0}
-                  onClick={() => goReception('examined')}
-                />
-                <KpiCard
-                  label="Đã hủy"
-                  value={today?.cancelled ?? 0}
-                  onClick={() => goReception('cancelled')}
-                />
-              </div>
+              {isDoctor ? (
+                <div className="dash-kpi-grid dash-kpi-grid--doctor">
+                  <KpiCard
+                    label="Tổng lịch"
+                    value={doctorTodayTotal}
+                    meta={DOCTOR_KPI_META.total}
+                    tone="dr-total"
+                    title={kpiClickTitle}
+                    onClick={() => goDoctor('all')}
+                  />
+                  <KpiCard
+                    label="Chờ tiếp đón"
+                    value={pendingToday}
+                    meta={DOCTOR_KPI_META.pending}
+                    tone="dr-pending"
+                    title={kpiClickTitle}
+                    onClick={() => goDoctor('all')}
+                  />
+                  <KpiCard
+                    label="Đang chờ khám"
+                    value={today?.confirmed ?? 0}
+                    meta={DOCTOR_KPI_META.confirmed}
+                    metaBold
+                    tone="dr-waiting"
+                    title={kpiClickTitle}
+                    onClick={() => goDoctor('confirmed')}
+                  />
+                  <KpiCard
+                    label="Đã khám"
+                    value={today?.examined ?? 0}
+                    meta={DOCTOR_KPI_META.examined}
+                    tone="dr-done"
+                    title={kpiClickTitle}
+                    onClick={() => goDoctor('examined')}
+                  />
+                </div>
+              ) : (
+                <div className="dash-kpi-grid">
+                  <KpiCard
+                    label="Tổng lịch"
+                    value={todayTotal}
+                    meta="Bấm để xem danh sách"
+                    title={kpiClickTitle}
+                    onClick={() => goReception('all')}
+                  />
+                  <KpiCard
+                    label="Chờ xác nhận"
+                    value={pendingToday}
+                    tone="warn"
+                    meta="Cần thu phí / chọn phòng"
+                    title={kpiClickTitle}
+                    onClick={() => goReception('pending')}
+                  />
+                  <KpiCard
+                    label="Đang chờ khám"
+                    value={today?.confirmed ?? 0}
+                    tone="info"
+                    meta="Đã tiếp nhận — chờ bác sĩ khám"
+                    title={kpiClickTitle}
+                    onClick={() => goReception('confirmed')}
+                  />
+                  <KpiCard
+                    label="Đã khám"
+                    value={today?.examined ?? 0}
+                    tone="success"
+                    title={kpiClickTitle}
+                    onClick={() => goReception('examined')}
+                  />
+                  <KpiCard
+                    label="Đã hủy"
+                    value={today?.cancelled ?? 0}
+                    tone="cancelled"
+                    title={kpiClickTitle}
+                    onClick={() => goReception('cancelled')}
+                  />
+                </div>
+              )}
             </section>
 
             {showStaffExtras && actions ? (
@@ -433,19 +586,23 @@ export default function Dashboard() {
                 </section>
               ) : null}
 
-              <section className="dash-section" aria-labelledby="dash-week">
+              <section className="dash-section dash-section--chart" aria-labelledby="dash-week">
                 <h2 id="dash-week" className="dash-section-title">
                   Tuần này
                 </h2>
                 <p className="dash-section-hint">
-                  {weekTotal} lịch
-                  {weekTotal > 0 ? ` · Tỷ lệ hủy ${cancelRateWeek}%` : ''}
+                  {isDoctor ? doctorWeekTotal : weekTotal} lịch
+                  {!isDoctor && weekTotal > 0 ? ` · Tỷ lệ hủy ${cancelRateWeek}%` : ''}
                 </p>
-                <StatusBars counts={week} />
+                <StatusBars
+                  counts={week}
+                  pendingLabel={isDoctor ? 'Chờ tiếp đón' : 'Chờ xác nhận'}
+                  hideCancelled={isDoctor}
+                />
               </section>
 
               {showStaffExtras && sources ? (
-                <section className="dash-section" aria-labelledby="dash-src">
+                <section className="dash-section dash-section--chart" aria-labelledby="dash-src">
                   <h2 id="dash-src" className="dash-section-title">
                     Nguồn đặt lịch (hôm nay)
                   </h2>
@@ -454,7 +611,7 @@ export default function Dashboard() {
               ) : null}
 
               {!isDoctor ? (
-                <section className="dash-section" aria-labelledby="dash-today-breakdown">
+                <section className="dash-section dash-section--chart" aria-labelledby="dash-today-breakdown">
                   <h2 id="dash-today-breakdown" className="dash-section-title">
                     Phân bổ trạng thái (hôm nay)
                   </h2>
@@ -491,22 +648,31 @@ export default function Dashboard() {
               </section>
             ) : null}
 
-            <section className="dash-section" aria-labelledby="dash-go">
+            <section className="dash-section dash-section--shortcuts" aria-labelledby="dash-go">
               <h2 id="dash-go" className="dash-section-title">
                 Thao tác nhanh
               </h2>
+              {role === 'receptionist' ? (
+                <div className="dash-shortcuts">
+                  <DashShortcut
+                    icon="user-plus"
+                    label="+ Tiếp nhận bệnh nhân mới"
+                    onClick={() => navigate('/registration', { state: { createNew: true } })}
+                  />
+                  <DashShortcut
+                    icon="qr"
+                    label="Quét mã QR hẹn lịch"
+                    onClick={() =>
+                      navigate('/reception', { state: { openQrScan: true, qrNavAt: Date.now() } })
+                    }
+                  />
+                </div>
+              ) : null}
               <div className="dash-actions">
                 {role === 'receptionist' ? (
                   <>
-                    <button type="button" className="tcl-btn tcl-btn--pri" onClick={() => navigate('/reception')}>
+                    <button type="button" className="tcl-btn" onClick={() => navigate('/reception')}>
                       Lịch hẹn
-                    </button>
-                    <button
-                      type="button"
-                      className="tcl-btn tcl-btn--pri"
-                      onClick={() => navigate('/registration', { state: { createNew: true } })}
-                    >
-                      Đăng ký
                     </button>
                   </>
                 ) : null}
@@ -525,8 +691,17 @@ export default function Dashboard() {
                   </>
                 ) : null}
                 {role === 'doctor' ? (
-                  <button type="button" className="tcl-btn tcl-btn--pri" onClick={() => navigate('/doctor')}>
+                  <button
+                    type="button"
+                    className="tcl-btn tcl-btn--pri dash-btn-with-badge"
+                    onClick={() => goDoctor(waitingToday > 0 ? 'confirmed' : 'all')}
+                  >
                     Khám bệnh
+                    {waitingToday > 0 ? (
+                      <span className="dash-nav-badge" aria-label={`${waitingToday} ca chờ khám`}>
+                        {waitingToday > 99 ? '99+' : waitingToday}
+                      </span>
+                    ) : null}
                   </button>
                 ) : null}
               </div>

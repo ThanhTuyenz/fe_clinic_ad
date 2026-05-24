@@ -73,6 +73,11 @@ export async function listPatientHistoryReception({ token, patientId }) {
   return data?.appointments || []
 }
 
+/** Lịch sử khám bệnh nhân (bác sĩ hoặc tiếp nhận). */
+export async function listPatientHistory({ token, patientId }) {
+  return listPatientHistoryReception({ token, patientId })
+}
+
 export async function lookupAppointmentByTicket({ token, ticket }) {
   const base = getApiBase()
   const qs = new URLSearchParams({ ticket: String(ticket || '').trim() })

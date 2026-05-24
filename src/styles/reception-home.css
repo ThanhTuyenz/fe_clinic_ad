@@ -168,11 +168,15 @@
   align-items: stretch;
   min-height: 0;
   flex: 1;
+  height: calc(100vh - 148px);
+  max-height: calc(100vh - 148px);
 }
 
 @media (max-width: 1024px) {
   .tcl-split {
     grid-template-columns: 1fr;
+    height: auto;
+    max-height: none;
   }
 }
 
@@ -184,8 +188,19 @@
   box-shadow: none;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+.tcl-split > .tcl-sidebar {
   min-height: 460px;
-  max-height: calc(100vh - 148px);
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.tcl-split > .tcl-detail {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .tcl-filters {
@@ -643,7 +658,175 @@
 }
 
 .tcl-detail {
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.tcl-detail-head {
+  flex-shrink: 0;
+  padding-top: 0.35rem;
+}
+
+.tcl-detail-head .tcl-banner-ok,
+.tcl-detail-head .tcl-banner-err {
+  margin: 0.25rem 0.95rem 0;
+  padding: 0.32rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.tcl-detail-head .tcl-banner-ok:first-child {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 0.15rem 0.95rem 0.25rem;
+}
+
+/* Chi tiết lịch hẹn — hai cột: thông tin (40%) | thao tác (60%) */
+.tcl-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 40%) minmax(0, 60%);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0.65rem;
+  flex: 1;
+  min-height: 0;
+  padding: 0.5rem 0.95rem 0.75rem;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.tcl-detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tcl-detail-col .tcl-sec {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.tcl-detail-col--info {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.tcl-detail-col--info .tcl-grid-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 0.55rem;
+}
+
+.tcl-detail-col--info .tcl-sec {
+  padding: 0.5rem 0.65rem;
+}
+
+.tcl-detail-col--info .tcl-sec-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.88rem;
+}
+
+.tcl-detail-col--info .tcl-sec-title span {
+  width: 1.35rem;
+  height: 1.35rem;
+  font-size: 0.72rem;
+}
+
+.tcl-detail-col--info .tcl-f {
+  gap: 0.12rem;
+}
+
+.tcl-detail-col--info .tcl-f label {
+  font-size: 0.68rem;
+}
+
+.tcl-detail-col--info .tcl-f input,
+.tcl-detail-col--info .tcl-f textarea {
+  padding: 0.34rem 0.48rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.tcl-detail-col--actions {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.15rem;
+  scrollbar-gutter: stable;
+}
+
+.tcl-detail-col--actions .tcl-grid-form {
+  gap: 0.55rem 0.85rem;
+}
+
+.tcl-detail-col--actions .tcl-sec {
+  padding: 0.65rem 0.75rem;
+}
+
+.tcl-detail-col--actions .tcl-sec-title {
+  margin: 0 0 0.55rem;
+  font-size: 0.92rem;
+}
+
+.tcl-sec--room {
+  border-color: rgba(13, 148, 136, 0.22);
+  background: linear-gradient(180deg, #f0fdfa 0%, #fff 2.5rem);
+}
+
+.tcl-room-queue-row {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+  gap: 0.55rem 0.75rem;
+  align-items: end;
+}
+
+.tcl-room-queue-row--room-only {
+  grid-template-columns: 1fr;
+}
+
+.tcl-room-queue-row__room,
+.tcl-room-queue-row__queue {
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .tcl-room-queue-row:not(.tcl-room-queue-row--room-only) {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+}
+
+.tcl-sec-title--plain {
+  padding-bottom: 0.15rem;
+  border-bottom: 2px solid rgba(13, 148, 136, 0.2);
+}
+
+@media (max-width: 520px) {
+  .tcl-detail-col--info .tcl-grid-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .tcl-detail {
+    overflow: auto;
+  }
+
+  .tcl-detail-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    overflow: visible;
+    flex: none;
+  }
+
+  .tcl-detail-col--info,
+  .tcl-detail-col--actions {
+    overflow-y: visible;
+  }
 }
 
 .tcl-banner-ok,
@@ -783,6 +966,15 @@
   font-size: 0.86rem;
   font-weight: 650;
   cursor: pointer;
+}
+
+.tcl-status-row--readonly label {
+  cursor: default;
+  opacity: 0.92;
+}
+
+.tcl-status-row--readonly input[type='radio'] {
+  cursor: default;
 }
 
 .tcl-muted {
