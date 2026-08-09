@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
+import { useStaffLogout } from '@/common/hooks/useStaffLogout'
 import {
   createAppointmentReception,
   getAvailability,
@@ -202,6 +203,7 @@ function parseRegistrationNote(note) {
 }
 
 export default function RegistrationHome() {
+  const { performLogout } = useStaffLogout()
   const navigate = useNavigate()
   const location = useLocation()
   const { token, user } = getSession()
@@ -1011,10 +1013,7 @@ export default function RegistrationHome() {
             <button
               type="button"
               className="tcl-btn"
-              onClick={() => {
-                clearStaffSession()
-                navigate('/login', { replace: true })
-              }}
+              onClick={performLogout}
             >
               Đăng xuất
             </button>
@@ -1055,10 +1054,7 @@ export default function RegistrationHome() {
           <button
             type="button"
             className="tcl-btn"
-            onClick={() => {
-              clearStaffSession()
-              navigate('/login', { replace: true })
-            }}
+            onClick={performLogout}
           >
             Đăng xuất
           </button>

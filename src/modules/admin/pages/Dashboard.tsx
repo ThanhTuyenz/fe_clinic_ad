@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@/common/hooks/useNextNavigation'
+import { useStaffLogout } from '@/common/hooks/useStaffLogout'
 import { fetchDashboardStats } from '../services/stats'
 import DoctorAppHeader from '../components/DoctorAppHeader'
 import RoleSidebar from '../components/RoleSidebar'
@@ -208,6 +209,7 @@ function KpiCard({ label, value, meta, metaBold, tone, onClick, disabled, title 
 }
 
 export default function Dashboard() {
+  const { performLogout } = useStaffLogout()
   const navigate = useNavigate()
   const { token, user } = useMemo(() => getStaffSession(), [])
   const role = staffRole(user)
@@ -336,8 +338,30 @@ export default function Dashboard() {
   const doctorWeekTotal = activeAppointmentTotal(week)
 
   function logout() {
-    clearStaffSession()
-    navigate('/login', { replace: true })
+    void performLogout()
+  }
+
+  if (isDoctor) {
+    const doctorCards = [
+      ['Lịch khám hôm nay', doctorTodayTotal, 'Tổng số ca được phân công', 'emerald'],
+      ['Đang chờ khám', today?.confirmed ?? 0, 'Bệnh nhân sẵn sàng', 'blue'],
+      ['Đã hoàn thành', today?.examined ?? 0, 'Ca khám đã kết thúc', 'green'],
+      ['Chờ tiếp đón', pendingToday, 'Bệnh nhân chưa check-in', 'amber'],
+    ]
+    return <div className="dr-desk">
+      <DoctorAppHeader activeTab="stats" user={user} onLogout={logout} examBadge={waitingToday} onExamNavigate={() => goDoctor(waitingToday > 0 ? 'confirmed' : 'all')} />
+      <main className="min-h-[calc(100vh-58px)] bg-[#f4faef] px-5 py-5 lg:px-7">
+        <div className="mx-auto max-w-[1440px]">
+          <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-bold text-emerald-700">TỔNG QUAN BÁC SĨ</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">Chào buổi sáng, {displayName(user)}</h1><p className="mt-1 text-sm text-slate-500">Theo dõi lịch khám và bệnh nhân của bạn hôm nay · {formatDateYmd(stats?.today)}</p></div><div className="flex gap-2"><button className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600" onClick={()=>void loadStats({silent:true})}>↻ Làm mới</button><button className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm" onClick={()=>goDoctor(waitingToday>0?'confirmed':'all')}>Mở phòng khám →</button></div></div>
+          {error&&<div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{doctorCards.map(([label,value,note,tone])=><button key={label} onClick={()=>goDoctor(label==='Đã hoàn thành'?'examined':label==='Đang chờ khám'?'confirmed':'all')} className="rounded-xl border border-[#dce8d7] bg-white p-4 text-left shadow-[0_2px_7px_rgba(28,74,42,.04)] transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold text-slate-500">{label}</p><p className="mt-2 text-3xl font-extrabold text-slate-900">{loading?'—':value}</p></div><span className={`grid h-10 w-10 place-items-center rounded-xl text-lg ${tone==='amber'?'bg-amber-50 text-amber-600':tone==='blue'?'bg-blue-50 text-blue-600':'bg-emerald-50 text-emerald-600'}`}>✚</span></div><p className="mt-2 text-[11px] text-slate-400">{note}</p></button>)}</div>
+          <div className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_.75fr]">
+            <section className="rounded-xl border border-[#dce8d7] bg-white shadow-[0_2px_7px_rgba(28,74,42,.04)]"><header className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="font-bold text-slate-900">Lịch khám hôm nay</h2><p className="mt-1 text-xs text-slate-400">Các ca đang chờ bạn xử lý</p></div><button onClick={()=>goDoctor('all')} className="text-xs font-bold text-emerald-700">Xem tất cả →</button></header><div className="p-5">{doctorTodayTotal===0?<div className="grid min-h-52 place-items-center rounded-lg border border-dashed border-[#cfe0ca] bg-[#f8fcf5] text-center"><div><span className="text-3xl">🗓</span><p className="mt-2 font-bold text-slate-700">Chưa có lịch khám hôm nay</p><p className="mt-1 text-xs text-slate-400">Lịch mới sẽ xuất hiện tại đây.</p></div></div>:<div className="space-y-3">{[['Đang chờ khám',today?.confirmed??0,'Bệnh nhân đã tiếp nhận'],['Chờ tiếp đón',pendingToday,'Chưa hoàn tất check-in'],['Đã khám',today?.examined??0,'Đã hoàn thành hồ sơ']].map(([label,value,note],i)=><button key={label} onClick={()=>goDoctor(i===0?'confirmed':i===2?'examined':'all')} className="flex w-full items-center gap-4 rounded-lg border border-slate-100 p-4 text-left hover:bg-[#f8fcf5]"><span className="grid h-10 w-10 place-items-center rounded-full bg-emerald-50 font-bold text-emerald-700">{value}</span><span className="flex-1"><b className="text-sm text-slate-800">{label}</b><p className="mt-1 text-xs text-slate-400">{note}</p></span><span className="text-emerald-600">→</span></button>)}</div>}</div></section>
+            <div className="space-y-5"><section className="rounded-xl border border-[#dce8d7] bg-white p-5 shadow-[0_2px_7px_rgba(28,74,42,.04)]"><h2 className="font-bold text-slate-900">Hiệu suất tuần này</h2><div className="mt-5 grid place-items-center"><div className="grid h-36 w-36 place-items-center rounded-full" style={{background:`conic-gradient(#16a34a 0 ${doctorWeekTotal?Math.round((Number(week?.examined)||0)/doctorWeekTotal*100):0}%, #e8f0e5 0)`}}><div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center"><div><b className="text-2xl text-slate-900">{doctorWeekTotal}</b><p className="text-[10px] text-slate-400">ca trong tuần</p></div></div></div></div><div className="mt-5 flex justify-between border-t border-slate-100 pt-4 text-xs"><span className="text-slate-500">Đã hoàn thành</span><b className="text-emerald-700">{week?.examined??0} ca</b></div></section><section className="rounded-xl border border-[#dce8d7] bg-[#eff8e9] p-5"><h2 className="font-bold text-emerald-900">Thao tác nhanh</h2><button onClick={()=>goDoctor('confirmed')} className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-bold text-white">Gọi bệnh nhân tiếp theo</button><button onClick={()=>navigate('/doctor')} className="mt-2 w-full rounded-lg border border-emerald-200 bg-white px-4 py-3 text-sm font-bold text-emerald-700">Mở hồ sơ khám bệnh</button></section></div>
+          </div>
+        </div>
+      </main>
+    </div>
   }
 
   return (

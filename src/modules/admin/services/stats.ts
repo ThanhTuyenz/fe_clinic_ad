@@ -1,10 +1,6 @@
-import { getApiBase, parseJsonResponse, staffFetch } from './apiBase'
+import { apiErrorMessage, apiRequest } from './apiBase'
 
 export async function fetchDashboardStats({ token }) {
-  const base = getApiBase()
-  const { res, data } = await staffFetch(`${base}/stats/dashboard`, { token })
-  if (!res.ok) {
-    throw new Error(data.message || 'Không lấy được thống kê.')
-  }
-  return data
+  try { return await apiRequest({ method: 'GET', url: '/stats/dashboard' }) }
+  catch (error) { throw new Error(apiErrorMessage(error, 'Không lấy được thống kê.')) }
 }
