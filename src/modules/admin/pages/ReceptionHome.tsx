@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import RoleSidebar from '../components/RoleSidebar'
 import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
 import {
   getNextVisitQueueNumber,
@@ -1243,6 +1244,7 @@ export default function ReceptionHome() {
 
   return (
     <div className="tcl-shell">
+      <RoleSidebar role="receptionist" active="reception" user={user} onLogout={() => { clearStaffSession(); navigate('/login', { replace: true }) }} />
       <header className="tcl-top">
         <div className="tcl-brand">VITACARE</div>
         <nav className="tcl-nav" aria-label="Module">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useNavigate } from '@/common/hooks/useNextNavigation'
+import RoleSidebar from './RoleSidebar'
 
 function displayName(user) {
   const first = String(user?.firstName || '').trim()
@@ -18,6 +19,8 @@ export default function DoctorAppHeader({ activeTab = 'exam', user, onLogout, ex
   const goExam = onExamNavigate ?? (() => navigate('/doctor'))
 
   return (
+    <>
+    <RoleSidebar role="doctor" active={activeTab === 'exam' ? 'exam' : 'dashboard'} user={user} onLogout={onLogout} />
     <header className="dr-topbar">
       <div className="dr-brand" role="banner" aria-label="VitaCare Clinic">
         <span className="dr-brand-mark" aria-hidden="true">
@@ -57,5 +60,6 @@ export default function DoctorAppHeader({ activeTab = 'exam', user, onLogout, ex
         </button>
       </div>
     </header>
+    </>
   )
 }

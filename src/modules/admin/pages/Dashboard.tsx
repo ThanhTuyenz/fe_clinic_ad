@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@/common/hooks/useNextNavigation'
 import { fetchDashboardStats } from '../services/stats'
 import DoctorAppHeader from '../components/DoctorAppHeader'
+import RoleSidebar from '../components/RoleSidebar'
 import { clearStaffSession, getStaffSession, isReceptionStaff, staffRole } from '../utils/staffSession'
 
 const REFRESH_MS = 90_000
@@ -350,6 +351,8 @@ export default function Dashboard() {
           onExamNavigate={() => goDoctor(waitingToday > 0 ? 'confirmed' : 'all')}
         />
       ) : (
+        <>
+        <RoleSidebar role="receptionist" active="dashboard" user={user} onLogout={logout} />
         <header className="tcl-top">
           <div className="tcl-brand">VITACARE</div>
           <nav className="tcl-nav" aria-label="Module">
@@ -377,6 +380,7 @@ export default function Dashboard() {
             </button>
           </div>
         </header>
+        </>
       )}
 
       <main className="dash-page">

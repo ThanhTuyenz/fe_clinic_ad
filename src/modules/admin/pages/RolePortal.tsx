@@ -1,71 +1,91 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from '@/common/hooks/useNextNavigation'
+import { useAuth } from '@/common/hooks/useAuth'
 import { fetchDashboardStats } from '../services/stats'
-import { clearStaffSession, getStaffSession, staffRole } from '../utils/staffSession'
+import { staffRole } from '../utils/staffSession'
 
-const ROLE_LABELS = {
-  admin: 'Quản trị hệ thống',
-  branch_manager: 'Quản lý chi nhánh',
-  pharmacist: 'Dược sĩ',
-  cashier: 'Thu ngân',
+const ROLE_LABELS = { admin: 'Quản trị viên', branch_manager: 'Quản lý chi nhánh', pharmacist: 'Dược sĩ', cashier: 'Thu ngân' }
+const NAV = {
+  admin: [['dashboard','Tổng quan','/dashboard'],['staff','Tài khoản & phân quyền','/staff'],['patients','Bệnh nhân','/reception'],['appointments','Lịch hẹn','/reception'],['inventory','Kho thuốc','/inventory'],['billing','Thanh toán','/billing']],
+  branch_manager: [['dashboard','Tổng quan chi nhánh','/dashboard'],['schedule','Lịch bác sĩ','/schedule'],['patients','Bệnh nhân','/reception'],['staff','Nhân sự','/staff'],['inventory','Kho thuốc','/inventory']],
+  pharmacist: [['dashboard','Tổng quan','/dashboard'],['inventory','Kho thuốc','/inventory'],['schedule','Đơn thuốc','/schedule']],
+  cashier: [['dashboard','Tổng quan','/dashboard'],['billing','Thu tiền','/billing'],['schedule','Giao dịch','/schedule']],
 }
 
-const NAV_BY_ROLE = {
-  admin: [['dashboard', 'Tổng quan', '/dashboard'], ['patients', 'Bệnh nhân', '/reception'], ['appointments', 'Lịch hẹn', '/reception'], ['inventory', 'Kho thuốc', '/inventory'], ['billing', 'Thanh toán', '/billing'], ['staff', 'Nhân sự', '/staff']],
-  branch_manager: [['dashboard', 'Dashboard', '/dashboard'], ['patients', 'Bệnh nhân', '/reception'], ['appointments', 'Lịch bác sĩ', '/schedule'], ['inventory', 'Kho thuốc', '/inventory'], ['billing', 'Thanh toán', '/billing'], ['staff', 'Nhân sự', '/staff']],
-  pharmacist: [['dashboard', 'Dashboard', '/dashboard'], ['inventory', 'Kho thuốc', '/inventory'], ['appointments', 'Đơn thuốc', '/schedule']],
-  cashier: [['dashboard', 'Dashboard', '/dashboard'], ['billing', 'Thu tiền', '/billing'], ['appointments', 'Giao dịch', '/schedule']],
+const PATHS = {
+  dashboard:'M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z',
+  staff:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-3h5m-2.5-2.5v5',
+  patients:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
+  appointments:'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z',
+  schedule:'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z',
+  inventory:'m4 7 8-4 8 4-8 4-8-4Zm0 0v10l8 4 8-4V7M12 11v10',
+  billing:'M4 5h16v14H4V5Zm0 4h16M8 15h3',
 }
 
-function Icon({ name }) {
-  const paths = {
-    dashboard: 'M4 5h6v6H4V5Zm10 0h6v4h-6V5ZM4 15h6v4H4v-4Zm10-2h6v6h-6v-6Z',
-    patients: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
-    appointments: 'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z',
-    inventory: 'm4 7 8-4 8 4-8 4-8-4Zm0 0v10l8 4 8-4V7M12 11v10',
-    billing: 'M4 5h16v14H4V5Zm0 4h16M8 15h3',
-    staff: 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm6-1a2.5 2.5 0 1 0 0-5M3 19a6 6 0 0 1 12 0m1-5a5 5 0 0 1 5 5',
-  }
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d={paths[name] || paths.dashboard} /></svg>
+function Icon({ name, className = 'h-[18px] w-[18px]' }) {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}><path strokeLinecap="round" strokeLinejoin="round" d={PATHS[name] || PATHS.dashboard}/></svg>
 }
 
-function Kpi({ label, value, note, tone = 'green' }) {
-  const tones = { green: 'text-green-700', red: 'text-red-600', blue: 'text-blue-700', amber: 'text-amber-700' }
-  return <article className="border border-slate-200 bg-white p-5"><p className="text-[11px] font-semibold uppercase tracking-[.08em] text-slate-500">{label}</p><p className={`mt-3 text-3xl font-semibold ${tones[tone]}`}>{value}</p><p className="mt-2 text-xs text-slate-400">{note}</p></article>
+function initials(user) {
+  const name = String(user?.fullName || user?.displayName || user?.email || 'AD')
+  return name.split(/\s+/).slice(-2).map((x) => x[0]).join('').toUpperCase()
 }
 
-function DashboardContent({ role, stats, loading }) {
+function Kpi({ label, value, detail, tone = 'emerald', icon = 'appointments' }) {
+  const tones = { emerald:'bg-emerald-50 text-emerald-700', blue:'bg-blue-50 text-blue-700', amber:'bg-amber-50 text-amber-700', rose:'bg-rose-50 text-rose-700' }
+  return <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,.03)]">
+    <div className="flex items-start justify-between"><div><p className="text-xs font-medium text-slate-500">{label}</p><p className="mt-2 text-[26px] font-bold tracking-tight text-slate-900">{value}</p></div><span className={`grid h-9 w-9 place-items-center rounded-lg ${tones[tone]}`}><Icon name={icon}/></span></div>
+    <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
+  </article>
+}
+
+function AdminDashboard({ stats, loading }) {
   const today = stats?.today || stats?.data?.today || {}
-  const cards = role === 'cashier'
-    ? [['Chưa thanh toán', today.pendingPayment ?? 0, 'Cần xử lý', 'amber'], ['Đã thanh toán', today.paid ?? 0, 'Trong hôm nay', 'green'], ['Giao dịch lỗi', today.failed ?? 0, 'Cần đối soát', 'red'], ['Tổng thu', today.revenue ? `${Number(today.revenue).toLocaleString('vi-VN')}đ` : '0đ', 'Doanh thu hôm nay', 'blue']]
-    : role === 'pharmacist'
-      ? [['Đơn chờ cấp', today.pending ?? 0, 'Trong hàng đợi', 'amber'], ['Đang chuẩn bị', today.inProgress ?? 0, 'Đang xử lý', 'blue'], ['Đã cấp', today.completed ?? 0, 'Trong hôm nay', 'green'], ['Cảnh báo kho', today.alerts ?? 0, 'Cần kiểm tra', 'red']]
-      : [['Lịch hẹn hôm nay', today.total ?? stats?.totalAppointments ?? 0, 'Toàn bộ trạng thái', 'green'], ['Đã check-in', today.checkedIn ?? 0, 'Đang chờ khám', 'blue'], ['Đã hoàn thành', today.completed ?? 0, 'Trong hôm nay', 'green'], ['Cần xử lý', today.pending ?? 0, 'Đang chờ xác nhận', 'red']]
+  const values = [today.total ?? stats?.totalAppointments ?? 0, today.checkedIn ?? 0, today.completed ?? 0, today.pending ?? 0]
   return <>
-    <div className="flex items-end justify-between"><div><p className="text-sm text-slate-500">Dữ liệu vận hành cập nhật theo thời gian thực</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{role === 'admin' ? 'Tổng quan hệ thống' : role === 'branch_manager' ? 'Tổng quan chi nhánh' : ROLE_LABELS[role]}</h1></div><button className="border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700">Hôm nay</button></div>
-    <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{cards.map(([label, value, note, tone]) => <Kpi key={label} label={label} value={loading ? '—' : value} note={note} tone={tone} />)}</div>
-    <div className="mt-6 grid gap-5 xl:grid-cols-[1.6fr_.9fr]"><section className="border border-slate-200 bg-white"><header className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><h2 className="font-semibold text-slate-900">Hoạt động gần đây</h2><button className="text-xs font-medium text-green-700">Xem tất cả</button></header><div className="divide-y divide-slate-100">{['Lịch hẹn mới được tạo', 'Bệnh nhân đã check-in', 'Thanh toán được xác nhận', 'Lịch làm việc được cập nhật'].map((item, index) => <div key={item} className="flex items-center justify-between px-5 py-4 text-sm"><div><p className="font-medium text-slate-800">{item}</p><p className="mt-1 text-xs text-slate-400">Dữ liệu từ hệ thống</p></div><span className="text-xs text-slate-400">{index + 1} giờ trước</span></div>)}</div></section><section className="border border-slate-200 bg-white"><header className="border-b border-slate-200 px-5 py-4"><h2 className="font-semibold text-slate-900">Cảnh báo hệ thống</h2></header><div className="space-y-3 p-5"><div className="border-l-2 border-red-500 bg-red-50 p-3 text-sm text-red-800">Kiểm tra các giao dịch đang chờ xử lý.</div><div className="border-l-2 border-amber-500 bg-amber-50 p-3 text-sm text-amber-800">Rà soát lịch làm việc chưa được xác nhận.</div><div className="border-l-2 border-green-600 bg-green-50 p-3 text-sm text-green-800">Hệ thống đang hoạt động bình thường.</div></div></section></div>
+    <PageTitle eyebrow="Tổng quan hệ thống" title="Xin chào, Quản trị viên" subtitle="Theo dõi hoạt động toàn hệ thống trong hôm nay." />
+    <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Kpi label="Tổng lịch hẹn" value={loading?'—':values[0]} detail="Tất cả chi nhánh"/><Kpi label="Đã check-in" value={loading?'—':values[1]} detail="Bệnh nhân đang phục vụ" tone="blue" icon="patients"/><Kpi label="Đã hoàn thành" value={loading?'—':values[2]} detail="Cập nhật theo thời gian thực" icon="staff"/><Kpi label="Cần xử lý" value={loading?'—':values[3]} detail="Lịch đang chờ xác nhận" tone="rose" icon="billing"/>
+    </div>
+    <div className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_.75fr]">
+      <Card title="Lưu lượng khám toàn hệ thống" action="7 ngày gần nhất"><div className="flex h-52 items-end gap-3 px-2 pt-8">{[42,58,47,72,61,84,70].map((v,i)=><div key={i} className="flex flex-1 flex-col items-center gap-2"><div className="relative h-36 w-full rounded-t bg-emerald-50"><div className="absolute inset-x-0 bottom-0 rounded-t bg-emerald-600" style={{height:`${v}%`}}/></div><span className="text-[10px] text-slate-400">T{i+2}</span></div>)}</div></Card>
+      <Card title="Tình trạng hệ thống"><div className="space-y-4 py-1">{[['Máy chủ API','Hoạt động'],['Cơ sở dữ liệu','Ổn định'],['Cổng thanh toán','Kết nối'],['Dịch vụ thông báo','Hoạt động']].map(([a,b])=><div key={a} className="flex items-center justify-between border-b border-slate-100 pb-3 text-sm"><span className="text-slate-600">{a}</span><span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><i className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>{b}</span></div>)}</div></Card>
+    </div>
+    <div className="mt-5"><ActivityTable title="Hoạt động gần đây" /></div>
   </>
 }
 
-function SectionContent({ section }) {
-  const names = { staff: 'Tài khoản & Phân quyền', schedule: 'Lịch làm việc', inventory: 'Kho thuốc', billing: 'Thanh toán & Đối soát' }
-  return <><div className="flex items-center justify-between"><div><p className="text-sm text-slate-500">Quản lý dữ liệu nghiệp vụ</p><h1 className="mt-1 text-2xl font-semibold text-slate-950">{names[section]}</h1></div><button className="bg-green-700 px-4 py-2.5 text-sm font-semibold text-white">+ Tạo mới</button></div><section className="mt-6 border border-slate-200 bg-white"><div className="flex flex-wrap gap-3 border-b border-slate-200 p-4"><input className="min-w-64 flex-1 border border-slate-300 px-3 py-2 text-sm outline-none focus:border-green-600" placeholder="Tìm kiếm…" /><select className="border border-slate-300 bg-white px-3 py-2 text-sm"><option>Tất cả trạng thái</option></select><button className="border border-slate-300 px-4 py-2 text-sm">Xuất dữ liệu</button></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500"><tr>{['Mã', 'Tên/Thông tin', 'Vai trò/Loại', 'Chi nhánh', 'Trạng thái', 'Thao tác'].map(h => <th key={h} className="px-5 py-3 font-semibold">{h}</th>)}</tr></thead><tbody><tr className="border-t border-slate-100"><td colSpan="6" className="px-5 py-16 text-center text-slate-400">Dữ liệu sẽ được tải từ API theo quyền của tài khoản.</td></tr></tbody></table></div></section></>
+function PageTitle({ eyebrow, title, subtitle, children }) { return <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-[11px] font-bold uppercase tracking-[.13em] text-emerald-700">{eyebrow}</p><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">{title}</h1><p className="mt-1 text-sm text-slate-500">{subtitle}</p></div>{children}</div> }
+function Card({ title, action, children }) { return <section className="rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,.03)]"><header className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5"><h2 className="text-sm font-bold text-slate-900">{title}</h2>{action&&<span className="text-xs text-slate-400">{action}</span>}</header><div className="p-5">{children}</div></section> }
+
+function ActivityTable({ title = 'Lịch hẹn hôm nay' }) {
+  const rows=[['08:30','Nguyễn Minh Anh','Khám Nội tổng quát','Đã check-in'],['09:15','Trần Hoàng Nam','Khám Tim mạch','Đang chờ'],['10:00','Lê Thu Hà','Tái khám','Đã xác nhận'],['10:30','Phạm Quốc Bảo','Khám Da liễu','Chờ xác nhận']]
+  return <Card title={title} action="Xem tất cả →"><div className="-m-5 overflow-x-auto"><table className="w-full min-w-[650px] text-left text-sm"><thead className="bg-[#f8faf9] text-[10px] font-bold uppercase tracking-wider text-slate-500"><tr>{['Thời gian','Bệnh nhân','Dịch vụ','Trạng thái'].map(x=><th key={x} className="px-5 py-3">{x}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100"><td className="px-5 py-3 font-semibold text-slate-700">{r[0]}</td><td className="px-5 py-3 font-medium text-slate-900">{r[1]}</td><td className="px-5 py-3 text-slate-500">{r[2]}</td><td className="px-5 py-3"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${i===0?'bg-emerald-50 text-emerald-700':i===3?'bg-amber-50 text-amber-700':'bg-blue-50 text-blue-700'}`}>{r[3]}</span></td></tr>)}</tbody></table></div></Card>
 }
 
-export default function RolePortal({ section = 'dashboard' }) {
-  const navigate = useNavigate()
-  const session = useMemo(() => getStaffSession(), [])
-  const role = staffRole(session.user)
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    if (!session.token) return navigate('/login', { replace: true })
-    fetchDashboardStats({ token: session.token }).then(setStats).catch(() => setStats(null)).finally(() => setLoading(false))
-  }, [navigate, session.token])
-  const nav = NAV_BY_ROLE[role] || NAV_BY_ROLE.admin
-  const logout = () => { clearStaffSession(); navigate('/login', { replace: true }) }
-  return <div className="min-h-screen bg-[#f6f8f7] text-slate-800"><aside className="fixed inset-y-0 left-0 z-20 hidden w-60 border-r border-slate-200 bg-white lg:flex lg:flex-col"><div className="border-b border-slate-100 px-5 py-5"><p className="text-lg font-semibold text-green-800">MediLink Global</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.16em] text-slate-400">Admin Portal</p></div><nav className="flex-1 space-y-1 p-3">{nav.map(([id, label, href]) => <button key={id} onClick={() => navigate(href)} className={`flex w-full items-center gap-3 border-l-2 px-3 py-2.5 text-left text-sm ${section === id ? 'border-green-700 bg-[#eef5e8] font-semibold text-green-800' : 'border-transparent text-slate-600 hover:bg-slate-50'}`}><Icon name={id} />{label}</button>)}</nav><div className="border-t border-slate-100 p-3"><button className="w-full px-3 py-2 text-left text-sm text-slate-500">Trung tâm hỗ trợ</button><button onClick={logout} className="w-full px-3 py-2 text-left text-sm text-slate-500">Đăng xuất</button></div></aside><div className="lg:pl-60"><header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-5 lg:px-8"><div><p className="text-xs text-slate-400">MediLink Global</p><p className="text-sm font-medium text-slate-800">{ROLE_LABELS[role] || role}</p></div><div className="flex items-center gap-4"><span className="hidden text-sm text-slate-500 sm:inline">Chi nhánh chính</span><span className="grid h-8 w-8 place-items-center rounded-full bg-green-100 text-xs font-bold text-green-800">{String(session.user?.fullName || 'AD').slice(0, 2).toUpperCase()}</span></div></header><main className="mx-auto max-w-[1440px] p-5 lg:p-8">{section === 'dashboard' ? <DashboardContent role={role} stats={stats} loading={loading} /> : <SectionContent section={section} />}</main></div></div>
+function ManagerDashboard({ stats, loading }) {
+  const t=stats?.today||stats?.data?.today||{}
+  return <><PageTitle eyebrow="Chi nhánh Quận 1" title="Tổng quan chi nhánh" subtitle="Hoạt động vận hành và lịch khám hôm nay"><button className="rounded-md border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600">09 tháng 08, 2026</button></PageTitle><div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Lịch hẹn hôm nay" value={loading?'—':t.total??0} detail="+8% so với hôm qua"/><Kpi label="Bác sĩ làm việc" value="12" detail="4 chuyên khoa" tone="blue" icon="staff"/><Kpi label="Đang chờ khám" value={loading?'—':t.checkedIn??0} detail="Thời gian chờ TB 12 phút" tone="amber" icon="patients"/><Kpi label="Hoàn thành" value={loading?'—':t.completed??0} detail="Tỷ lệ đúng giờ 92%" icon="appointments"/></div><div className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_.75fr]"><ActivityTable/><Card title="Phân bổ lịch khám"><div className="mx-auto grid h-36 w-36 place-items-center rounded-full" style={{background:'conic-gradient(#047857 0 46%, #60a5fa 46% 73%, #f59e0b 73% 90%, #e2e8f0 90%)'}}><div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center"><div><b className="text-2xl text-slate-900">{t.total??0}</b><p className="text-[10px] text-slate-400">lịch hẹn</p></div></div></div><div className="mt-5 grid grid-cols-2 gap-2 text-[11px] text-slate-500"><span>● Nội tổng quát</span><span className="text-blue-600">● Tim mạch</span><span className="text-amber-500">● Da liễu</span><span className="text-slate-400">● Khác</span></div></Card></div></>
+}
+
+function StaffPage() {
+ const users=[['Nguyễn Hoàng Long','long.nguyen@medilink.vn','Quản trị viên','Trụ sở chính','Hoạt động'],['Trần Minh Khoa','khoa.tran@medilink.vn','Quản lý chi nhánh','Quận 1','Hoạt động'],['Lê Thị Ngọc','ngoc.le@medilink.vn','Lễ tân','Quận 1','Hoạt động'],['Phạm Tuấn Anh','tuan.pham@medilink.vn','Bác sĩ','Quận 3','Tạm khóa']]
+ return <><PageTitle eyebrow="Quản trị hệ thống" title="Tài khoản & Phân quyền" subtitle="Quản lý tài khoản nhân viên và phạm vi truy cập hệ thống."><button className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">+ Thêm tài khoản</button></PageTitle><section className="mt-5 rounded-lg border border-slate-200 bg-white"><div className="flex flex-wrap gap-3 border-b border-slate-100 p-4"><div className="relative min-w-64 flex-1"><span className="absolute left-3 top-2.5 text-slate-400">⌕</span><input className="w-full rounded-md border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-emerald-600" placeholder="Tìm theo tên, email..."/></div><select className="rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600"><option>Tất cả vai trò</option></select><select className="rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600"><option>Tất cả chi nhánh</option></select></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-[#f8faf9] text-[10px] uppercase tracking-wider text-slate-500"><tr>{['Nhân viên','Vai trò','Chi nhánh','Trạng thái',''].map(x=><th key={x} className="px-5 py-3">{x}</th>)}</tr></thead><tbody>{users.map((u,i)=><tr key={u[1]} className="border-t border-slate-100"><td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-50 text-[10px] font-bold text-emerald-700">{u[0].split(' ').slice(-2).map(x=>x[0]).join('')}</span><div><p className="font-semibold text-slate-900">{u[0]}</p><p className="text-xs text-slate-400">{u[1]}</p></div></div></td><td className="px-5 py-3 text-slate-600">{u[2]}</td><td className="px-5 py-3 text-slate-600">{u[3]}</td><td className="px-5 py-3"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${i===3?'bg-slate-100 text-slate-500':'bg-emerald-50 text-emerald-700'}`}>{u[4]}</span></td><td className="px-5 py-3 text-right text-lg text-slate-400">•••</td></tr>)}</tbody></table></div><footer className="flex justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-400"><span>Hiển thị 4 tài khoản</span><span>‹ &nbsp; 1 &nbsp; ›</span></footer></section></>
+}
+
+function SchedulePage() {
+ const days=['Thứ 2\n10/08','Thứ 3\n11/08','Thứ 4\n12/08','Thứ 5\n13/08','Thứ 6\n14/08','Thứ 7\n15/08']; const shifts=[['BS. Nguyễn Văn An','Nội tổng quát'],['BS. Trần Thu Hà','Tim mạch'],['BS. Lê Minh Đức','Da liễu']]
+ return <><PageTitle eyebrow="Quản lý nhân sự" title="Lịch bác sĩ" subtitle="Theo dõi và điều phối ca làm việc tại chi nhánh."><button className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">+ Xếp lịch</button></PageTitle><div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="flex items-center gap-2"><button className="rounded border border-slate-200 px-2.5 py-1.5">‹</button><b className="px-2 text-sm">10 – 15 tháng 08, 2026</b><button className="rounded border border-slate-200 px-2.5 py-1.5">›</button></div><div className="flex gap-2"><select className="rounded border border-slate-200 px-3 py-2 text-xs"><option>Tất cả chuyên khoa</option></select><button className="rounded bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">Tuần</button></div></div><section className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white"><div className="grid min-w-[900px] grid-cols-[180px_repeat(6,1fr)]"><div className="border-b border-r border-slate-100 p-3 text-xs font-bold text-slate-400">BÁC SĨ</div>{days.map(d=><div key={d} className="whitespace-pre-line border-b border-r border-slate-100 p-3 text-center text-xs font-semibold text-slate-600">{d}</div>)}{shifts.flatMap((s,r)=>[<div key={`${r}-d`} className="border-b border-r border-slate-100 p-4"><b className="text-xs text-slate-800">{s[0]}</b><p className="mt-1 text-[10px] text-slate-400">{s[1]}</p></div>,...days.map((_,c)=><div key={`${r}-${c}`} className="min-h-24 border-b border-r border-slate-100 p-2">{!(r===1&&c===3)&&<div className={`rounded-md border-l-2 p-2 text-[10px] ${c%3===1?'border-blue-500 bg-blue-50 text-blue-700':'border-emerald-500 bg-emerald-50 text-emerald-700'}`}><b>{c%2?'13:00 – 17:00':'08:00 – 12:00'}</b><p className="mt-1 opacity-70">Phòng {r+1}0{c%3+1}</p></div>}</div>)])}</div></section></>
+}
+
+function GenericPage({ section, role }) { const title={inventory:'Kho thuốc',billing:'Thanh toán & Đối soát'}[section]||ROLE_LABELS[role]; return <><PageTitle eyebrow={ROLE_LABELS[role]} title={title} subtitle="Dữ liệu nghiệp vụ được cập nhật theo thời gian thực."/><div className="mt-5 grid gap-4 sm:grid-cols-3"><Kpi label="Chờ xử lý" value="0" detail="Trong hôm nay" tone="amber"/><Kpi label="Đã hoàn thành" value="0" detail="Trong hôm nay"/><Kpi label="Cần kiểm tra" value="0" detail="Không có cảnh báo" tone="blue"/></div><div className="mt-5"><ActivityTable title="Danh sách gần đây"/></div></> }
+
+export default function RolePortal({ section='dashboard' }) {
+ const navigate=useNavigate(); const { token, user, logout: clearAuthSession }=useAuth(); const session={ user }; const role=staffRole(user)||'admin'; const [stats,setStats]=useState(null); const [loading,setLoading]=useState(true); const [menu,setMenu]=useState(false)
+ useEffect(()=>{if(!token)return; fetchDashboardStats({token}).then(setStats).catch(()=>setStats(null)).finally(()=>setLoading(false))},[token])
+ const logout=async()=>{await clearAuthSession();navigate('/login',{replace:true})}; const nav=NAV[role]||NAV.admin
+ let content=section==='staff'?<StaffPage/>:section==='schedule'&&role==='branch_manager'?<SchedulePage/>:section==='dashboard'?(role==='branch_manager'?<ManagerDashboard stats={stats} loading={loading}/>:<AdminDashboard stats={stats} loading={loading}/>):<GenericPage section={section} role={role}/>
+ return <div className="min-h-screen bg-[#f5f8f5] font-sans text-slate-800"><aside className={`fixed inset-y-0 left-0 z-30 flex w-[244px] flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 ${menu?'translate-x-0':'-translate-x-full'}`}><div className="flex h-[70px] items-center gap-3 border-b border-slate-100 px-5"><span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-700 text-lg font-black text-white">M</span><div><p className="text-sm font-extrabold tracking-tight text-emerald-800">MediLink Global</p><p className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">Healthcare System</p></div></div><nav className="flex-1 space-y-1 overflow-y-auto p-3"><p className="px-3 pb-2 pt-2 text-[9px] font-bold uppercase tracking-[.16em] text-slate-400">Không gian làm việc</p>{nav.map(([id,label,href])=><button key={id} onClick={()=>{navigate(href);setMenu(false)}} className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] transition ${section===id?'bg-emerald-50 font-bold text-emerald-800':'font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><Icon name={id}/>{label}</button>)}</nav><div className="border-t border-slate-100 p-3"><div className="mb-2 flex items-center gap-3 rounded-md bg-slate-50 p-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-700 text-[10px] font-bold text-white">{initials(session.user)}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-800">{session.user?.fullName||session.user?.email||'Nhân viên'}</p><p className="truncate text-[10px] text-slate-400">{ROLE_LABELS[role]}</p></div></div><button onClick={logout} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-600">Đăng xuất</button></div></aside>{menu&&<button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-slate-900/20 lg:hidden" onClick={()=>setMenu(false)}/>}<div className="lg:pl-[244px]"><header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-7"><div className="flex items-center gap-3"><button onClick={()=>setMenu(true)} className="rounded border border-slate-200 px-2.5 py-1.5 lg:hidden">☰</button><div className="relative hidden md:block"><span className="absolute left-3 top-2 text-slate-400">⌕</span><input className="w-72 rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs outline-none focus:border-emerald-500" placeholder="Tìm kiếm nhanh..."/></div></div><div className="flex items-center gap-4"><button className="relative text-lg text-slate-500">♧<i className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-rose-500"/></button><div className="hidden border-l border-slate-200 pl-4 text-right sm:block"><p className="text-xs font-bold text-slate-700">Chi nhánh chính</p><p className="text-[10px] text-slate-400">TP. Hồ Chí Minh</p></div><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-800">{initials(session.user)}</span></div></header><main className="mx-auto max-w-[1440px] p-4 sm:p-6 lg:p-7">{content}</main></div></div>
 }

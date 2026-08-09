@@ -1,6 +1,6 @@
 /* Dashboard — palette y tế: emerald (hoàn tất), amber (cần xử lý), slate/crimson (đóng) */
 .dash-page {
-  --dash-card-bg: #f8fafc;
+  --dash-card-bg: #ffffff;
   --dash-emerald: #059669;
   --dash-emerald-soft: #ecfdf5;
   --dash-amber: #d97706;
@@ -11,14 +11,14 @@
   --dash-slate-soft: #f1f5f9;
   --dash-crimson: #be123c;
   --dash-crimson-soft: #fff1f2;
-  --dash-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --dash-shadow-hover: 0 4px 12px rgba(15, 23, 42, 0.06);
+  --dash-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
+  --dash-shadow-hover: 0 6px 16px rgba(15, 23, 42, 0.07);
 }
 
 .dash-page {
   flex: 1;
   padding: 1rem 1.25rem 2rem;
-  max-width: 1100px;
+  max-width: 1440px;
   margin: 0 auto;
   width: 100%;
 }
@@ -68,8 +68,8 @@
 
 .dash-section {
   background: var(--dash-card-bg);
-  border: none;
-  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   box-shadow: var(--dash-shadow);
   padding: 0.9rem 1rem 1rem;
 }
@@ -133,8 +133,8 @@
   gap: 0.25rem;
   min-height: 6.5rem;
   padding: 0.85rem 1rem;
-  border: none;
-  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   background: var(--dash-card-bg);
   box-shadow: var(--dash-shadow);
   text-align: center;

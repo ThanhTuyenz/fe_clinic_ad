@@ -1,11 +1,13 @@
 'use client'
 
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
+import { apiClient } from '../lib/api-client'
 import { getCurrentStaff } from '../modules/admin/services/auth'
 import {
   clearStaffSession,
   getStaffSession,
   saveStaffSession,
+  setRuntimeStaffSession,
   staffRole,
 } from '../modules/admin/utils/staffSession'
 
@@ -24,49 +26,46 @@ const STAFF_ROLES = [
 export function AuthProvider({ children }) {
   const [session, setSession] = useState({ token: null, user: null })
   const [isInitializing, setIsInitializing] = useState(true)
+  const syncRuntimeSession = useCallback(() => setSession(getStaffSession()), [])
 
-  const syncSession = useCallback(() => setSession(getStaffSession()), [])
-
-  const logout = useCallback(() => {
-    clearStaffSession()
-    setSession({ token: null, user: null })
+  const logout = useCallback(async () => {
+    try {
+      await apiClient.post('/auth/logout', {})
+    } catch {
+      // UI vẫn phải đóng phiên nếu cookie phía server đã hết hạn.
+    } finally {
+      clearStaffSession()
+      setSession({ token: null, user: null })
+    }
   }, [])
 
   const verifySession = useCallback(async () => {
-    const stored = getStaffSession()
-    if (!stored.token) {
+    try {
+      const verifiedUser = await getCurrentStaff()
+      const user = verifiedUser
+      setRuntimeStaffSession(user)
+      setSession({ token: 'cookie-session', user })
+      return user
+    } catch {
+      clearStaffSession()
       setSession({ token: null, user: null })
       return null
     }
-    setSession(stored)
-    try {
-      const verifiedUser = await getCurrentStaff(stored.token)
-      const user = verifiedUser?.id ? { ...stored.user, ...verifiedUser } : stored.user
-      setSession({ token: stored.token, user })
-      return user
-    } catch {
-      logout()
-      return null
-    }
-  }, [logout])
+  }, [])
 
   useEffect(() => {
     verifySession().finally(() => setIsInitializing(false))
-    window.addEventListener('storage', syncSession)
-    window.addEventListener('staff-session-changed', syncSession)
-    return () => {
-      window.removeEventListener('storage', syncSession)
-      window.removeEventListener('staff-session-changed', syncSession)
-    }
-  }, [syncSession, verifySession])
+    window.addEventListener('staff-session-changed', syncRuntimeSession)
+    return () => window.removeEventListener('staff-session-changed', syncRuntimeSession)
+  }, [syncRuntimeSession, verifySession])
 
-  const login = useCallback(({ token, user, remember = true }) => {
+  const login = useCallback(({ user }) => {
     const role = staffRole(user)
     if (!STAFF_ROLES.includes(role)) {
       throw new Error('Tài khoản này không có quyền truy cập cổng nhân viên.')
     }
-    saveStaffSession({ token, user, remember })
-    setSession({ token, user })
+    saveStaffSession({ user })
+    setSession({ token: 'cookie-session', user })
   }, [])
 
   const hasRole = useCallback(

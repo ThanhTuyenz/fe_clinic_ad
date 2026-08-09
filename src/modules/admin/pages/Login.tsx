@@ -5,27 +5,11 @@ import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
 import { useAuth } from '../../../common/hooks/useAuth'
 import { login as loginApi } from '../services/auth'
 
-/** Chỉ lưu lựa chọn UI (có/không ghi nhớ), không lưu mật khẩu. */
-const REMEMBER_PREF_KEY = 'vitacare_staff_remember_login'
-/** Email lần đăng nhập gần nhất — tự điền ô email (không lưu mật khẩu). */
-const LAST_EMAIL_KEY = 'vitacare_staff_last_login_email'
-
 function readLastEmail() {
-  try {
-    return String(localStorage.getItem(LAST_EMAIL_KEY) || '').trim()
-  } catch {
-    return ''
-  }
+  return ''
 }
 
 function readRememberPref() {
-  try {
-    const v = localStorage.getItem(REMEMBER_PREF_KEY)
-    if (v === '0') return false
-    if (v === '1') return true
-  } catch {
-    /* ignore */
-  }
   return true
 }
 
@@ -82,13 +66,6 @@ export default function Login() {
       }
 
       login({ token: data.token, user: data.user, remember })
-
-      try {
-        localStorage.setItem(REMEMBER_PREF_KEY, remember ? '1' : '0')
-        localStorage.setItem(LAST_EMAIL_KEY, emailOrPhone)
-      } catch {
-        /* ignore */
-      }
 
       const returnPath = String(location.state?.from || '')
       navigate(returnPath.startsWith('/') ? returnPath : redirectPathForUser(data.user), { replace: true })

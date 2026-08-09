@@ -1,7 +1,7 @@
 import { apiFetch, getApiBase, parseJsonResponse } from './apiBase'
 
-export function isMongoObjectId(id) {
-  return typeof id === 'string' && /^[a-fA-F0-9]{24}$/.test(id)
+export function isValidDoctorId(id) {
+  return typeof id === 'string' && (/^[a-fA-F0-9]{24}$/.test(id) || /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id))
 }
 
 export async function listDoctors() {
@@ -18,6 +18,6 @@ export async function listDoctors() {
   if (!res.ok) {
     throw new Error(data.message || 'Không lấy được danh sách bác sĩ.')
   }
-  const raw = data.doctors || []
-  return raw.filter((d) => isMongoObjectId(d?.id))
+  const raw = Array.isArray(data) ? data : data?.doctors || []
+  return raw.filter((d) => isValidDoctorId(d?.id))
 }

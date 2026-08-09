@@ -438,6 +438,9 @@ export default function DoctorHome() {
   const [medicineResults, setMedicineResults] = useState([])
   const [medicineSearchLoading, setMedicineSearchLoading] = useState(false)
   const [medicineSearchErr, setMedicineSearchErr] = useState('')
+  const medicineCacheRef = useRef(new Map())
+  const medicineRequestKeyRef = useRef('')
+  const medicineRequestSeqRef = useRef(0)
 
   const [clinicRooms, setClinicRooms] = useState([])
   const [patientHistory, setPatientHistory] = useState([])
@@ -1117,10 +1120,22 @@ export default function DoctorHome() {
   }, [token, examSubTab, selectedApptId])
 
   useEffect(() => {
-    if (!rxPickOpen) return undefined
+    if (!rxPickOpen || !token) return undefined
 
     const q = String(medicineQuery || '').trim()
-    let cancelled = false
+    const requestKey = `${token}:${q.toLocaleLowerCase('vi')}`
+    const cached = medicineCacheRef.current.get(requestKey)
+    if (cached) {
+      setMedicineResults(cached)
+      setMedicineSearchLoading(false)
+      setMedicineSearchErr('')
+      return undefined
+    }
+
+    // React Strict Mode hoặc một render lặp không được tạo lại cùng request đang chạy.
+    if (medicineRequestKeyRef.current === requestKey) return undefined
+    medicineRequestKeyRef.current = requestKey
+    const requestSeq = ++medicineRequestSeqRef.current
     const delay = q.length > 0 ? 280 : 0
 
     const timer = setTimeout(() => {
@@ -1128,22 +1143,26 @@ export default function DoctorHome() {
       setMedicineSearchErr('')
       void searchMedicines({ token, q, limit: q ? 30 : 50 })
         .then((rows) => {
-          if (cancelled) return
-          setMedicineResults(Array.isArray(rows) ? rows : [])
+          if (requestSeq !== medicineRequestSeqRef.current) return
+          const nextRows = Array.isArray(rows) ? rows : []
+          medicineCacheRef.current.set(requestKey, nextRows)
+          setMedicineResults(nextRows)
         })
         .catch((e) => {
-          if (cancelled) return
+          if (requestSeq !== medicineRequestSeqRef.current) return
           setMedicineResults([])
           setMedicineSearchErr(e?.message || 'Không tải được danh mục thuốc. Kiểm tra API be_clinic đang chạy.')
         })
         .finally(() => {
-          if (!cancelled) setMedicineSearchLoading(false)
+          if (medicineRequestKeyRef.current === requestKey) medicineRequestKeyRef.current = ''
+          if (requestSeq === medicineRequestSeqRef.current) setMedicineSearchLoading(false)
         })
     }, delay)
 
     return () => {
-      cancelled = true
       clearTimeout(timer)
+      if (medicineRequestSeqRef.current === requestSeq) medicineRequestSeqRef.current += 1
+      if (medicineRequestKeyRef.current === requestKey) medicineRequestKeyRef.current = ''
     }
   }, [rxPickOpen, medicineQuery, token])
 
@@ -1275,10 +1294,7 @@ export default function DoctorHome() {
   }, [])
 
   function logout() {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    sessionStorage.removeItem('token')
-    sessionStorage.removeItem('user')
+    clearStaffSession()
     navigate('/login', { replace: true })
   }
 

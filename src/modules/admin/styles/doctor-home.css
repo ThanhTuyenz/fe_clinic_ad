@@ -450,7 +450,22 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding-left: 232px;
 }
+
+.role-sidebar {
+  position: fixed; inset: 0 auto 0 0; z-index: 40; width: 232px; padding: 0 12px 14px;
+  display: flex; flex-direction: column; background: #fff; border-right: 1px solid #e2e8f0;
+}
+.role-sidebar-brand { height: 70px; margin: 0 -12px; padding: 0 18px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f5f9; }
+.role-sidebar-logo { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; background: #047857; color: #fff; font-weight: 900; }
+.role-sidebar-brand b { display:block; color:#065f46; font-size:13px; }.role-sidebar-brand small { display:block; margin-top:2px; color:#94a3b8; font-size:8px; letter-spacing:.12em; text-transform:uppercase; }
+.role-sidebar-context { padding: 22px 10px 10px; }.role-sidebar-context small { display:block; color:#94a3b8; font-size:8px; font-weight:800; letter-spacing:.14em; }.role-sidebar-context strong { display:block; margin-top:5px; color:#334155; font-size:11px; }
+.role-sidebar nav { flex:1; }.role-sidebar nav button { width:100%; border:0; border-radius:6px; padding:10px 11px; display:flex; align-items:center; gap:11px; background:transparent; color:#64748b; font:600 12px inherit; cursor:pointer; text-align:left; }.role-sidebar nav button svg { width:17px; height:17px; }.role-sidebar nav button:hover { background:#f8fafc; color:#334155; }.role-sidebar nav button.is-active { background:#ecfdf5; color:#047857; font-weight:800; }
+.role-sidebar-user { display:flex; align-items:center; gap:9px; padding:10px; border-radius:7px; background:#f8fafc; }.role-sidebar-user>span { width:30px; height:30px; display:grid; place-items:center; border-radius:50%; background:#d1fae5; color:#065f46; font-size:9px; font-weight:900; }.role-sidebar-user div { min-width:0; }.role-sidebar-user b,.role-sidebar-user small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.role-sidebar-user b { color:#334155; font-size:10px; }.role-sidebar-user small { margin-top:2px; color:#94a3b8; font-size:8px; }
+.role-sidebar-logout { margin-top:6px; padding:8px 10px; border:0; border-radius:6px; background:transparent; color:#64748b; font-size:11px; font-weight:700; text-align:left; cursor:pointer; }.role-sidebar-logout:hover { background:#fff1f2; color:#e11d48; }
+
+@media (max-width: 900px) { .role-sidebar { display:none; } .dr-desk { padding-left:0; } }
 
 .dr-topbar {
   position: sticky;

@@ -16,5 +16,5 @@ export async function listClinicRooms({ activeOnly = true } = {}) {
   if (!res.ok) {
     throw new Error(data.message || 'Không lấy được danh sách phòng.')
   }
-  return data?.rooms || []
+  return Array.isArray(data) ? data : data?.rooms || []
 }

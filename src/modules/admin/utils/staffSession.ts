@@ -1,89 +1,33 @@
-function safeParse(json) {
-  try {
-    return JSON.parse(json)
-  } catch {
-    return null
-  }
-}
-
-function normalizeToken(raw) {
-  const t = String(raw || '').trim()
-  if (!t || t === 'null' || t === 'undefined') return ''
-  return t
-}
-
-/** Kiểm tra JWT hết hạn (không verify chữ ký — chỉ đọc claim exp). */
-export function isJwtExpired(token) {
-  try {
-    const parts = normalizeToken(token).split('.')
-    if (parts.length !== 3) return true
-    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
-    const payload = JSON.parse(atob(b64))
-    if (!payload.exp) return false
-    return Date.now() >= payload.exp * 1000
-  } catch {
-    return true
-  }
-}
+/**
+ * Compatibility session for legacy screens.
+ * Authentication lives exclusively in httpOnly cookies; nothing is persisted in Web Storage.
+ */
+let runtimeSession: { token: string | null; user: any } = { token: null, user: null }
 
 export function clearStaffSession() {
-  try {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    sessionStorage.removeItem('token')
-    sessionStorage.removeItem('user')
-    window.dispatchEvent(new Event('staff-session-changed'))
-  } catch {
-    /* ignore */
-  }
+  runtimeSession = { token: null, user: null }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('staff-session-changed'))
 }
 
-/** Lưu phiên staff vào đúng storage và thông báo cho AuthProvider cập nhật. */
-export function saveStaffSession({ token, user, remember = true }) {
-  const normalizedToken = normalizeToken(token)
-  if (!normalizedToken || !user) throw new Error('Dữ liệu phiên đăng nhập không hợp lệ.')
-  clearStaffSession()
-  const storage = remember ? localStorage : sessionStorage
-  storage.setItem('token', normalizedToken)
-  storage.setItem('user', JSON.stringify(user))
-  window.dispatchEvent(new Event('staff-session-changed'))
+export function saveStaffSession({ user }: { token?: string; user: any; remember?: boolean }) {
+  if (!user) throw new Error('Dữ liệu phiên đăng nhập không hợp lệ.')
+  runtimeSession = { token: 'cookie-session', user }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('staff-session-changed'))
 }
 
-export function staffRole(user) {
+export function setRuntimeStaffSession(user: any) {
+  runtimeSession = user ? { token: 'cookie-session', user } : { token: null, user: null }
+}
+
+export function staffRole(user: any) {
   return String(user?.userType || user?.role || '').trim().toLowerCase()
 }
 
-/** Tiếp đón hoặc đăng ký — được gọi API danh sách BN, đặt lịch quầy, … */
-export function isReceptionStaff(user) {
-  const r = staffRole(user)
-  return r === 'receptionist' || r === 'registration'
+export function isReceptionStaff(user: any) {
+  const role = staffRole(user)
+  return role === 'receptionist' || role === 'registration'
 }
 
-function readPair(storage) {
-  const token = normalizeToken(storage.getItem('token'))
-  if (!token) return null
-  if (isJwtExpired(token)) {
-    storage.removeItem('token')
-    storage.removeItem('user')
-    return null
-  }
-  return {
-    token,
-    user: safeParse(storage.getItem('user') || 'null'),
-  }
-}
-
-/**
- * Ưu tiên localStorage (ghi nhớ đăng nhập). Bỏ token hết hạn / không phải JWT.
- */
 export function getStaffSession() {
-  try {
-    const fromLs = readPair(localStorage)
-    if (fromLs) return fromLs
-    const fromSs = readPair(sessionStorage)
-    if (fromSs) return fromSs
-    return { token: null, user: null }
-  } catch {
-    return { token: null, user: null }
-  }
+  return runtimeSession
 }
