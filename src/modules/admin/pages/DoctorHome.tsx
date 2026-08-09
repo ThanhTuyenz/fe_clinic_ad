@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
+import { useStaffLogout } from '@/common/hooks/useStaffLogout'
 import { Html5Qrcode } from 'html5-qrcode'
-import { finishExamAppointment, listDoctorAppointments, listPatientHistory } from '../services/appointments'
+import { finishExamAppointment, listDoctorAppointments, listPatientHistory, updateAppointmentStatus } from '../services/appointments'
 import { listClinicRooms } from '../services/clinicRooms'
 import { getExaminationByAppointment, saveExamination } from '../services/examinations'
 import { searchMedicines } from '../services/medicines'
@@ -95,6 +96,7 @@ function patientLabel(a) {
   const fromParts = [p?.lastName, p?.firstName].filter(Boolean).join(' ').trim()
   return (
     String(p?.displayName || '').trim() ||
+    String(p?.fullName || p?.name || '').trim() ||
     fromParts ||
     String(p?.email || '').trim() ||
     'Bệnh nhân'
@@ -124,7 +126,7 @@ function formatPatientAgeShort(dob) {
 function patientDemographicLine(a) {
   const parts = [
     formatGenderShort(a?.patient?.gender),
-    formatPatientAgeShort(a?.patient?.dob),
+    formatPatientAgeShort(a?.patient?.dob || a?.patient?.dateOfBirth),
     timeLabel(a?.startTime),
   ].filter(Boolean)
   return parts.length ? parts.join(' · ') : '—'
@@ -391,6 +393,7 @@ function sanitizeVitalInput(key, raw) {
 }
 
 export default function DoctorHome() {
+  const { performLogout } = useStaffLogout()
   const navigate = useNavigate()
   const location = useLocation()
   const navInit = useMemo(() => readDoctorNavState(location), [])
@@ -399,6 +402,7 @@ export default function DoctorHome() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [startingAppointmentId, setStartingAppointmentId] = useState('')
 
   // Bác sĩ chỉ thấy lịch sau khi tiếp nhận xác nhận (confirmed/examined), không hiển thị pending/cancelled.
   const [filterStatus, setFilterStatus] = useState(navInit.statusFilter)
@@ -701,6 +705,29 @@ export default function DoctorHome() {
     }
     return rows
   }, [items, filterFrom, filterTo, filterStatus, listSearch, qrListFocusTicket])
+
+  const waitingQueue = useMemo(() => filteredQueue.filter((appointment) => {
+    const workflowStatus = String(appointment?.workflowStatus || '').toUpperCase()
+    return workflowStatus ? workflowStatus === 'CHECKED_IN' : String(appointment?.status || '').toLowerCase() === 'confirmed'
+  }), [filteredQueue])
+
+  async function startExamination(appointment) {
+    const id = String(appointment?.id || appointment?._id || '')
+    if (!id || startingAppointmentId) return
+    setStartingAppointmentId(id)
+    setExamSaveErr('')
+    try {
+      const result = await updateAppointmentStatus({ token, appointmentId: id, status: 'in_examination' })
+      const updated = result?.appointment
+      setItems((rows) => rows.map((row) => String(row?.id || row?._id) === id ? { ...row, ...(updated || {}), status: 'confirmed', workflowStatus: 'IN_EXAMINATION' } : row))
+      setSelectedApptId(id)
+      flashOk(`Đã bắt đầu khám cho ${patientLabel(appointment)}.`)
+    } catch (startError) {
+      flashErr(startError?.message || 'Không bắt đầu khám được.')
+    } finally {
+      setStartingAppointmentId('')
+    }
+  }
 
   const totalFiltered = filteredQueue.length
   const pageCount = Math.max(1, Math.ceil(totalFiltered / pageSize))
@@ -1294,8 +1321,7 @@ export default function DoctorHome() {
   }, [])
 
   function logout() {
-    clearStaffSession()
-    navigate('/login', { replace: true })
+    void performLogout()
   }
 
   if (!token || !user) return null
@@ -1305,13 +1331,132 @@ export default function DoctorHome() {
       <DoctorAppHeader activeTab="exam" user={user} onLogout={logout} />
 
       <main className="dr-view dr-view--exam" role="main">
+        <div className="dr-clinic-heading">
+          <div>
+            <h1>Quản lý khám bệnh</h1>
+            <p>{selectedAppt ? `Bệnh nhân hiện tại: ${patientLabel(selectedAppt)}` : 'Chọn bệnh nhân trong lịch khám để bắt đầu.'}</p>
+          </div>
+          <div className="dr-clinic-heading-actions">
+            <button type="button" className="dr-btn dr-btn--ghost" onClick={() => navigate('/dashboard')}>Lịch sử khám</button>
+            <button type="button" className="dr-btn dr-btn--solid" disabled={!selectedAppt || examLocked || examSaving} onClick={() => requestFinishAndPrint()}>✓ Hoàn thành khám</button>
+          </div>
+        </div>
         {error ? (
           <div className="dr-banner dr-banner--error dr-banner--flush" role="alert">
             {error}
           </div>
         ) : null}
+        <div className="dr-stitch-workspace">
+          <aside className="dr-stitch-context">
+            <section className="dr-stitch-card dr-stitch-patient">
+              {selectedAppt ? (
+                <>
+                  <div className="dr-stitch-patient-head">
+                    <span className="dr-patient-avatar">
+                      {patientLabel(selectedAppt).split(/\s+/).slice(-2).map((word) => word[0]).join('').toUpperCase()}
+                    </span>
+                    <div><h2>{patientLabel(selectedAppt)}</h2><p>{patientDemographicLine(selectedAppt)}</p></div>
+                  </div>
+                  <dl className="dr-stitch-patient-meta">
+                    <div><dt>Mã BN:</dt><dd>{selectedAppt?.patient?.patientCode || '—'}</dd></div>
+                    <div><dt>Lý do khám:</dt><dd>{selectedAppt?.reason || selectedAppt?.symptoms || 'Khám theo lịch hẹn'}</dd></div>
+                    <div><dt>Sinh hiệu:</dt><dd>{vitals.bp ? `HA: ${vitals.bp}` : 'Chưa cập nhật'}</dd></div>
+                  </dl>
+                  <div className="dr-stitch-patient-actions">
+                    <button type="button" disabled>▣ Chat</button><button type="button" disabled>▣ Video</button>
+                  </div>
+                </>
+              ) : <div className="dr-patient-summary-empty"><span>✚</span><b>Chưa chọn bệnh nhân</b><p>Chọn một lịch khám bên dưới.</p></div>}
+            </section>
+
+            <section className="dr-stitch-card dr-stitch-ai">
+              <div className="dr-stitch-card-title"><span>✦</span> AI Tóm tắt bệnh án</div>
+              {selectedAppt ? <>
+                <p>– {vitals.symptoms ? `Triệu chứng: ${vitals.symptoms}` : 'Chưa ghi nhận triệu chứng lâm sàng.'}</p>
+                <p>– {vitals.diagnosis ? `Chẩn đoán: ${vitals.diagnosis}` : 'Chưa có chẩn đoán ICD-10.'}</p>
+                <p>– {prescriptionHasMedicines(prescriptionLines) ? `Đơn thuốc hiện có ${filterFilledRxLines(prescriptionLines).length} thuốc.` : 'Chưa kê đơn thuốc.'}</p>
+              </> : <p>Thông tin tóm tắt xuất hiện sau khi chọn bệnh nhân.</p>}
+            </section>
+
+            <section className="dr-stitch-card dr-stitch-schedule">
+              <header><b>Bệnh nhân đang đợi</b><span>{waitingQueue.length} bệnh nhân</span></header>
+              <div className="dr-stitch-schedule-list">
+                {waitingQueue.slice(0, 5).map((appointment) => (
+                  <div key={appointment.id || appointment._id} className={`dr-stitch-waiting-row${String(appointment.id || appointment._id) === String(selectedApptId) ? ' is-active' : ''}`}>
+                    <button type="button" className="dr-stitch-waiting-info" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>
+                      <span><b>{appointment?.startTime || '—'}</b> · {patientLabel(appointment)}</span>
+                      <small>STT {appointment?.visitQueueNumber || '—'} · {appointment?.symptoms || 'Khám theo lịch hẹn'}</small>
+                    </button>
+                    <button type="button" className="dr-stitch-start" disabled={Boolean(startingAppointmentId)} onClick={() => void startExamination(appointment)}>{startingAppointmentId === String(appointment.id || appointment._id) ? 'Đang mở…' : 'Bắt đầu khám'}</button>
+                  </div>
+                ))}
+                {!waitingQueue.length ? <div className="dr-stitch-empty"><b>Chưa có bệnh nhân đang đợi</b><p>Danh sách sẽ cập nhật khi lễ tân check-in.</p></div> : null}
+              </div>
+            </section>
+          </aside>
+
+          <section className="dr-stitch-clinical">
+            <article className="dr-stitch-card dr-stitch-exam-card">
+              <div className="dr-stitch-card-title"><span>≡</span> Khám bệnh và Ghi hồ sơ</div>
+              <label className="dr-stitch-field dr-stitch-field--full">
+                <span>Lâm sàng / Triệu chứng</span>
+                <textarea rows={4} placeholder="Nhập ghi chú lâm sàng..." value={vitals.symptoms} onChange={(e) => setVitals((state) => ({ ...state, symptoms: e.target.value }))} disabled={examLocked || !selectedAppt} />
+              </label>
+              <div className="dr-stitch-diagnosis-row">
+                <IcdDiagnosisField token={token} value={diagnosisIcd} onChange={(pick) => { setDiagnosisIcd(pick); setDiagnosisError(''); setVitals((state) => ({ ...state, diagnosis: pick ? formatIcdLabel(pick.code, pick.name) : '' })) }} disabled={examLocked || !selectedAppt} error={diagnosisError} />
+                <label className="dr-stitch-field"><span>Chỉ định cận lâm sàng</span><button type="button" className="dr-stitch-dashed" disabled={!selectedAppt || examLocked}>⊕ Thêm chỉ định</button></label>
+              </div>
+              <details className="dr-stitch-details">
+                <summary>Sinh hiệu và ghi chú điều trị</summary>
+                <div className="dr-stitch-vitals">
+                  {VITAL_FIELD_UI.map(({ key, label, inputMode, placeholder }) => <label key={key}><span>{label}</span><input type="text" inputMode={inputMode || 'text'} placeholder={placeholder || VITAL_PLACEHOLDER} value={vitals[key]} onChange={(e) => setVitalField(key, e.target.value)} disabled={examLocked || !selectedAppt} /></label>)}
+                </div>
+                <label className="dr-stitch-field dr-stitch-field--full"><span>Hướng điều trị</span><textarea rows={2} value={vitals.treatment} onChange={(e) => setVitals((state) => ({ ...state, treatment: e.target.value }))} disabled={examLocked || !selectedAppt} /></label>
+              </details>
+            </article>
+
+            <article className="dr-stitch-card dr-stitch-rx-card">
+              <header className="dr-stitch-rx-header"><div className="dr-stitch-card-title"><span>▤</span> Kê thuốc</div><button type="button" className="dr-stitch-voice" disabled>♩ Kê thuốc bằng giọng nói</button></header>
+              <div className="dr-stitch-rx-table">
+                <div className="dr-stitch-rx-row dr-stitch-rx-head"><span>Tên thuốc</span><span>Liều lượng</span><span>Cách dùng</span><span /></div>
+                {prescriptionLines.map((line, idx) => <div className="dr-stitch-rx-row" key={idx}>
+                  <button type="button" className="dr-stitch-medicine-pick" onClick={() => openMedicinePicker(idx)} disabled={examLocked || !selectedAppt}>{line.medicineDisplayName || line.medicineName || 'Tìm và chọn thuốc...'}</button>
+                  <input value={line.dosageAmount} onChange={(e) => updateRxLine(idx, { dosageAmount: sanitizeDosageAmountInput(e.target.value) })} placeholder="1 viên/lần" disabled={examLocked || !selectedAppt} />
+                  <select value={line.frequencyPerDay} onChange={(e) => updateRxLine(idx, { frequencyPerDay: e.target.value })} disabled={examLocked || !selectedAppt}><option value="">Chọn cách dùng</option>{RX_FREQUENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                  <button type="button" className="dr-stitch-remove" onClick={() => removeRxLine(idx)} disabled={examLocked || prescriptionLines.length < 2}>×</button>
+                </div>)}
+                {!examLocked ? <button type="button" className="dr-stitch-add-rx" onClick={addRxLine} disabled={!selectedAppt}>＋ Thêm thuốc</button> : null}
+              </div>
+              <footer className="dr-stitch-rx-footer"><button type="button" className="dr-btn dr-btn--ghost" onClick={() => void handleSaveExamination()} disabled={!selectedAppt || examLocked || examSaving}>Lưu nháp</button><button type="button" className="dr-btn dr-btn--solid" onClick={() => requestFinishAndPrint()} disabled={!selectedAppt || examLocked || examSaving}>▣ In đơn thuốc</button></footer>
+            </article>
+          </section>
+        </div>
         <div className="dr-split">
             <aside className="dr-side" aria-label="Danh sách đăng ký">
+              <section className="dr-patient-summary" aria-label="Bệnh nhân hiện tại">
+                {selectedAppt ? <>
+                  <div className="dr-patient-summary-head">
+                    <span className="dr-patient-avatar">{patientLabel(selectedAppt).split(/\s+/).slice(-2).map((word) => word[0]).join('').toUpperCase()}</span>
+                    <div><h2>{patientLabel(selectedAppt)}</h2><p>{patientDemographicLine(selectedAppt)}</p></div>
+                  </div>
+                  <div className="dr-patient-summary-grid">
+                    <span>Mã BN <b>{selectedAppt?.patient?.patientCode || '—'}</b></span>
+                    <span>Mã lịch <b>{selectedAppt?.ticket || '—'}</b></span>
+                    <span>Điện thoại <b>{selectedAppt?.patient?.phone || '—'}</b></span>
+                    <span>Huyết áp <b>{vitals.bp || '—'}</b></span>
+                  </div>
+                </> : <div className="dr-patient-summary-empty"><span>✚</span><b>Chưa chọn bệnh nhân</b><p>Chọn một lịch trong danh sách bên dưới.</p></div>}
+              </section>
+
+              <section className="dr-record-summary" aria-label="Tóm tắt hồ sơ">
+                <div className="dr-record-summary-title"><span>✦</span> Tóm tắt hồ sơ</div>
+                {selectedAppt ? <ul>
+                  <li>{vitals.symptoms ? `Triệu chứng: ${vitals.symptoms}` : 'Chưa ghi nhận triệu chứng lâm sàng.'}</li>
+                  <li>{vitals.diagnosis ? `Chẩn đoán: ${vitals.diagnosis}` : 'Chưa có chẩn đoán ICD-10.'}</li>
+                  <li>{prescriptionLines.some((line) => line.medicineName || line.medicineDisplayName) ? `Đơn thuốc có ${prescriptionLines.filter((line) => line.medicineName || line.medicineDisplayName).length} thuốc.` : 'Chưa kê đơn thuốc.'}</li>
+                </ul> : <p>Thông tin tóm tắt sẽ xuất hiện sau khi chọn bệnh nhân.</p>}
+              </section>
+
               <div className="dr-filters">
                 <div className="dr-search-filter-row">
                   <input

@@ -1403,6 +1403,53 @@
   border-color: var(--clinic-primary-dark);
 }
 
+/* Doctor workspace — Stitch: "Phòng khám & Hỗ trợ AI (Updated)" */
+.dr-desk { --dr-topbar-h: 58px; background: #f4faef; }
+.dr-topbar { min-height: var(--dr-topbar-h); padding: 0 1.15rem; border-bottom-color: #dce8d7; background: rgba(255,255,255,.96); }
+.dr-topbar .dr-brand { display: none; }
+.dr-topbar { grid-template-columns: 1fr auto; }
+.dr-topnav { justify-content: flex-end; order: 1; height: 100%; }
+.dr-topbar-right { order: 2; padding-left: .75rem; border-left: 1px solid #e7eee3; }
+.dr-topnav-item { height: 58px; padding: 0 .9rem; border-radius: 0; font-size: .78rem; }
+.dr-topnav-item.is-active { background: #f2faee; border-bottom-color: #16a34a; color: #087a39; }
+.dr-logout { display: none; }
+.dr-view--exam { background: #f4faef; }
+.dr-clinic-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding: 1rem 1.25rem .85rem; flex-shrink:0; }
+.dr-clinic-heading h1 { margin:0; color:#102219; font-size:1.45rem; line-height:1.2; font-weight:800; letter-spacing:-.025em; }
+.dr-clinic-heading p { margin:.3rem 0 0; color:#64748b; font-size:.78rem; }
+.dr-clinic-heading-actions { display:flex; gap:.55rem; }
+.dr-split { gap:.85rem; padding: 0 1.25rem 1.25rem; max-height:calc(100dvh - var(--dr-topbar-h) - 76px); }
+.dr-side { position:relative; top:auto; width:28%; min-width:290px; max-width:350px; height:auto; max-height:none; border:1px solid #dbe7d7; border-radius:12px; background:#fff; box-shadow:0 2px 8px rgba(32,75,48,.04); }
+.dr-filters { padding:.75rem; background:#fff; border-bottom-color:#edf2ea; }
+.dr-list-head { background:#f8fcf5; border-bottom-color:#e4ede0; }
+.dr-list-title { color:#185b32; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; }
+.dr-queue-list { padding:.35rem; gap:.25rem; }
+.dr-queue-item { margin:0; border:0; border-left:3px solid transparent; border-radius:7px; background:#fff; }
+.dr-queue-item:hover:not(.is-selected) { background:#f7fbf5; }
+.dr-queue-item.is-selected { border-color:#16a34a; background:#eef8eb; box-shadow:none; }
+.dr-queue-name { color:#183524; font-size:.84rem; }
+.dr-panel { height:auto; max-height:none; padding:0; border:0; background:transparent; }
+.dr-panel-top { margin:0 0 .75rem; padding:.7rem .85rem; border:1px solid #dbe7d7; border-radius:11px; background:#fff; }
+.dr-subtabs { gap:.35rem; }
+.dr-subtab { padding:.55rem .8rem; background:transparent; border:1px solid transparent; color:#64748b; }
+.dr-subtab.is-active { color:#087a39; border-color:#bfe1c0; background:#eff9eb; }
+.dr-panel-alert { margin:0 0 .7rem; border:1px solid #dce8d7; border-radius:10px; background:#f7fcf3; color:#27633b; }
+.dr-section { margin-bottom:.75rem; padding:.9rem 1rem; border:1px solid #dbe7d7; border-radius:12px; background:#fff; box-shadow:0 2px 8px rgba(32,75,48,.035); }
+.dr-section-title { color:#115c31; font-size:.92rem; }
+.dr-input,.dr-textarea,.dr-select,.dr-list-search-input { border-color:#d8e5d3; border-radius:8px; background:#f8fcf5; }
+.dr-input:focus,.dr-textarea:focus,.dr-list-search-input:focus { border-color:#56b870; box-shadow:0 0 0 3px rgba(34,197,94,.09); }
+.dr-table-wrap { border-color:#e0eadc; border-radius:9px; }
+.dr-table thead th { background:#f5faF2; color:#51705c; font-size:.67rem; }
+.dr-rx-toolbar { margin-bottom:.55rem; }
+.dr-btn { border-radius:8px; }
+.dr-btn--solid,.dr-btn--primary { border-color:#16a34a; background:#16a34a; color:#fff; }
+.dr-btn--solid:hover:not(:disabled),.dr-btn--primary:hover:not(:disabled) { border-color:#15803d; background:#15803d; }
+.role-sidebar { width:232px; border-right-color:#dce8d7; }
+.role-sidebar nav button.is-active { background:#eaf6e5; color:#087a39; }
+
+@media (max-width: 1050px) { .dr-side { min-width:270px; }.dr-split { padding-inline:.75rem; }.dr-clinic-heading { padding-inline:.75rem; } }
+@media (max-width: 900px) { .dr-topbar { grid-template-columns:1fr; height:auto; padding:.35rem .75rem; }.dr-topbar-right { display:none; }.dr-topnav { justify-content:flex-start; }.dr-topnav-item { height:42px; }.dr-clinic-heading { align-items:flex-start; flex-direction:column; }.dr-split { max-height:none; overflow:auto; flex-direction:column; }.dr-side { position:relative; width:100%; max-width:none; min-width:0; height:390px; }.dr-panel { overflow:visible; }.dr-desk { overflow:auto; } }
+
 .dr-btn--primary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -2225,4 +2272,78 @@
   gap: 0.5rem;
   margin-top: 0.9rem;
 }
+
+/* Keep Stitch workspace overrides last in the cascade. */
+.dr-desk .dr-split { gap:.85rem; padding:0 1.25rem 1.25rem; max-height:calc(100dvh - var(--dr-topbar-h) - 76px); }
+.dr-desk .dr-side { position:relative; top:auto; width:28%; min-width:290px; max-width:350px; height:auto; max-height:none; border:1px solid #dbe7d7; border-radius:12px; background:#fff; }
+.dr-desk .dr-panel { height:auto; max-height:none; padding:0; background:transparent; }
+.dr-desk .dr-section { margin-bottom:.75rem; padding:.9rem 1rem; border:1px solid #dbe7d7; border-radius:12px; background:#fff; box-shadow:0 2px 8px rgba(32,75,48,.035); }
+.dr-desk .dr-section-title { color:#115c31; font-size:.92rem; }
+.dr-desk .dr-queue-item.is-selected { border-color:#16a34a; background:#eef8eb; box-shadow:none; }
+.dr-patient-summary { margin:.75rem .75rem 0; padding:.85rem; border:1px solid #dbe7d7; border-radius:10px; background:#fff; flex-shrink:0; }
+.dr-patient-summary-head { display:flex; align-items:center; gap:.7rem; padding-bottom:.7rem; border-bottom:1px solid #edf2ea; }
+.dr-patient-avatar { width:42px; height:42px; display:grid; place-items:center; flex:0 0 auto; border-radius:50%; border:1px solid #80c693; background:#e8f6e5; color:#087a39; font-size:.7rem; font-weight:900; }
+.dr-patient-summary h2 { margin:0; color:#173522; font-size:.9rem; }.dr-patient-summary-head p { margin:.2rem 0 0; color:#64748b; font-size:.68rem; }
+.dr-patient-summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:.55rem .7rem; padding-top:.7rem; }.dr-patient-summary-grid span { display:flex; flex-direction:column; gap:.15rem; color:#64748b; font-size:.62rem; }.dr-patient-summary-grid b { overflow:hidden; color:#243c2d; font-size:.67rem; text-overflow:ellipsis; white-space:nowrap; }
+.dr-patient-summary-empty { padding:.4rem; text-align:center; }.dr-patient-summary-empty>span { display:block; color:#16a34a; font-size:1.2rem; }.dr-patient-summary-empty b { display:block; margin-top:.2rem; color:#34533f; font-size:.8rem; }.dr-patient-summary-empty p { margin:.2rem 0 0; color:#94a3b8; font-size:.65rem; }
+.dr-record-summary { margin:.65rem .75rem 0; padding:.8rem; border:1px solid #d6e8cf; border-radius:10px; background:#f4faef; flex-shrink:0; }.dr-record-summary-title { color:#087a39; font-size:.75rem; font-weight:900; }.dr-record-summary ul { margin:.55rem 0 0; padding-left:1rem; color:#4f6657; font-size:.65rem; line-height:1.45; }.dr-record-summary p { margin:.5rem 0 0; color:#718078; font-size:.65rem; line-height:1.4; }
+.dr-desk .dr-filters { margin-top:.65rem; padding:.65rem .75rem; border-top:1px solid #edf2ea; }
+.dr-desk .dr-list-panel { min-height:170px; }
+@media (max-width:900px){.dr-desk .dr-split{max-height:none;overflow:auto;flex-direction:column;padding-inline:.75rem}.dr-desk .dr-side{width:100%;max-width:none;min-width:0;height:390px}.dr-desk .dr-panel{overflow:visible}}
+
+/* Exact workspace structure from Stitch: DOCTOR — Phòng khám & Hỗ trợ AI (Updated). */
+.dr-view--exam > .dr-split { display: none; }
+.dr-stitch-workspace { display:grid; grid-template-columns:minmax(260px,4fr) minmax(520px,8fr); gap:16px; padding:0 24px 24px; }
+.dr-stitch-context,.dr-stitch-clinical { display:flex; min-width:0; flex-direction:column; gap:16px; }
+.dr-stitch-card { border:1px solid #d9e5d5; border-radius:12px; background:#fff; box-shadow:0 2px 7px rgba(34,72,43,.045); }
+.dr-stitch-patient,.dr-stitch-ai,.dr-stitch-exam-card,.dr-stitch-rx-card { padding:16px; }
+.dr-stitch-patient-head { display:flex; align-items:center; gap:12px; padding-bottom:13px; }
+.dr-stitch-patient-head .dr-patient-avatar { width:52px; height:52px; font-size:.78rem; }
+.dr-stitch-patient-head h2 { margin:0; color:#14281b; font-size:.94rem; font-weight:800; }
+.dr-stitch-patient-head p { margin:3px 0 0; color:#66756a; font-size:.72rem; }
+.dr-stitch-patient-meta { display:grid; gap:8px; margin:0; padding:13px 0; border-top:1px solid #e5ede2; }
+.dr-stitch-patient-meta div { display:grid; grid-template-columns:86px 1fr; gap:8px; font-size:.7rem; }
+.dr-stitch-patient-meta dt { color:#69786c; }.dr-stitch-patient-meta dd { margin:0; color:#213629; font-weight:600; text-align:right; }
+.dr-stitch-patient-actions { display:flex; gap:8px; }
+.dr-stitch-patient-actions button { flex:1; padding:7px; border:1px solid #dce7d8; border-radius:8px; background:#f4f8f1; color:#385244; font:600 .68rem inherit; }
+.dr-stitch-card-title { display:flex; align-items:center; gap:7px; color:#173c23; font-size:.9rem; font-weight:800; }
+.dr-stitch-card-title > span { color:#0b9d45; font-size:1rem; }
+.dr-stitch-ai { position:relative; overflow:hidden; background:linear-gradient(135deg,#fff 0%,#f2faed 100%); }
+.dr-stitch-ai::after { content:'✦'; position:absolute; top:4px; right:10px; color:#93d5a5; font-size:34px; opacity:.35; }
+.dr-stitch-ai p { margin:9px 0 0; color:#4d6052; font-size:.69rem; line-height:1.45; }
+.dr-stitch-schedule { overflow:hidden; flex:1; }
+.dr-stitch-schedule header { display:flex; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #e3ece0; background:#f8fcf5; color:#284633; font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; }
+.dr-stitch-schedule header span { color:#138b40; text-transform:none; letter-spacing:0; }
+.dr-stitch-schedule-list { display:flex; flex-direction:column; }
+.dr-stitch-waiting-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; padding:9px 10px 9px 13px; border-bottom:1px solid #edf2eb; background:#fff; }
+.dr-stitch-waiting-row.is-active { border-left:4px solid #16a34a; padding-left:9px; background:#eff8eb; }
+.dr-stitch-waiting-info { display:flex; min-width:0; flex-direction:column; gap:4px; padding:0; border:0; background:transparent; color:#263b2d; text-align:left; cursor:pointer; font-size:.69rem; }
+.dr-stitch-waiting-info span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.dr-stitch-waiting-info small { overflow:hidden; color:#68786c; text-overflow:ellipsis; white-space:nowrap; }
+.dr-stitch-start { padding:7px 9px; border:0; border-radius:7px; background:#16a34a; color:#fff; cursor:pointer; font-size:.63rem; font-weight:750; white-space:nowrap; }
+.dr-stitch-start:hover { background:#11883d; }.dr-stitch-start:disabled { cursor:wait; opacity:.6; }
+.dr-stitch-empty { padding:28px 16px; color:#89978c; font-size:.72rem; text-align:center; }.dr-stitch-empty b { display:block; color:#586b5e; }.dr-stitch-empty p { margin:6px 0 0; }
+.dr-stitch-exam-card { min-height:300px; }
+.dr-stitch-field { display:flex; min-width:0; flex-direction:column; gap:5px; color:#5f7064; font-size:.68rem; font-weight:600; }
+.dr-stitch-field--full { margin-top:14px; }
+.dr-stitch-field textarea,.dr-stitch-field input,.dr-stitch-rx-row input,.dr-stitch-rx-row select { box-sizing:border-box; width:100%; border:1px solid #d8e5d4; border-radius:8px; background:#f7fbf4; color:#24382a; font:500 .72rem inherit; outline:none; }
+.dr-stitch-field textarea { resize:vertical; padding:10px; }.dr-stitch-field input,.dr-stitch-rx-row input,.dr-stitch-rx-row select { min-height:36px; padding:7px 9px; }
+.dr-stitch-field textarea:focus,.dr-stitch-field input:focus,.dr-stitch-rx-row input:focus,.dr-stitch-rx-row select:focus { border-color:#16a34a; box-shadow:0 0 0 2px rgba(22,163,74,.1); }
+.dr-stitch-diagnosis-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px; align-items:end; }
+.dr-stitch-diagnosis-row > * { min-width:0; margin:0; }
+.dr-stitch-dashed { min-height:38px; border:1px dashed #43b96c; border-radius:8px; background:#fff; color:#09873b; font-weight:700; }
+.dr-stitch-details { margin-top:14px; border-top:1px solid #e5eee2; padding-top:10px; color:#52665a; font-size:.7rem; }
+.dr-stitch-details summary { cursor:pointer; color:#17733b; font-weight:700; }
+.dr-stitch-vitals { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:12px 0; }
+.dr-stitch-vitals label { display:flex; flex-direction:column; gap:4px; font-size:.62rem; }.dr-stitch-vitals input { min-width:0; padding:7px; border:1px solid #d8e5d4; border-radius:7px; }
+.dr-stitch-rx-header,.dr-stitch-rx-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.dr-stitch-voice { padding:7px 10px; border:0; border-radius:7px; background:#26ad55; color:#fff; font-size:.66rem; font-weight:700; }
+.dr-stitch-rx-table { margin-top:13px; overflow:hidden; border:1px solid #dce7d9; border-radius:8px; }
+.dr-stitch-rx-row { display:grid; grid-template-columns:2fr 1fr 1.45fr 34px; align-items:center; gap:7px; min-height:38px; padding:6px 9px; border-bottom:1px solid #edf2eb; background:#fbfdf9; }
+.dr-stitch-rx-head { min-height:30px; background:#f1f7ed; color:#637268; font-size:.62rem; font-weight:700; }
+.dr-stitch-medicine-pick { overflow:hidden; border:0; background:transparent; color:#1d3926; text-align:left; text-overflow:ellipsis; white-space:nowrap; font-size:.7rem; font-weight:600; cursor:pointer; }
+.dr-stitch-remove { border:0; background:transparent; color:#d04444; font-size:1rem; cursor:pointer; }.dr-stitch-remove:disabled { opacity:.25; }
+.dr-stitch-add-rx { width:100%; padding:9px; border:0; background:#fff; color:#139044; font-size:.68rem; font-weight:700; text-align:left; }
+.dr-stitch-rx-footer { justify-content:flex-end; padding-top:12px; }
+@media(max-width:1100px){.dr-stitch-workspace{grid-template-columns:300px minmax(480px,1fr);padding-inline:14px}.dr-stitch-vitals{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:820px){.dr-stitch-workspace{grid-template-columns:1fr}.dr-stitch-diagnosis-row{grid-template-columns:1fr}.dr-stitch-rx-row{grid-template-columns:1.6fr 1fr 1.2fr 28px}}
 
