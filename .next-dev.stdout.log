@@ -1,0 +1,15 @@
+
+> fe_clinic_ad@0.0.0 dev
+> next dev --port 5174
+
+   ▲ Next.js 15.1.7
+   - Local:        http://localhost:5174
+   - Network:      http://169.254.223.69:5174
+   - Environments: .env.development
+
+ ✓ Starting...
+ ✓ Ready in 1501ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 4.4s (879 modules)
+ GET /login 200 in 4685ms
+[?25h
