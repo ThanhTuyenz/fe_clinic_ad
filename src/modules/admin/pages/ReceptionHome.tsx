@@ -26,6 +26,7 @@ import { buildPaymentInvoiceView } from '../utils/paymentInvoiceView'
 import { printPaymentInvoice, printPaymentThenVisitSlip } from '../utils/printPaymentInvoice'
 import { printVisitSlip } from '../utils/printVisitSlip'
 import { ticketFromQrPayload } from '../utils/ticketQr'
+import { staffCheckInByQr } from '../services/checkIn'
 
 const QR_READER_ELEMENT_ID = 'tcl-ticket-qr-reader'
 
@@ -834,6 +835,26 @@ export default function ReceptionHome() {
 
     const onScan = async (decodedText) => {
       if (qrScanDoneRef.current) return
+      if (String(decodedText || '').trim().startsWith('VITACARE_CHECKIN:')) {
+        qrScanDoneRef.current = true
+        try {
+          await html5.stop()
+        } catch { /* scanner đã dừng */ }
+        try { html5.clear() } catch { /* ignore */ }
+        try {
+          const result = await staffCheckInByQr(decodedText)
+          setQrOpen(false)
+          setFlashOk(`Check-in thành công · STT ${result.queueNumber} · ${result.room?.name || result.room?.code || 'Phòng đang cập nhật'}`)
+          if (result.bookingCode) {
+            setTicket(result.bookingCode)
+            await runLookupRef.current(result.bookingCode, { focusList: true })
+          }
+        } catch (scanError) {
+          setQrErr(scanError?.message || 'Không thể check-in mã QR này.')
+          setQrOpen(false)
+        }
+        return
+      }
       const code = ticketFromQrPayload(decodedText)
       if (!code) return
       qrScanDoneRef.current = true
@@ -2010,7 +2031,7 @@ export default function ReceptionHome() {
             <h2 id="tcl-qr-title" className="tcl-qr-modal-title">
               Quét mã QR lịch hẹn
             </h2>
-            <p className="tcl-qr-modal-hint">Đưa mã QR vé vào khung hình; hệ thống sẽ tra cứu khi quét xong.</p>
+            <p className="tcl-qr-modal-hint">Quét QR check-in để tiếp nhận ngay; mã vé cũ vẫn được hỗ trợ để tra cứu.</p>
             <div id={QR_READER_ELEMENT_ID} className="tcl-qr-reader-wrap" />
             {qrErr ? (
               <div className="tcl-banner-err" style={{ marginTop: 8 }}>
