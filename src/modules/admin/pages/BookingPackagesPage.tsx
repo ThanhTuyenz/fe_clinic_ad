@@ -1,0 +1,4 @@
+'use client'
+import { useState } from 'react'
+import SystemCatalogCrudPage from './SystemCatalogCrudPage'
+export default function BookingPackagesPage(){const[tab,setTab]=useState<'specialty-services'|'health-packages'>('specialty-services');return <div><div className="mb-5 flex gap-2 border-b border-slate-200"><button onClick={()=>setTab('specialty-services')} className={`px-4 py-3 text-sm font-bold ${tab==='specialty-services'?'border-b-2 border-emerald-700 text-emerald-700':'text-slate-500'}`}>Gói khám chuyên khoa / ngoài giờ / tư vấn</button><button onClick={()=>setTab('health-packages')} className={`px-4 py-3 text-sm font-bold ${tab==='health-packages'?'border-b-2 border-emerald-700 text-emerald-700':'text-slate-500'}`}>Gói khám sức khỏe</button></div><SystemCatalogCrudPage resource={tab}/></div>}

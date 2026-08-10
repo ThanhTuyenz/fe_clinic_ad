@@ -6,10 +6,10 @@ import { useStaffLogout } from '@/common/hooks/useStaffLogout'
 import { Html5Qrcode } from 'html5-qrcode'
 import { finishExamAppointment, listDoctorAppointments, listPatientHistory, updateAppointmentStatus } from '../services/appointments'
 import { listClinicRooms } from '../services/clinicRooms'
-import { getExaminationByAppointment, saveExamination } from '../services/examinations'
+import { getMedicalVisitByAppointment, saveMedicalVisit } from '../services/medicalVisits'
 import { searchMedicines } from '../services/medicines'
 import DoctorAppHeader from '../components/DoctorAppHeader'
-import IcdDiagnosisField, { formatIcdLabel, parseIcdFromExamination } from '../components/IcdDiagnosisField'
+import IcdDiagnosisField, { formatIcdLabel, parseIcdFromMedicalVisit } from '../components/IcdDiagnosisField'
 import { runDoctorShortcut } from '../utils/doctorShortcuts'
 import { buildPrescriptionPrintViewFromExam, printPrescription } from '../utils/printPrescription'
 import {
@@ -282,7 +282,7 @@ function historyMedicineNames(ex) {
 function isHistoryVisit(appt) {
   const st = String(appt?.status || '').toLowerCase()
   if (isAppointmentExamined(st)) return true
-  const ex = appt?.examination
+  const ex = appt?.medicalVisit
   return Boolean(historyDiagnosisLabel(ex) || String(ex?.symptoms || '').trim())
 }
 
@@ -711,7 +711,7 @@ export default function DoctorHome() {
     return workflowStatus ? workflowStatus === 'CHECKED_IN' : String(appointment?.status || '').toLowerCase() === 'confirmed'
   }), [filteredQueue])
 
-  async function startExamination(appointment) {
+  async function startMedicalVisit(appointment) {
     const id = String(appointment?.id || appointment?._id || '')
     if (!id || startingAppointmentId) return
     setStartingAppointmentId(id)
@@ -878,7 +878,7 @@ export default function DoctorHome() {
     }
   }
 
-  async function handleSaveExamination() {
+  async function handleSaveMedicalVisit() {
     if (!token || examLocked || examSaving) return
     const appointmentId = String(selectedAppt?.id || selectedAppt?._id || '').trim()
     if (!appointmentId) {
@@ -905,7 +905,7 @@ export default function DoctorHome() {
     setExamSaveOk('')
     setExamSaveErr('')
     try {
-      await saveExamination({ token, appointmentId, payload: buildExamPayload() })
+      await saveMedicalVisit({ token, appointmentId, payload: buildExamPayload() })
       flashOk('Đã lưu phiên khám.')
     } catch (e) {
       flashErr(e?.message || 'Không lưu được.')
@@ -987,7 +987,7 @@ export default function DoctorHome() {
     setExamSaveOk('')
     setExamSaveErr('')
     try {
-      await saveExamination({ token, appointmentId, payload: buildExamPayload() })
+      await saveMedicalVisit({ token, appointmentId, payload: buildExamPayload() })
 
       if (withPrint && printView) {
         setAwaitingPrintLock(true)
@@ -1057,9 +1057,9 @@ export default function DoctorHome() {
 
     void (async () => {
       try {
-        const data = await getExaminationByAppointment({ token, appointmentId })
+        const data = await getMedicalVisitByAppointment({ token, appointmentId })
         if (seq !== examLoadSeqRef.current) return
-        const ex = data?.examination
+        const ex = data?.medicalVisit
         setVitals((s) => ({
           ...s,
           examAt: String(ex?.examAt || '').trim() || fallbackExamAt,
@@ -1077,7 +1077,7 @@ export default function DoctorHome() {
           treatment: String(ex?.treatment || '').trim() || '',
           notes: String(ex?.notes ?? ex?.note ?? '').trim() || '',
         }))
-        const icd = parseIcdFromExamination(ex)
+        const icd = parseIcdFromMedicalVisit(ex)
         setDiagnosisIcd(icd ? { code: icd.code, name: icd.name } : null)
         setDiagnosisError('')
         setPrescriptionLines(normalizeRxLines(ex?.prescriptionLines, ex?.prescription))
@@ -1267,7 +1267,7 @@ export default function DoctorHome() {
   const shortcutActionsRef = useRef({})
   shortcutActionsRef.current = {
     save: () => {
-      if (!examLocked && !examSaving) void handleSaveExamination()
+      if (!examLocked && !examSaving) void handleSaveMedicalVisit()
     },
     finishAndPrint: () => {
       if (!examLocked && !examSaving) requestFinishAndPrint()
@@ -1387,7 +1387,7 @@ export default function DoctorHome() {
                       <span><b>{appointment?.startTime || '—'}</b> · {patientLabel(appointment)}</span>
                       <small>STT {appointment?.visitQueueNumber || '—'} · {appointment?.symptoms || 'Khám theo lịch hẹn'}</small>
                     </button>
-                    <button type="button" className="dr-stitch-start" disabled={Boolean(startingAppointmentId)} onClick={() => void startExamination(appointment)}>{startingAppointmentId === String(appointment.id || appointment._id) ? 'Đang mở…' : 'Bắt đầu khám'}</button>
+                    <button type="button" className="dr-stitch-start" disabled={Boolean(startingAppointmentId)} onClick={() => void startMedicalVisit(appointment)}>{startingAppointmentId === String(appointment.id || appointment._id) ? 'Đang mở…' : 'Bắt đầu khám'}</button>
                   </div>
                 ))}
                 {!waitingQueue.length ? <div className="dr-stitch-empty"><b>Chưa có bệnh nhân đang đợi</b><p>Danh sách sẽ cập nhật khi lễ tân check-in.</p></div> : null}
@@ -1427,7 +1427,7 @@ export default function DoctorHome() {
                 </div>)}
                 {!examLocked ? <button type="button" className="dr-stitch-add-rx" onClick={addRxLine} disabled={!selectedAppt}>＋ Thêm thuốc</button> : null}
               </div>
-              <footer className="dr-stitch-rx-footer"><button type="button" className="dr-btn dr-btn--ghost" onClick={() => void handleSaveExamination()} disabled={!selectedAppt || examLocked || examSaving}>Lưu nháp</button><button type="button" className="dr-btn dr-btn--solid" onClick={() => requestFinishAndPrint()} disabled={!selectedAppt || examLocked || examSaving}>▣ In đơn thuốc</button></footer>
+              <footer className="dr-stitch-rx-footer"><button type="button" className="dr-btn dr-btn--ghost" onClick={() => void handleSaveMedicalVisit()} disabled={!selectedAppt || examLocked || examSaving}>Lưu nháp</button><button type="button" className="dr-btn dr-btn--solid" onClick={() => requestFinishAndPrint()} disabled={!selectedAppt || examLocked || examSaving}>▣ In đơn thuốc</button></footer>
             </article>
           </section>
         </div>
@@ -1696,7 +1696,7 @@ export default function DoctorHome() {
                     type="button"
                     className="dr-btn dr-btn--primary"
                     disabled={examLocked || examSaving}
-                    onClick={() => void handleSaveExamination()}
+                    onClick={() => void handleSaveMedicalVisit()}
                   >
                     {examSaving ? 'Đang lưu…' : 'Lưu'}
                   </button>
@@ -1968,7 +1968,7 @@ export default function DoctorHome() {
                   {!historyLoading && historyTimeline.length > 0 ? (
                     <div className="dr-history-timeline" role="list">
                       {historyTimeline.map((h) => {
-                        const ex = h?.examination
+                        const ex = h?.medicalVisit
                         const diagnosis = historyDiagnosisLabel(ex)
                         const symptoms = String(ex?.symptoms || h?.note || '').trim()
                         const meds = historyMedicineNames(ex)

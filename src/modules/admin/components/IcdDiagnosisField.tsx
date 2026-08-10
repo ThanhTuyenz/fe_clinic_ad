@@ -11,7 +11,7 @@ export function formatIcdLabel(code, name) {
 }
 
 /** @param {{ code: string, name: string } | null} value */
-export function parseIcdFromExamination(ex) {
+export function parseIcdFromMedicalVisit(ex) {
   if (!ex || typeof ex !== 'object') return null
   const code = String(ex.diagnosisCode || ex.icdCode || '').trim()
   const name = String(ex.diagnosisName || '').trim()

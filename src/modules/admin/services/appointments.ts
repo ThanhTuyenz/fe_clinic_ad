@@ -60,7 +60,7 @@ export async function updateAppointmentStatus({ appointmentId, status, cancelRea
 
 export async function finishExamAppointment({ appointmentId }) {
   const id = String(appointmentId || '').trim()
-  return appointmentRequest({ method: 'PATCH', url: `/appointments/${encodeURIComponent(id)}/finish-exam` }, 'Không kết thúc khám được.')
+  return appointmentRequest({ method: 'PATCH', url: `/appointments/${encodeURIComponent(id)}/finish-visit` }, 'Không kết thúc khám được.')
 }
 
 export async function createAppointmentReception({ patientEmailOrPhone, patient, createdByStaff, doctorId, appointmentDate, startTime, note }) {
