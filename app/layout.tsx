@@ -21,7 +21,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="vi" className={inter.variable}>
-      <body className={inter.className}><Providers>{children}</Providers></body>
+      <body className={`${inter.className} font-sans antialiased`}><Providers>{children}</Providers></body>
     </html>
   )
 }

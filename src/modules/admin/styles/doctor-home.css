@@ -193,7 +193,7 @@
 }
 
 .dr-banner--error code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family: inherit;
   font-size: 0.85em;
 }
 
@@ -1096,7 +1096,7 @@
 }
 
 .dr-queue-chip--id {
-  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  font-family: inherit;
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -1804,8 +1804,14 @@
   font: inherit;
 }
 
-.dr-icd-option:hover {
+.dr-icd-option:hover,
+.dr-icd-option--active {
   background: rgba(13, 148, 136, 0.06);
+}
+
+.dr-icd-option--active {
+  outline: 2px solid rgba(13, 148, 136, 0.24);
+  outline-offset: -2px;
 }
 
 .dr-icd-option-code {

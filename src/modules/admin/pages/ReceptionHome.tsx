@@ -30,6 +30,17 @@ import { staffCheckInByQr } from '../services/checkIn'
 
 const QR_READER_ELEMENT_ID = 'tcl-ticket-qr-reader'
 
+function cameraErrorMessage(error) {
+  const name = String(error?.name || '').trim()
+  const detail = String(error?.message || error || '').trim()
+  if (typeof window !== 'undefined' && !window.isSecureContext) return 'Camera chỉ hoạt động trên HTTPS hoặc localhost.'
+  if (name === 'NotAllowedError' || /permission|notallowed/i.test(detail)) return 'Trình duyệt đang chặn camera cho trang này. Hãy cho phép camera trong thanh địa chỉ.'
+  if (name === 'NotReadableError' || /could not start|notreadable|track start/i.test(detail)) return 'Trình duyệt không khởi động được camera. Có thể camera/driver chưa sẵn sàng hoặc phiên camera cũ chưa được giải phóng.'
+  if (name === 'NotFoundError' || /not found|no camera/i.test(detail)) return 'Không tìm thấy camera trên thiết bị.'
+  if (name === 'OverconstrainedError') return 'Camera không hỗ trợ chế độ quét đã yêu cầu.'
+  return detail || 'Không mở được camera.'
+}
+
 function getSession() {
   return getStaffSession()
 }
@@ -66,23 +77,6 @@ function formatDateTimeVi(iso) {
   return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
-function formatCancelledByLine(cancelledBy) {
-  if (!cancelledBy || typeof cancelledBy !== 'object') return '—'
-  const ut = String(cancelledBy.userType || '').toLowerCase()
-  const role = String(cancelledBy.role || '').toLowerCase()
-  if (role === 'system' || ut === 'system') return 'Hệ thống'
-  const isPatient = role === 'patient' || ut === 'patient'
-  const label = isPatient ? 'Bệnh nhân' : 'Phòng khám'
-  const name = String(cancelledBy.displayName || '').trim() || String(cancelledBy.email || '').trim()
-  return name ? `${label}: ${name}` : label
-}
-
-function formatConfirmedByLine(confirmedBy) {
-  if (!confirmedBy || typeof confirmedBy !== 'object') return '—'
-  const name = String(confirmedBy.displayName || '').trim() || String(confirmedBy.email || '').trim()
-  return name || '—'
-}
-
 function formatVnd(amount) {
   const n = Number(amount)
   if (!Number.isFinite(n)) return '—'
@@ -93,6 +87,8 @@ function paymentMethodLabel(method) {
   const m = String(method || '').trim().toLowerCase()
   if (m === 'cash') return 'Tiền mặt'
   if (m === 'transfer') return 'Chuyển khoản'
+  if (['online', 'wallet', 'momo'].includes(m)) return 'MoMo / Trực tuyến'
+  if (['card', 'credit_card'].includes(m)) return 'Thẻ thanh toán'
   return '—'
 }
 
@@ -125,7 +121,7 @@ function buildPatientCode(userId) {
 /** Hiển thị chuyên khoa — đồng bộ với be_clinic doctorEmbed / fe_clinic khi API thiếu specialtyName. */
 function doctorDisplayName(d) {
   if (!d) return '—'
-  const name = String(d.displayName || '').trim()
+  const name = String(d.fullName || d.name || d.displayName || '').trim()
   if (name) return name
   const last = String(d.lastName || '').trim()
   const first = String(d.firstName || '').trim()
@@ -135,7 +131,7 @@ function doctorDisplayName(d) {
 function clinicRoomLabel(roomId, rooms) {
   const id = String(roomId || '').trim()
   if (!id) return '—'
-  const hit = (rooms || []).find((r) => String(r.roomID) === id)
+  const hit = (rooms || []).find((r) => String(r.id || r.roomID) === id)
   return hit?.name ? String(hit.name).trim() : id
 }
 
@@ -149,6 +145,7 @@ function mergeReceptionDetail(cached, row) {
   return {
     ...cached,
     status: row.status ?? cached.status,
+    workflowStatus: row.workflowStatus ?? cached.workflowStatus,
     cancelReason: row.cancelReason ?? cached.cancelReason,
     cancelledAt: row.cancelledAt ?? cached.cancelledAt,
     cancelledBy: row.cancelledBy ?? cached.cancelledBy,
@@ -168,6 +165,11 @@ function mergeReceptionDetail(cached, row) {
       rowDoctor && (rowDoctor.id || rowDoctor.email || rowDoctor.displayName)
         ? { ...cached.doctor, ...rowDoctor }
         : cached.doctor,
+    specialty: row.specialty ?? cached.specialty,
+    servicePackage: row.servicePackage ?? cached.servicePackage,
+    bookingMethod: row.bookingMethod ?? cached.bookingMethod,
+    branch: row.branch ?? cached.branch,
+    clinicRoomName: row.clinicRoomName || cached.clinicRoomName,
     ticket: row.ticket || cached.ticket,
     appointmentDate: row.appointmentDate || cached.appointmentDate,
     startTime: row.startTime || cached.startTime,
@@ -234,7 +236,7 @@ function doctorSpecialtyDisplay(d) {
 
 function patientListDisplayName(p) {
   if (!p) return '—'
-  const dn = String(p.displayName || '').trim()
+  const dn = String(p.displayName || p.fullName || p.name || '').trim()
   if (dn) return dn
   const last = String(p.lastName || '').trim()
   const first = String(p.firstName || '').trim()
@@ -255,19 +257,28 @@ function ageFromDobField(dob) {
   return age >= 0 ? String(age) : ''
 }
 
-function statusDotClass(st) {
-  const s = String(st || '').toLowerCase()
-  if (s === 'confirmed') return 'tcl-stt-dot--confirmed'
-  if (s === 'cancelled') return 'tcl-stt-dot--cancelled'
-  return 'tcl-stt-dot--pending'
-}
-
 function statusLabelVi(st) {
   const s = String(st || '').toLowerCase()
   if (s === 'confirmed') return 'Đã xác nhận'
   if (s === 'cancelled') return 'Từ chối'
   if (s === 'examined' || s === 'completed' || s === 'done') return 'Đã khám'
   return 'Chờ'
+}
+
+function receptionStatusMeta(row) {
+  const workflow = String(row?.workflowStatus || '').toUpperCase()
+  if (workflow === 'PENDING_PAYMENT') return { label: 'Chờ thanh toán', tone: 'pending' }
+  if (workflow === 'BOOKED') return { label: 'Chờ check-in', tone: 'booked' }
+  if (workflow === 'CHECKED_IN') return { label: 'Đã check-in', tone: 'checked-in' }
+  if (workflow === 'IN_EXAMINATION') return { label: 'Đang khám', tone: 'examining' }
+  if (workflow === 'COMPLETED') return { label: 'Đã khám', tone: 'completed' }
+  if (workflow === 'CANCELLED') return { label: 'Đã hủy', tone: 'cancelled' }
+  if (workflow === 'EXPIRED') return { label: 'Hết hạn', tone: 'cancelled' }
+  const status = normalizeStatus(row?.status)
+  if (status === 'confirmed') return { label: 'Đã xác nhận', tone: 'booked' }
+  if (status === 'examined') return { label: 'Đã khám', tone: 'completed' }
+  if (status === 'cancelled') return { label: 'Đã hủy', tone: 'cancelled' }
+  return { label: 'Chờ xử lý', tone: 'pending' }
 }
 
 const PAGE_SIZE = 10
@@ -279,14 +290,13 @@ function normalizeStatus(st) {
 }
 
 function readReceptionNavState(location) {
-  const today = ymd(new Date())
   const from = String(location?.state?.fromDate || '').trim()
   const to = String(location?.state?.toDate || '').trim()
   const st = String(location?.state?.statusFilter || '').trim()
   const dashFilter = String(location?.state?.dashFilter || '').trim()
   return {
-    fromDate: from || today,
-    toDate: to || today,
+    fromDate: from,
+    toDate: to,
     statusFilter: st || 'all',
     dashFilter,
     filtersOpen: Boolean(from || to || st || dashFilter),
@@ -395,6 +405,9 @@ export default function ReceptionHome() {
   const [qrListFocusTicket, setQrListFocusTicket] = useState('')
   const runLookupRef = useRef(async () => ({ ok: false }))
   const qrScanDoneRef = useRef(false)
+  const qrScannerRef = useRef(null)
+  const qrDecodeHandlerRef = useRef(null)
+  const [qrImageLoading, setQrImageLoading] = useState(false)
   const didAutoLookupRef = useRef(false)
   const roomSttReqRef = useRef(0)
 
@@ -547,13 +560,6 @@ export default function ReceptionHome() {
     if (!activeDetail || !canPrintPaymentInvoice) return null
     return buildPaymentInvoiceView(activeDetail, slipOverrides)
   }, [activeDetail, canPrintPaymentInvoice, slipOverrides])
-  const confirmBlockTitle =
-    !isPaid && canEditStatus
-      ? 'Cần thu phí khám trước'
-      : !hasClinicRoom && canEditStatus && isPaid
-        ? 'Cần chọn phòng khám trước'
-        : undefined
-
   const applyClinicRoomSelection = useCallback(
     async (roomValue) => {
       const r = String(roomValue ?? '').trim()
@@ -697,34 +703,41 @@ export default function ReceptionHome() {
   }
 
   function normalizeLookup(data) {
+    const appointment = data.appointment || data
     return {
-      id: data.appointment.id,
-      ticket: data.ticket,
-      appointmentDate: data.appointment.appointmentDate,
-      startTime: data.appointment.startTime,
-      endTime: data.appointment.endTime || '',
-      status: data.appointment.status,
-      source: data.appointment.source || data.appointment.bookingSource || data.source,
-      bookingSource: data.appointment.bookingSource || data.appointment.source || data.source,
-      createdByStaff: data.appointment.createdByStaff || data.appointment.createdByReceptionist || data.createdByStaff,
-      note: data.appointment.note || '',
-      cancelReason: data.appointment.cancelReason || '',
-      cancelledAt: data.appointment.cancelledAt ?? null,
-      cancelledBy: data.appointment.cancelledBy ?? null,
-      confirmedAt: data.appointment.confirmedAt ?? null,
-      confirmedBy: data.appointment.confirmedBy ?? null,
-      createdAt: data.appointment.createdAt,
-      visitQueueNumber: data.appointment.visitQueueNumber ?? null,
-      clinicRoom: data.appointment.clinicRoom || '',
-      payment: data.appointment.payment || null,
-      consultationFee: data.consultationFee ?? data.doctor?.consultationFee ?? null,
-      patient: data.patient
+      id: appointment.id,
+      ticket: appointment.ticket || appointment.bookingCode || data.ticket,
+      appointmentDate: appointment.appointmentDate,
+      startTime: appointment.startTime,
+      endTime: appointment.endTime || '',
+      status: appointment.status,
+      workflowStatus: appointment.workflowStatus,
+      source: appointment.source || appointment.bookingSource || data.source,
+      bookingSource: appointment.bookingSource || appointment.source || data.source,
+      createdByStaff: appointment.createdByStaff || appointment.createdByReceptionist || data.createdByStaff,
+      note: appointment.note || appointment.symptoms || '',
+      cancelReason: appointment.cancelReason || '',
+      cancelledAt: appointment.cancelledAt ?? null,
+      cancelledBy: appointment.cancelledBy ?? null,
+      confirmedAt: appointment.confirmedAt ?? null,
+      confirmedBy: appointment.confirmedBy ?? null,
+      createdAt: appointment.createdAt,
+      visitQueueNumber: appointment.visitQueueNumber ?? null,
+      clinicRoom: appointment.clinicRoom || '',
+      clinicRoomName: appointment.clinicRoomName || '',
+      payment: appointment.payment || null,
+      consultationFee: data.consultationFee ?? appointment.doctor?.consultationFee ?? null,
+      patient: (data.patient || appointment.patient)
         ? {
-            ...data.patient,
-            patientCode: data.patient.patientCode || buildPatientCode(data.patient.id),
+            ...(data.patient || appointment.patient),
+            patientCode: (data.patient || appointment.patient).patientCode || buildPatientCode((data.patient || appointment.patient).id),
           }
         : null,
-      doctor: data.doctor || data.appointment?.doctor || null,
+      doctor: data.doctor || appointment.doctor || null,
+      specialty: appointment.specialty || null,
+      servicePackage: appointment.servicePackage || null,
+      bookingMethod: appointment.bookingMethod || null,
+      branch: appointment.branch || null,
     }
   }
 
@@ -831,6 +844,7 @@ export default function ReceptionHome() {
     setQrErr('')
     qrScanDoneRef.current = false
     const html5 = new Html5Qrcode(QR_READER_ELEMENT_ID, { verbose: false })
+    qrScannerRef.current = html5
     const config = { fps: 10, qrbox: { width: 250, height: 250 } }
 
     const onScan = async (decodedText) => {
@@ -844,7 +858,9 @@ export default function ReceptionHome() {
         try {
           const result = await staffCheckInByQr(decodedText)
           setQrOpen(false)
-          setFlashOk(`Check-in thành công · STT ${result.queueNumber} · ${result.room?.name || result.room?.code || 'Phòng đang cập nhật'}`)
+          setFlashOk(
+            `Check-in thành công · STT ${result.queueNumber} · ${result.doctor?.fullName || 'Bác sĩ đang cập nhật'} · ${result.room?.name || result.room?.code || 'Phòng đang cập nhật'}`,
+          )
           if (result.bookingCode) {
             setTicket(result.bookingCode)
             await runLookupRef.current(result.bookingCode, { focusList: true })
@@ -878,23 +894,44 @@ export default function ReceptionHome() {
     }
 
     const onFail = () => {}
+    qrDecodeHandlerRef.current = onScan
 
     let cancelled = false
-    ;(async () => {
+    // Trì hoãn một nhịp để modal render xong và tránh effect kép của React Strict Mode giữ camera.
+    const startTimer = window.setTimeout(async () => {
       try {
-        await html5.start({ facingMode: 'environment' }, config, onScan, onFail)
-      } catch {
+        const cameras = await Html5Qrcode.getCameras()
         if (cancelled) return
-        try {
-          await html5.start({ facingMode: 'user' }, config, onScan, onFail)
-        } catch (e2) {
-          if (!cancelled) setQrErr(e2?.message || 'Không mở được camera. Kiểm tra quyền truy cập.')
+        if (!cameras.length) throw new DOMException('Không tìm thấy camera', 'NotFoundError')
+        const orderedCameras = [...cameras].sort((a, b) => {
+          const score = (camera) => /back|rear|environment|sau/i.test(camera.label) ? 0 : /integrated|front|user|facetime|webcam/i.test(camera.label) ? 1 : /virtual|obs|droidcam|snap/i.test(camera.label) ? 3 : 2
+          return score(a) - score(b)
+        })
+        let lastError
+        let started = false
+        for (const camera of orderedCameras) {
+          if (cancelled) return
+          try {
+            await html5.start(camera.id, config, onScan, onFail)
+            started = true
+            break
+          } catch (error) {
+            lastError = error
+          }
         }
+        if (!started) {
+          const labels = orderedCameras.map((camera) => camera.label || 'Camera không tên').join(', ')
+          throw new Error(`${cameraErrorMessage(lastError)} Đã thử: ${labels}.`)
+        }
+        if (cancelled) await html5.stop().catch(() => {})
+      } catch (error) {
+        if (!cancelled) setQrErr(cameraErrorMessage(error))
       }
-    })()
+    }, 120)
 
     return () => {
       cancelled = true
+      window.clearTimeout(startTimer)
       /** `stop()` throws đồng bộ nếu scanner đã dừng (vd. sau khi quét xong) — phải bắt để không crash React. */
       let stopPromise
       try {
@@ -910,9 +947,24 @@ export default function ReceptionHome() {
           } catch {
             /* ignore */
           }
+          if (qrScannerRef.current === html5) qrScannerRef.current = null
         })
     }
   }, [qrOpen])
+
+  const scanQrImage = async (file) => {
+    if (!file || !qrScannerRef.current || !qrDecodeHandlerRef.current) return
+    setQrImageLoading(true)
+    setQrErr('')
+    try {
+      const decodedText = await qrScannerRef.current.scanFile(file, true)
+      await qrDecodeHandlerRef.current(decodedText)
+    } catch (error) {
+      setQrErr(error?.message || 'Không tìm thấy mã QR trong ảnh đã chọn.')
+    } finally {
+      setQrImageLoading(false)
+    }
+  }
 
   const applyPaymentToCaches = useCallback((id, payment, norm = null) => {
     const key = String(id)
@@ -1302,17 +1354,6 @@ export default function ReceptionHome() {
             <button type="button" className="tcl-btn tcl-btn--pri" onClick={handleAdd}>
               + Thêm
             </button>
-            <button
-              type="button"
-              className="tcl-btn tcl-btn--pri"
-              disabled
-              title="Dùng «Xác nhận đã thu» (đã chọn phòng) hoặc «Hủy lịch» trong chi tiết"
-            >
-              Lưu
-            </button>
-            <button type="button" className="tcl-btn tcl-btn--danger" disabled title="Chưa hỗ trợ">
-              Xóa
-            </button>
           </div>
         </div>
 
@@ -1436,35 +1477,41 @@ export default function ReceptionHome() {
                 <table className="tcl-table tcl-list-table">
                   <thead>
                     <tr>
-                      <th className="tcl-col-status" scope="col">TT</th>
+                      <th className="tcl-col-status" scope="col">Trạng thái</th>
                       <th className="tcl-col-ticket" scope="col">Mã lịch hẹn</th>
                       <th className="tcl-col-source" scope="col">Nguồn</th>
                       <th className="tcl-col-code" scope="col">Mã bệnh nhân</th>
                       <th className="tcl-col-name" scope="col">Tên bệnh nhân</th>
+                      <th className="tcl-col-method" scope="col">Hình thức khám</th>
                     </tr>
                   </thead>
                   <tbody>
                     {listLoading ? (
                       <tr className="tcl-table-empty-row">
-                        <td colSpan={5} className="tcl-table-empty">
+                        <td colSpan={6} className="tcl-table-empty">
                           Đang tải danh sách…
                         </td>
                       </tr>
                     ) : pageRows.length === 0 ? (
                       <tr className="tcl-table-empty-row">
-                        <td colSpan={5} className="tcl-table-empty">
+                        <td colSpan={6} className="tcl-table-empty">
                           {listErr || 'Không có lịch trong khoảng thời gian này.'}
                         </td>
                       </tr>
                     ) : (
-                      pageRows.map((row) => (
+                      pageRows.map((row) => {
+                        const statusMeta = receptionStatusMeta(row)
+                        return (
                         <tr
                           key={String(row.id)}
                           className={String(selectedId) === String(row.id) ? 'is-selected' : ''}
                           onClick={() => selectRow(row)}
                         >
                           <td className="tcl-cell-status">
-                            <span className={`tcl-stt-dot ${statusDotClass(row.status)}`} title={statusLabelVi(row.status)} />
+                            <span className={`tcl-status-badge tcl-status-badge--${statusMeta.tone}`}>
+                              <span className="tcl-stt-dot" aria-hidden="true" />
+                              {statusMeta.label}
+                            </span>
                           </td>
                           <td className="tcl-cell-ticket">{row.ticket}</td>
                           <td className="tcl-cell-source">
@@ -1477,8 +1524,10 @@ export default function ReceptionHome() {
                           </td>
                           <td className="tcl-cell-code">{row.patient?.patientCode || '—'}</td>
                           <td className="tcl-cell-name">{patientListDisplayName(row.patient)}</td>
+                          <td className="tcl-cell-method">{row.bookingMethod?.name || (row.servicePackage ? 'Khám theo gói' : 'Khám với bác sĩ')}</td>
                         </tr>
-                      ))
+                        )
+                      })
                     )}
                   </tbody>
                 </table>
@@ -1511,11 +1560,13 @@ export default function ReceptionHome() {
             </div>
           </aside>
 
-          <main className="tcl-detail">
-            {activeDetail ? (
+          {activeDetail ? (
+            <div className="tcl-detail-modal-backdrop" role="presentation" onClick={() => { setSelectedId(null); setLookupDetail(null); setQrListFocusTicket('') }}>
+          <main className="tcl-detail tcl-detail--modal" role="dialog" aria-modal="true" aria-label="Chi tiết lịch hẹn" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="tcl-detail-modal-close" aria-label="Đóng chi tiết" onClick={() => { setSelectedId(null); setLookupDetail(null); setQrListFocusTicket('') }}>×</button>
               <>
                 <div className="tcl-detail-head">
-                  <div className="tcl-banner-ok">Bạn đang xem thông tin lịch hẹn</div>
+                  <div className="tcl-banner-ok">{flashOk || 'Bạn đang xem thông tin lịch hẹn'}</div>
                   {detailErr ? <div className="tcl-banner-err">{detailErr}</div> : null}
                   {detailLoadingId && String(activeDetail?.id) === String(detailLoadingId) ? (
                     <div className="tcl-banner-ok">Đang tải chi tiết…</div>
@@ -1607,7 +1658,23 @@ export default function ReceptionHome() {
                     </div>
                     <div className="tcl-f">
                       <label>Giờ khám</label>
-                      <input readOnly value={String(activeDetail.startTime || '').slice(0, 5)} />
+                      <input readOnly value={formatExamTimeLine(activeDetail.startTime, activeDetail.endTime)} />
+                    </div>
+                    <div className="tcl-f">
+                      <label>Dịch vụ / Gói khám</label>
+                      <input readOnly value={activeDetail.servicePackage?.name || (activeDetail.doctor ? 'Khám với bác sĩ' : '—')} />
+                    </div>
+                    <div className="tcl-f">
+                      <label>Hình thức khám</label>
+                      <input readOnly value={activeDetail.bookingMethod?.name || (activeDetail.servicePackage ? 'Khám theo gói' : 'Khám với bác sĩ')} />
+                    </div>
+                    <div className="tcl-f">
+                      <label>Cơ sở y tế</label>
+                      <input readOnly value={activeDetail.branch?.name || '—'} />
+                    </div>
+                    <div className="tcl-f tcl-f--full">
+                      <label>Địa chỉ cơ sở</label>
+                      <input readOnly value={activeDetail.branch?.address || '—'} />
                     </div>
                   </div>
                 </section>
@@ -1623,7 +1690,7 @@ export default function ReceptionHome() {
                     </div>
                     <div className="tcl-f">
                       <label>Chuyên khoa</label>
-                      <input readOnly value={doctorSpecialtyDisplay(activeDetail.doctor)} />
+                      <input readOnly value={activeDetail.specialty?.name || doctorSpecialtyDisplay(activeDetail.doctor)} />
                     </div>
                     <div
                       className={`tcl-room-queue-row tcl-f--full${
@@ -1652,14 +1719,14 @@ export default function ReceptionHome() {
                         >
                           <option value="">— Chọn phòng —</option>
                           {clinicRoomDraft &&
-                          !clinicRooms.some((r) => String(r.roomID) === String(clinicRoomDraft)) ? (
+                          !clinicRooms.some((r) => String(r.id || r.roomID) === String(clinicRoomDraft)) ? (
                             <option value={clinicRoomDraft}>
                               {clinicRoomDraft} (giá trị hiện tại / ngoài danh mục)
                             </option>
                           ) : null}
                           {clinicRooms.map((r) => (
-                            <option key={r.roomID} value={r.roomID}>
-                              {r.name}
+                            <option key={r.id || r.roomID} value={r.id || r.roomID}>
+                              {r.name}{r.branch?.name ? ` · ${r.branch.name}` : ''}
                             </option>
                           ))}
                         </select>
@@ -1751,17 +1818,6 @@ export default function ReceptionHome() {
                               <input readOnly value={activeDetail.payment.invoiceNo} />
                             </div>
                           ) : null}
-                          {paymentInvoiceView ? (
-                            <div className="tcl-f tcl-f--full tcl-payment-actions">
-                              <button
-                                type="button"
-                                className="tcl-btn tcl-btn--print"
-                                onClick={() => handlePrintPaymentInvoice()}
-                              >
-                                In hóa đơn
-                              </button>
-                            </div>
-                          ) : null}
                         </div>
                       ) : (
                         <>
@@ -1822,143 +1878,9 @@ export default function ReceptionHome() {
                           <input readOnly value={activeDetail.payment.invoiceNo} />
                         </div>
                       ) : null}
-                      {paymentInvoiceView ? (
-                        <div className="tcl-f tcl-f--full tcl-payment-actions">
-                          <button
-                            type="button"
-                            className="tcl-btn tcl-btn--print"
-                            onClick={() => handlePrintPaymentInvoice()}
-                          >
-                            In hóa đơn
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
                   ) : (
                     <p className="tcl-payment-hint">Chưa ghi nhận thanh toán cho lịch này.</p>
-                  )}
-                </section>
-
-                <section className="tcl-sec">
-                  <h2 className="tcl-sec-title">
-                    <span>4</span>
-                    Thông tin xác nhận
-                  </h2>
-                  <div className="tcl-f" style={{ marginBottom: '0.65rem' }}>
-                    <label>Trạng thái</label>
-                    <div className="tcl-status-row tcl-status-row--readonly" aria-readonly="true">
-                      <label title="Chỉ hiển thị — thay đổi qua «Xác nhận đã thu» hoặc «Hủy lịch»">
-                        <input
-                          type="radio"
-                          name={`st-${String(activeDetail?.id ?? 'x')}`}
-                          checked={currentStatus === 'pending'}
-                          disabled
-                          readOnly
-                        />
-                        Chờ xác nhận
-                      </label>
-                      <label title="Chỉ hiển thị">
-                        <input
-                          type="radio"
-                          name={`st-${String(activeDetail?.id ?? 'x')}`}
-                          checked={currentStatus === 'cancelled'}
-                          disabled
-                          readOnly
-                        />
-                        Hủy
-                      </label>
-                      <label title={confirmBlockTitle || 'Chỉ hiển thị — xác nhận qua «Xác nhận đã thu»'}>
-                        <input
-                          type="radio"
-                          name={`st-${String(activeDetail?.id ?? 'x')}`}
-                          checked={currentStatus === 'confirmed'}
-                          disabled
-                          readOnly
-                        />
-                        Xác nhận
-                      </label>
-                      <label title="Trạng thái này do bác sĩ/cận lâm sàng cập nhật">
-                        <input
-                          type="radio"
-                          name={`st-${String(activeDetail?.id ?? 'x')}`}
-                          checked={currentStatus === 'examined'}
-                          disabled
-                          readOnly
-                        />
-                        Đã khám
-                      </label>
-                      <span
-                        className="tcl-muted"
-                        title={
-                          canEditStatus
-                            ? 'Quá hết khung giờ mà chưa xác nhận — hệ thống tự hủy'
-                            : 'Trạng thái do hệ thống cập nhật, không chỉnh tay.'
-                        }
-                      >
-                        {canEditStatus ? 'Chỉ xem — dùng nút thu phí / hủy lịch' : `Đã khóa: ${statusLabelVi(currentStatus)}`}
-                        {canEditStatus && !hasClinicRoom ? ' · Chưa chọn phòng' : ''}
-                        {canEditStatus && hasClinicRoom && !isPaid ? ' · Chưa thu phí' : ''}
-                      </span>
-                    </div>
-                  </div>
-                  {currentStatus === 'cancelled' ? (
-                    <div className="tcl-grid-form tcl-cancel-info">
-                      <div className="tcl-f">
-                        <label>Hủy bởi</label>
-                        <input readOnly value={formatCancelledByLine(activeDetail.cancelledBy)} />
-                      </div>
-                      <div className="tcl-f">
-                        <label>Thời điểm hủy</label>
-                        <input
-                          readOnly
-                          value={
-                            activeDetail.cancelledAt != null && activeDetail.cancelledAt !== ''
-                              ? formatDateTimeVi(activeDetail.cancelledAt)
-                              : '—'
-                          }
-                        />
-                      </div>
-                      <div className="tcl-f tcl-f--full">
-                        <label>Lý do hủy</label>
-                        <textarea
-                          readOnly
-                          rows={3}
-                          value={String(activeDetail.cancelReason || '').trim() || '—'}
-                          className="tcl-cancel-reason-ta"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="tcl-grid-form">
-                      <div className="tcl-f">
-                        <label>Nhân viên xác nhận</label>
-                        <input
-                          readOnly
-                          value={
-                            currentStatus === 'confirmed'
-                              ? formatConfirmedByLine(activeDetail.confirmedBy)
-                              : '—'
-                          }
-                        />
-                      </div>
-                      <div className="tcl-f">
-                        <label>Ngày xác nhận</label>
-                        <input
-                          readOnly
-                          value={
-                            currentStatus === 'confirmed' &&
-                            activeDetail.confirmedAt != null &&
-                            activeDetail.confirmedAt !== ''
-                              ? formatDateTimeVi(activeDetail.confirmedAt)
-                              : '—'
-                          }
-                        />
-                      </div>
-                      <div className="tcl-f tcl-f--full">
-                        <label>Nội dung xác nhận</label>
-                        <input readOnly value={saveMsg || '—'} />
-                      </div>
-                    </div>
                   )}
                   <div className="tcl-confirm-actions">
                     {canFinishConfirm ? (
@@ -1981,6 +1903,9 @@ export default function ReceptionHome() {
                         {saving ? 'Đang hủy…' : 'Hủy lịch'}
                       </button>
                     ) : null}
+                  </div>
+                  {(canPrintPaymentInvoice && paymentInvoiceView) || (canPrintVisitSlip && visitSlipView) ? (
+                    <div className="tcl-print-actions">
                     {canPrintPaymentInvoice && paymentInvoiceView ? (
                       <button
                         type="button"
@@ -1999,17 +1924,15 @@ export default function ReceptionHome() {
                         In phiếu khám
                       </button>
                     ) : null}
-                  </div>
+                    </div>
+                  ) : null}
                 </section>
                   </div>
                 </div>
               </>
-            ) : (
-              <div className="tcl-empty">
-                Chọn một dòng trong danh sách hoặc quét mã QR để tra cứu chi tiết.
-              </div>
-            )}
           </main>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -2039,6 +1962,20 @@ export default function ReceptionHome() {
               </div>
             ) : null}
             <div className="tcl-qr-modal-actions">
+              <label className="tcl-btn tcl-btn--pri" style={{ cursor: qrImageLoading ? 'wait' : 'pointer' }}>
+                {qrImageLoading ? 'Đang đọc QR…' : 'Chọn ảnh QR'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  disabled={qrImageLoading}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    event.target.value = ''
+                    if (file) void scanQrImage(file)
+                  }}
+                />
+              </label>
               <button type="button" className="tcl-btn" onClick={() => setQrOpen(false)}>
                 Đóng
               </button>

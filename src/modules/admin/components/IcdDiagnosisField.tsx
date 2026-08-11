@@ -38,11 +38,13 @@ export default function IcdDiagnosisField({
 }) {
   const listId = useId()
   const wrapRef = useRef(null)
+  const optionRefs = useRef([])
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [searchErr, setSearchErr] = useState('')
+  const [activeIndex, setActiveIndex] = useState(-1)
 
   useEffect(() => {
     if (value?.code && value?.name) {
@@ -56,7 +58,13 @@ export default function IcdDiagnosisField({
     if (!open || disabled) return undefined
     let cancelled = false
     const q = String(query || '').trim()
-    const delay = q.length > 0 ? 260 : 0
+    if (q.length < 2) {
+      setItems([])
+      setLoading(false)
+      setSearchErr('')
+      setActiveIndex(-1)
+      return undefined
+    }
 
     const timer = setTimeout(() => {
       setLoading(true)
@@ -65,6 +73,7 @@ export default function IcdDiagnosisField({
         .then((rows) => {
           if (cancelled) return
           setItems(Array.isArray(rows) ? rows : [])
+          setActiveIndex(-1)
         })
         .catch((e) => {
           if (cancelled) return
@@ -74,7 +83,7 @@ export default function IcdDiagnosisField({
         .finally(() => {
           if (!cancelled) setLoading(false)
         })
-    }, delay)
+    }, 250)
 
     return () => {
       cancelled = true
@@ -92,12 +101,13 @@ export default function IcdDiagnosisField({
 
   function pickItem(item) {
     const code = String(item?.code || '').trim()
-    const name = String(item?.name || '').trim()
+    const name = String(item?.name || item?.description || '').trim()
     if (!code || !name) return
     onChange({ code, name })
     setQuery(formatIcdLabel(code, name))
     setOpen(false)
     setSearchErr('')
+    setActiveIndex(-1)
   }
 
   function handleInputChange(e) {
@@ -109,6 +119,32 @@ export default function IcdDiagnosisField({
 
   function handleFocus() {
     if (!disabled) setOpen(true)
+  }
+
+  function handleKeyDown(event) {
+    if (disabled) return
+    if (event.key === 'Escape') {
+      setOpen(false)
+      setActiveIndex(-1)
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setOpen(true)
+      if (!items.length) return
+      setActiveIndex((current) => {
+        const next = event.key === 'ArrowDown'
+          ? (current + 1) % items.length
+          : (current <= 0 ? items.length - 1 : current - 1)
+        queueMicrotask(() => optionRefs.current[next]?.scrollIntoView({ block: 'nearest' }))
+        return next
+      })
+      return
+    }
+    if (event.key === 'Enter' && open && activeIndex >= 0 && items[activeIndex]) {
+      event.preventDefault()
+      pickItem(items[activeIndex])
+    }
   }
 
   const showList = open && !disabled
@@ -123,12 +159,15 @@ export default function IcdDiagnosisField({
           value={query}
           onChange={handleInputChange}
           onFocus={handleFocus}
+          onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder="Gõ từ khóa (vd: Viêm) rồi chọn trong danh sách"
+          placeholder="Gõ mã hoặc tên (vd: K29, Viêm dạ dày)"
           autoComplete="off"
           aria-invalid={error ? 'true' : undefined}
           aria-expanded={showList}
           aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={activeIndex >= 0 ? `${listId}-option-${activeIndex}` : undefined}
         />
         {value?.code ? (
           <span className="dr-icd-picked" title="Đã chọn mã ICD-10">
@@ -139,17 +178,30 @@ export default function IcdDiagnosisField({
           <ul id={listId} className="dr-icd-dropdown" role="listbox">
             {loading ? <li className="dr-icd-empty">Đang tìm…</li> : null}
             {!loading && searchErr ? <li className="dr-icd-empty dr-icd-empty--err">{searchErr}</li> : null}
-            {!loading && !searchErr && items.length === 0 ? (
+            {!loading && !searchErr && String(query || '').trim().length < 2 ? (
+              <li className="dr-icd-empty">Nhập ít nhất 2 ký tự để tìm theo mã hoặc tên bệnh.</li>
+            ) : null}
+            {!loading && !searchErr && String(query || '').trim().length >= 2 && items.length === 0 ? (
               <li className="dr-icd-empty">
-                {String(query || '').trim() ? 'Không có kết quả.' : 'Chưa có dữ liệu ICD-10 trong MongoDB.'}
+                Không tìm thấy mã ICD-10 phù hợp.
               </li>
             ) : null}
             {!loading
-              ? items.map((it) => (
+              ? items.map((it, index) => (
                   <li key={String(it.id || it.code)}>
-                    <button type="button" className="dr-icd-option" role="option" onClick={() => pickItem(it)}>
+                    <button
+                      id={`${listId}-option-${index}`}
+                      ref={(node) => { optionRefs.current[index] = node }}
+                      type="button"
+                      className={`dr-icd-option${activeIndex === index ? ' dr-icd-option--active' : ''}`}
+                      role="option"
+                      aria-selected={activeIndex === index}
+                      onMouseEnter={() => setActiveIndex(index)}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => pickItem(it)}
+                    >
                       <span className="dr-icd-option-code">{it.code}</span>
-                      <span className="dr-icd-option-name">{it.name}</span>
+                      <span className="dr-icd-option-name">{it.name || it.description}</span>
                     </button>
                   </li>
                 ))
@@ -162,7 +214,7 @@ export default function IcdDiagnosisField({
           {error}
         </span>
       ) : (
-        <span className="dr-icd-hint">Bắt buộc chọn một mục từ danh sách gợi ý (không gõ tay).</span>
+        <span className="dr-icd-hint">Nhập ít nhất 2 ký tự, dùng ↑/↓ và Enter để chọn. Không chấp nhận nội dung gõ tay.</span>
       )}
     </label>
   )

@@ -165,7 +165,7 @@
 
 .tcl-split {
   display: grid;
-  grid-template-columns: minmax(300px, 400px) 1fr;
+  grid-template-columns: 1fr;
   gap: 1rem;
   align-items: stretch;
   min-height: 0;
@@ -202,7 +202,61 @@
 .tcl-split > .tcl-detail {
   height: 100%;
   max-height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.tcl-detail-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.52);
+}
+
+.tcl-detail--modal {
+  position: relative;
+  width: min(1120px, 96vw);
+  height: min(820px, 92vh) !important;
+  max-height: 92vh !important;
+  border-radius: 8px;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+.tcl-detail-modal-close {
+  position: sticky;
+  z-index: 3;
+  top: 0.6rem;
+  float: right;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0.55rem 0.65rem -2.8rem 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  color: #475569;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tcl-detail-modal-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+@media (max-width: 760px) {
+  .tcl-detail-modal-backdrop { padding: 0; }
+  .tcl-detail--modal {
+    width: 100vw;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border: 0;
+    border-radius: 0;
+  }
 }
 
 .tcl-filters {
@@ -508,6 +562,10 @@
   font-size: 0.84rem;
 }
 
+.tcl-list-table {
+  table-layout: fixed;
+}
+
 .tcl-table th,
 .tcl-table td {
   border-bottom: 1px solid var(--border);
@@ -548,31 +606,28 @@
 
 .tcl-list-table .tcl-col-status,
 .tcl-list-table .tcl-cell-status {
-  width: 2.5rem;
-  text-align: center;
+  width: 14%;
+  text-align: left;
 }
 
 .tcl-list-table .tcl-col-ticket,
 .tcl-list-table .tcl-cell-ticket {
-  width: 7.5rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  width: 15%;
 }
 
 .tcl-list-table .tcl-col-source,
 .tcl-list-table .tcl-cell-source {
-  width: 5.5rem;
+  width: 11%;
 }
 
 .tcl-list-table .tcl-col-code,
 .tcl-list-table .tcl-cell-code {
-  width: 6.5rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  width: 17%;
 }
 
 .tcl-list-table .tcl-col-name,
 .tcl-list-table .tcl-cell-name {
-  min-width: 7rem;
-  max-width: 11rem;
+  width: 22%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -592,12 +647,28 @@
 }
 
 .tcl-stt-dot {
-  width: 10px;
-  height: 10px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   display: inline-block;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+  background: currentColor;
 }
+
+.tcl-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.tcl-status-badge--pending { color: #b45309; }
+.tcl-status-badge--booked { color: #2563eb; }
+.tcl-status-badge--checked-in { color: #047857; }
+.tcl-status-badge--examining { color: #7c3aed; }
+.tcl-status-badge--completed { color: #475569; }
+.tcl-status-badge--cancelled { color: #dc2626; }
 
 .tcl-stt-dot--pending {
   background: #f59e0b;
@@ -686,17 +757,25 @@
   padding: 0.15rem 0.95rem 0.25rem;
 }
 
-/* Chi tiết lịch hẹn — hai cột: thông tin (40%) | thao tác (60%) */
+/* Chi tiết lịch hẹn: một vùng cuộn chung, không tạo scrollbar lồng nhau. */
 .tcl-detail-layout {
   display: grid;
-  grid-template-columns: minmax(0, 40%) minmax(0, 60%);
-  grid-template-rows: minmax(0, 1fr);
-  gap: 0.65rem;
-  flex: 1;
+  grid-template-columns: minmax(340px, 44%) minmax(400px, 56%);
+  grid-template-rows: auto;
+  gap: 0.75rem;
+  flex: none;
   min-height: 0;
-  padding: 0.5rem 0.95rem 0.75rem;
-  align-items: stretch;
+  padding: 0.35rem 0.85rem 0.85rem;
+  align-items: start;
+  overflow: visible;
+}
+
+.tcl-list-table .tcl-col-method,
+.tcl-list-table .tcl-cell-method {
+  width: 20%;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tcl-detail-col {
@@ -714,9 +793,7 @@
 
 .tcl-detail-col--info {
   overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  overflow-y: visible;
 }
 
 .tcl-detail-col--info .tcl-grid-form {
@@ -755,10 +832,8 @@
 }
 
 .tcl-detail-col--actions {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 0.15rem;
-  scrollbar-gutter: stable;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .tcl-detail-col--actions .tcl-grid-form {
@@ -766,7 +841,7 @@
 }
 
 .tcl-detail-col--actions .tcl-sec {
-  padding: 0.65rem 0.75rem;
+  padding: 0.6rem 0.7rem;
 }
 
 .tcl-detail-col--actions .tcl-sec-title {
@@ -857,9 +932,9 @@
   margin: 0.75rem 0.95rem;
   padding: 0.85rem 0.95rem;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: none;
 }
 
 .tcl-sec-title {
@@ -1036,6 +1111,23 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   justify-content: flex-end;
+}
+
+.tcl-print-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.65rem;
+}
+
+.tcl-print-actions .tcl-btn {
+  width: 100%;
+}
+
+@media (max-width: 520px) {
+  .tcl-print-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .tcl-btn--print {

@@ -32,7 +32,7 @@ import {
 } from '../utils/prescriptionLine'
 import { formatMedicineLabel, rxLineMedicineName } from '../utils/medicineLabel'
 import { appointmentSourceLabel, appointmentSourceTitle, appointmentSourceValue } from '../utils/appointmentSource'
-import { getStaffSession } from '../utils/staffSession'
+import { getStaffSession, staffRole } from '../utils/staffSession'
 import { ticketFromQrPayload } from '../utils/ticketQr'
 
 const DR_QR_READER_ELEMENT_ID = 'dr-ticket-qr-reader'
@@ -398,6 +398,7 @@ export default function DoctorHome() {
   const location = useLocation()
   const navInit = useMemo(() => readDoctorNavState(location), [])
   const { token, user } = getSession()
+  const currentStaffRole = staffRole(user)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -588,10 +589,10 @@ export default function DoctorHome() {
   useEffect(() => {
     if (!token || !user) {
       navigate('/login', { replace: true })
-    } else if (user.userType === 'receptionist' || user.userType === 'registration') {
+    } else if (currentStaffRole === 'receptionist' || currentStaffRole === 'registration') {
       navigate('/dashboard', { replace: true })
     }
-  }, [token, user, navigate])
+  }, [token, user, currentStaffRole, navigate])
 
   useEffect(() => {
     void listClinicRooms()
@@ -616,7 +617,7 @@ export default function DoctorHome() {
   const loadAppointments = useMemo(() => {
     return async ({ silent } = { silent: false }) => {
       if (!token) return
-      if (user?.userType !== 'doctor') {
+      if (currentStaffRole !== 'doctor') {
         queueMicrotask(() => setLoading(false))
         return
       }
@@ -634,7 +635,7 @@ export default function DoctorHome() {
         setRefreshing(false)
       }
     }
-  }, [token, user?.userType])
+  }, [token, currentStaffRole])
 
   useEffect(() => {
     let mounted = true
@@ -648,12 +649,12 @@ export default function DoctorHome() {
   }, [loadAppointments])
 
   useEffect(() => {
-    if (!token || user?.userType !== 'doctor') return
+    if (!token || currentStaffRole !== 'doctor') return
     const t = setInterval(() => {
       void loadAppointments({ silent: true })
     }, 15000)
     return () => clearInterval(t)
-  }, [token, user?.userType, loadAppointments])
+  }, [token, currentStaffRole, loadAppointments])
 
   const filteredQueue = useMemo(() => {
     let rows = [...(items || [])]
@@ -667,8 +668,10 @@ export default function DoctorHome() {
     // Chỉ hiển thị lịch lễ tân đã xác nhận + thu phí, hoặc đã khám xong (xem lại).
     rows = rows.filter((a) => {
       const st = String(a?.status || '').toLowerCase()
+      const workflow = String(a?.workflowStatus || '').toUpperCase()
       if (st === 'cancelled' || st === 'pending') return false
       if (st === 'confirmed' && !isAppointmentPaymentPaid(a)) return false
+      if (workflow && !['CHECKED_IN', 'IN_EXAMINATION', 'COMPLETED'].includes(workflow)) return false
       return st === 'confirmed' || isAppointmentExamined(st)
     })
 
