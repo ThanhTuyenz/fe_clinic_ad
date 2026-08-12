@@ -17,7 +17,8 @@ function userTypeLower(user) {
   return String(user?.userType || user?.role || '').trim().toLowerCase()
 }
 
-function redirectPathForUser() {
+function redirectPathForUser(user) {
+  if (userTypeLower(user) === 'pharmacist') return '/pharmacy'
   return '/dashboard'
 }
 

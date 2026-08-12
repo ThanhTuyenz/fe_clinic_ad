@@ -11,16 +11,18 @@ const paths = {
 export default function RoleSidebar({ role = 'doctor', active = 'dashboard', user, onLogout }) {
   const navigate = useNavigate()
   const doctor = role === 'doctor'
+  const pharmacist = role === 'pharmacist'
   const links = doctor
-    ? [['exam', 'Khám bệnh', '/doctor'], ['calendar', 'Lịch khám', '/doctor?view=schedule'], ['history', 'Lịch sử bệnh nhân', '/doctor?view=history'], ['laboratory', 'Cận lâm sàng', '/doctor?view=laboratory'], ['prescription', 'Đơn thuốc', '/doctor?view=prescription']]
-    : [['dashboard', 'Tổng quan', '/dashboard'], ['reception', 'Tiếp nhận', '/reception'], ['registration', 'Đăng ký bệnh nhân', '/registration']]
+    ? [['exam', 'Khám bệnh', '/doctor'], ['calendar', 'Lịch khám', '/doctor?view=schedule'], ['history', 'Lịch sử bệnh nhân', '/doctor?view=history'], ['laboratory', 'Cận lâm sàng', '/clinical-orders'], ['prescription', 'Đơn thuốc', '/doctor/prescriptions']]
+    : pharmacist ? [['pharmacy', 'Cấp thuốc', '/pharmacy'], ['inventory', 'Kho thuốc', '/inventory']]
+    : [['dashboard', 'Tổng quan', '/dashboard'], ['reception', 'Tiếp nhận', '/reception'], ['clinical', 'Cận lâm sàng', '/clinical-orders'], ['registration', 'Đăng ký bệnh nhân', '/registration']]
   const name = String(user?.fullName || user?.displayName || user?.email || (doctor ? 'Bác sĩ' : 'Lễ tân'))
   const avatar = name.split(/\s+/).slice(-2).map((x) => x[0]).join('').toUpperCase()
   return <aside className="role-sidebar">
     <div className="role-sidebar-brand"><span className="role-sidebar-logo">M</span><div><b>MediLink Global</b><small>Healthcare System</small></div></div>
-    <div className="role-sidebar-context"><small>{doctor ? 'PHÒNG KHÁM' : 'KHÔNG GIAN LÀM VIỆC'}</small><strong>{doctor ? 'BÁC SĨ' : 'TIẾP NHẬN'}</strong></div>
+    <div className="role-sidebar-context"><small>{doctor ? 'PHÒNG KHÁM' : 'KHÔNG GIAN LÀM VIỆC'}</small><strong>{doctor ? 'BÁC SĨ' : pharmacist ? 'NHÀ THUỐC' : 'TIẾP NHẬN'}</strong></div>
     <nav>{links.map(([id,label,href])=><button key={id} className={active===id?'is-active':''} onClick={()=>navigate(href)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d={id==='dashboard'?paths.dashboard:id==='registration'?paths.patient:paths.calendar}/></svg>{label}</button>)}</nav>
-    <div className="role-sidebar-user"><span>{avatar}</span><div><b>{name}</b><small>{doctor ? 'Bác sĩ' : 'Nhân viên tiếp nhận'}</small></div></div>
+    <div className="role-sidebar-user"><span>{avatar}</span><div><b>{name}</b><small>{doctor ? 'Bác sĩ' : pharmacist ? 'Dược sĩ' : 'Nhân viên tiếp nhận'}</small></div></div>
     <button className="role-sidebar-logout" onClick={onLogout}>Đăng xuất</button>
   </aside>
 }

@@ -6,7 +6,7 @@ import { useStaffLogout } from '@/common/hooks/useStaffLogout'
 import { Html5Qrcode } from 'html5-qrcode'
 import { finishExamAppointment, listDoctorAppointments, listPatientHistory, updateAppointmentStatus } from '../services/appointments'
 import { listClinicRooms } from '../services/clinicRooms'
-import { getMedicalVisitByAppointment, saveMedicalVisit } from '../services/medicalVisits'
+import { getClinicalOrderPass, getMedicalVisitByAppointment, listClinicalServices, mockClinicalOrderResult, saveMedicalVisit } from '../services/medicalVisits'
 import { searchMedicines } from '../services/medicines'
 import DoctorAppHeader from '../components/DoctorAppHeader'
 import IcdDiagnosisField, { formatIcdLabel, parseIcdFromMedicalVisit } from '../components/IcdDiagnosisField'
@@ -373,7 +373,7 @@ function getVitalsFinishIssue(vitals, vitalsSkipConfirmed) {
   if (vitalsSkipConfirmed) return { ok: true, errors: {}, missing: false }
   const errors = validateAllVitals(vitals)
   if (Object.keys(errors).length > 0) {
-    return { ok: false, errors, missing: false, message: 'Sinh hiệu ngoài khoảng cho phép — kiểm tra lại các ô đỏ.' }
+    return { ok: false, errors, missing: false, message: Object.values(errors).join(' ') }
   }
   if (!vitalsHasEntry(vitals)) {
     return { ok: false, errors: {}, missing: true, message: VITALS_MISSING_MSG }
@@ -418,6 +418,7 @@ export default function DoctorHome() {
 
   const [selectedApptId, setSelectedApptId] = useState(null)
   const [examSubTab, setExamSubTab] = useState('info')
+  const [contextCollapsed, setContextCollapsed] = useState(false)
 
   const [vitals, setVitals] = useState({
     examAt: '',
@@ -437,6 +438,10 @@ export default function DoctorHome() {
   })
 
   const [prescriptionLines, setPrescriptionLines] = useState([emptyRxLine()])
+  const [clinicalOrders, setClinicalOrders] = useState([])
+  const [clinicalServices, setClinicalServices] = useState([])
+  const [clinicalBusy, setClinicalBusy] = useState('')
+  const [clinicalPass, setClinicalPass] = useState(null)
   const [rxPickOpen, setRxPickOpen] = useState(false)
   const [rxPickRow, setRxPickRow] = useState(0)
   const [medicineQuery, setMedicineQuery] = useState('')
@@ -455,6 +460,7 @@ export default function DoctorHome() {
   const [vitalsErrors, setVitalsErrors] = useState({})
   const [vitalsFormError, setVitalsFormError] = useState('')
   const [vitalsSkipConfirmed, setVitalsSkipConfirmed] = useState(false)
+  const [vitalsOpen, setVitalsOpen] = useState(false)
   const [diagnosisIcd, setDiagnosisIcd] = useState(null)
   const [diagnosisError, setDiagnosisError] = useState('')
 
@@ -463,9 +469,11 @@ export default function DoctorHome() {
   const [emptyRxConfirmOpen, setEmptyRxConfirmOpen] = useState(false)
   const [examSaveOk, setExamSaveOk] = useState('')
   const [examSaveErr, setExamSaveErr] = useState('')
+  const [finishAttempted, setFinishAttempted] = useState(false)
   const flashTimerRef = useRef(null)
   const examLoadSeqRef = useRef(0)
   const itemsRef = useRef([])
+  const skipNextActiveVisitRestoreRef = useRef(false)
   const qrScanDoneRef = useRef(false)
   const listSearchRef = useRef(null)
 
@@ -486,7 +494,7 @@ export default function DoctorHome() {
     flashTimerRef.current = setTimeout(() => {
       setExamSaveOk('')
       flashTimerRef.current = null
-    }, 2000)
+    }, 5000)
   }
 
   function flashErr(msg) {
@@ -496,7 +504,7 @@ export default function DoctorHome() {
     flashTimerRef.current = setTimeout(() => {
       setExamSaveErr('')
       flashTimerRef.current = null
-    }, 2000)
+    }, 5000)
   }
 
   useEffect(() => {
@@ -656,6 +664,21 @@ export default function DoctorHome() {
     return () => clearInterval(t)
   }, [token, currentStaffRole, loadAppointments])
 
+  // Sau F5, React state bị mất nhưng ca khám vẫn là IN_EXAMINATION trong DB.
+  // Tự mở lại ca đang khám của bác sĩ; nếu id đã chọn không còn trong dữ liệu thì
+  // cũng khôi phục sang ca đang khám thay vì để màn hình trống.
+  useEffect(() => {
+    if (!items.length) return
+    const selectedStillExists = selectedApptId && items.some((item) => String(item?.id || item?._id) === String(selectedApptId))
+    if (selectedStillExists) return
+    if (skipNextActiveVisitRestoreRef.current) {
+      skipNextActiveVisitRestoreRef.current = false
+      return
+    }
+    const activeVisit = items.find((item) => String(item?.workflowStatus || '').toUpperCase() === 'IN_EXAMINATION')
+    if (activeVisit) setSelectedApptId(String(activeVisit.id || activeVisit._id || ''))
+  }, [items, selectedApptId])
+
   const filteredQueue = useMemo(() => {
     let rows = [...(items || [])]
     rows.sort((a, b) => {
@@ -714,9 +737,13 @@ export default function DoctorHome() {
     return workflowStatus ? workflowStatus === 'CHECKED_IN' : String(appointment?.status || '').toLowerCase() === 'confirmed'
   }), [filteredQueue])
 
+  const inExaminationQueue = useMemo(() => filteredQueue.filter((appointment) =>
+    String(appointment?.workflowStatus || '').toUpperCase() === 'IN_EXAMINATION'
+  ), [filteredQueue])
+
   async function startMedicalVisit(appointment) {
     const id = String(appointment?.id || appointment?._id || '')
-    if (!id || startingAppointmentId) return
+    if (!id || startingAppointmentId) return false
     setStartingAppointmentId(id)
     setExamSaveErr('')
     try {
@@ -725,11 +752,29 @@ export default function DoctorHome() {
       setItems((rows) => rows.map((row) => String(row?.id || row?._id) === id ? { ...row, ...(updated || {}), status: 'confirmed', workflowStatus: 'IN_EXAMINATION' } : row))
       setSelectedApptId(id)
       flashOk(`Đã bắt đầu khám cho ${patientLabel(appointment)}.`)
+      return true
     } catch (startError) {
       flashErr(startError?.message || 'Không bắt đầu khám được.')
+      return false
     } finally {
       setStartingAppointmentId('')
     }
+  }
+
+  async function openClinicalOrdering() {
+    if (!selectedAppt) {
+      flashErr('Vui lòng chọn bệnh nhân trước khi thêm chỉ định.')
+      return
+    }
+    const workflow = String(selectedAppt.workflowStatus || '').toUpperCase()
+    if (workflow === 'CHECKED_IN') {
+      const started = await startMedicalVisit(selectedAppt)
+      if (!started) return
+    } else if (workflow !== 'IN_EXAMINATION') {
+      flashErr(doctorExamLockMessage(selectedAppt))
+      return
+    }
+    setExamSubTab('clinical')
   }
 
   const totalFiltered = filteredQueue.length
@@ -748,6 +793,18 @@ export default function DoctorHome() {
     if (!selectedApptId) return null
     return items.find((a) => String(a?.id || a?._id) === String(selectedApptId)) || null
   }, [items, selectedApptId])
+
+  const clinicalRoomsForSelectedBranch = useMemo(() => {
+    const branchId = String(selectedAppt?.branch?.id || selectedAppt?.branchId || '').trim()
+    if (!branchId) return []
+    return clinicRooms.filter((room) => String(room?.branchId || room?.branch?.id || '').trim() === branchId)
+  }, [clinicRooms, selectedAppt])
+
+  useEffect(() => {
+    if (!selectedAppt || clinicRooms.length === 0) return
+    const allowed = new Set(clinicalRoomsForSelectedBranch.map((room) => String(room.id)))
+    setClinicalOrders((orders) => orders.map((order) => order.status === 'ORDERED' && order.assignedRoomId && !allowed.has(String(order.assignedRoomId)) ? { ...order, assignedRoomId: '' } : order))
+  }, [selectedAppt?.id, clinicRooms, clinicalRoomsForSelectedBranch])
 
   const receptionClinicRoomId = useMemo(
     () => String(selectedAppt?.clinicRoom || '').trim(),
@@ -830,7 +887,7 @@ export default function DoctorHome() {
       setVitalsFormError('')
       setVitalsErrors(issue.errors || {})
     }
-    setExamSubTab('info')
+    setVitalsOpen(true)
   }
 
   function setVitalField(key, raw) {
@@ -878,38 +935,68 @@ export default function DoctorHome() {
       vitalsSkipped: vitalsSkipConfirmed,
       prescriptionLines: prescriptionLines.map(rxLineToApiPayload).filter(Boolean),
       prescription: prescriptionLines.map(rxLineToLegacyPrescriptionItem).filter(Boolean),
+      clinicalOrders: clinicalOrders.map((order) => ({ serviceId: order.serviceId, assignedRoomId: order.assignedRoomId || '', note: order.note || '' })),
     }
   }
 
-  async function handleSaveMedicalVisit() {
+  async function handleSaveMedicalVisit({ clinicalOnly = false, draftOnly = false } = {}) {
     if (!token || examLocked || examSaving) return
     const appointmentId = String(selectedAppt?.id || selectedAppt?._id || '').trim()
     if (!appointmentId) {
       flashErr('Chưa chọn lịch khám.')
       return
     }
-
-    const vitalIssue = getVitalsFinishIssue(vitals, vitalsSkipConfirmed)
-    if (!vitalIssue.ok) {
-      applyVitalsFinishFeedback(vitalIssue)
-      flashErr(vitalIssue.message || 'Sinh hiệu không hợp lệ.')
+    if (clinicalOnly && clinicalOrders.length === 0) {
+      flashErr('Vui lòng chọn ít nhất một dịch vụ cận lâm sàng.')
+      return
+    }
+    if (clinicalOnly && clinicalOrders.some((order) => !order.assignedRoomId)) {
+      flashErr('Vui lòng chọn phòng thực hiện cho tất cả chỉ định.')
       return
     }
 
-    if (!diagnosisIcd?.code) {
-      setDiagnosisError('Vui lòng chọn chẩn đoán ICD-10 từ danh sách gợi ý.')
-      flashErr('Vui lòng chọn chẩn đoán ICD-10 từ danh sách gợi ý.')
-      return
+    if (!clinicalOnly && !draftOnly) {
+      const vitalIssue = getVitalsFinishIssue(vitals, vitalsSkipConfirmed)
+      if (!vitalIssue.ok) {
+        applyVitalsFinishFeedback(vitalIssue)
+        flashErr(vitalIssue.message || 'Sinh hiệu không hợp lệ.')
+        return
+      }
+
+      if (!diagnosisIcd?.code) {
+        setDiagnosisError('Vui lòng chọn chẩn đoán ICD-10 từ danh sách gợi ý.')
+        flashErr('Vui lòng chọn chẩn đoán ICD-10 từ danh sách gợi ý.')
+        return
+      }
+      setDiagnosisError('')
     }
-    setDiagnosisError('')
 
     setExamSaving(true)
     clearFlashTimer()
     setExamSaveOk('')
     setExamSaveErr('')
     try {
-      await saveMedicalVisit({ token, appointmentId, payload: buildExamPayload() })
-      flashOk('Đã lưu phiên khám.')
+      const payload = buildExamPayload()
+      if (draftOnly) payload.draftOnly = true
+      if (clinicalOnly) {
+        payload.clinicalOnly = true
+        delete payload.prescriptionLines
+        delete payload.prescription
+      }
+      const saved = await saveMedicalVisit({ token, appointmentId, payload })
+      setClinicalOrders(Array.isArray(saved?.medicalVisit?.clinicalOrders) ? saved.medicalVisit.clinicalOrders : clinicalOrders)
+      if (clinicalOnly) {
+        setExamSubTab('clinical')
+        try {
+          setClinicalPass(await getClinicalOrderPass(appointmentId))
+          flashOk('Đã lưu chỉ định và tạo QR thành công.')
+        } catch (passError) {
+          setClinicalPass(null)
+          flashErr(`Đã lưu chỉ định nhưng chưa tạo được QR: ${passError?.message || 'Lỗi không xác định.'}`)
+        }
+      } else {
+        flashOk(draftOnly ? 'Đã lưu nháp hồ sơ khám.' : 'Đã lưu phiên khám.')
+      }
     } catch (e) {
       flashErr(e?.message || 'Không lưu được.')
     } finally {
@@ -935,7 +1022,6 @@ export default function DoctorHome() {
     if (finishExamCheck.ok) return true
     if (!diagnosisIcd?.code) {
       setDiagnosisError('Bắt buộc chọn chẩn đoán ICD-10 (tab Thông tin khám bệnh).')
-      setExamSubTab('info')
     }
     applyVitalsFinishFeedback(getVitalsFinishIssue(vitals, vitalsSkipConfirmed))
     const msg = finishExamCheck.reasons.join(' ')
@@ -943,14 +1029,15 @@ export default function DoctorHome() {
     return false
   }
 
-  function requestFinishAndPrint() {
+  function requestFinishExam() {
     if (examLocked || examSaving) return
+    setFinishAttempted(true)
     if (!flashFinishBlockers()) return
     if (!prescriptionHasMedicines(prescriptionLines)) {
       setEmptyRxConfirmOpen(true)
       return
     }
-    void handleFinishExam({ withPrint: true })
+    void handleFinishExam({ withPrint: false })
   }
 
   async function handleFinishExam({ withPrint = false, skipEmptyRxConfirm = false } = {}) {
@@ -1028,7 +1115,11 @@ export default function DoctorHome() {
       }
 
       await finishExamAppointment({ token, appointmentId })
+      skipNextActiveVisitRestoreRef.current = true
       await loadAppointments({ silent: true })
+      setSelectedApptId(null)
+      setExamSubTab('info')
+      setFinishAttempted(false)
       flashOk('Đã kết thúc khám.')
     } catch (e) {
       flashErr(e?.message || 'Không kết thúc khám được.')
@@ -1042,6 +1133,7 @@ export default function DoctorHome() {
   useEffect(() => {
     setAwaitingPrintLock(false)
     setExamSaving(false)
+    setFinishAttempted(false)
   }, [selectedApptId])
 
   useEffect(() => {
@@ -1084,6 +1176,21 @@ export default function DoctorHome() {
         setDiagnosisIcd(icd ? { code: icd.code, name: icd.name } : null)
         setDiagnosisError('')
         setPrescriptionLines(normalizeRxLines(ex?.prescriptionLines, ex?.prescription))
+        const loadedClinicalOrders = Array.isArray(ex?.clinicalOrders) ? ex.clinicalOrders : []
+        setClinicalOrders(loadedClinicalOrders)
+        if (loadedClinicalOrders.length > 0) {
+          try {
+            const pass = await getClinicalOrderPass(appointmentId)
+            if (seq !== examLoadSeqRef.current) return
+            setClinicalPass(pass)
+            setExamSubTab('clinical')
+          } catch {
+            if (seq !== examLoadSeqRef.current) return
+            setClinicalPass(null)
+          }
+        } else {
+          setClinicalPass(null)
+        }
         setVitalsSkipConfirmed(Boolean(ex?.vitalsSkipped))
         setVitalsErrors({})
         setVitalsFormError('')
@@ -1097,6 +1204,7 @@ export default function DoctorHome() {
         setDiagnosisIcd(null)
         setDiagnosisError('')
         setPrescriptionLines([emptyRxLine()])
+        setClinicalOrders([])
         setVitalsSkipConfirmed(false)
         setVitalsErrors({})
         setVitalsFormError('')
@@ -1108,6 +1216,13 @@ export default function DoctorHome() {
       examLoadSeqRef.current += 1
     }
   }, [token, selectedApptId, receptionClinicRoomId])
+
+  useEffect(() => {
+    if (!token) return
+    void listClinicalServices()
+      .then((data) => setClinicalServices(Array.isArray(data?.items) ? data.items.filter((item) => ['LAB_TEST', 'IMAGING'].includes(item.category)) : []))
+      .catch(() => setClinicalServices([]))
+  }, [token])
 
   useEffect(() => {
     setVitalsSkipConfirmed(false)
@@ -1273,7 +1388,7 @@ export default function DoctorHome() {
       if (!examLocked && !examSaving) void handleSaveMedicalVisit()
     },
     finishAndPrint: () => {
-      if (!examLocked && !examSaving) requestFinishAndPrint()
+      if (!examLocked && !examSaving) requestFinishExam()
     },
     focusSearch: () => {
       listSearchRef.current?.focus()
@@ -1327,10 +1442,29 @@ export default function DoctorHome() {
     void performLogout()
   }
 
+  function addClinicalOrder(serviceId) {
+    const service = clinicalServices.find((item) => String(item.id) === String(serviceId))
+    if (!service || clinicalOrders.some((item) => String(item.serviceId) === String(service.id))) return
+    setClinicalOrders((items) => [...items, { serviceId: service.id, serviceCode: service.code, serviceName: service.name, category: service.category, price: service.price, status: 'ORDERED', assignedRoomId: '', note: '' }])
+  }
+
+  async function simulateClinicalResult(order) {
+    if (!order.id) { flashErr('Hãy lưu hồ sơ trước khi mô phỏng kết quả.'); return }
+    setClinicalBusy(order.id)
+    try {
+      const data = await mockClinicalOrderResult(order.id)
+      setClinicalOrders((items) => items.map((item) => item.id === order.id ? { ...item, ...data, result: data.result } : item))
+      flashOk('Đã nhận kết quả mô phỏng.')
+    } catch (e) { flashErr(e?.message || 'Không mô phỏng được kết quả.') }
+    finally { setClinicalBusy('') }
+  }
+
   if (!token || !user) return null
 
   return (
     <div className="dr-desk">
+      {examSaveOk ? <div className="fixed right-5 top-5 z-[100] max-w-md border border-emerald-300 bg-emerald-50 px-5 py-4 font-bold text-emerald-800 shadow-lg" role="status">✓ {examSaveOk}</div> : null}
+      {examSaveErr ? <div className="fixed right-5 top-5 z-[100] max-w-md border border-red-300 bg-red-50 px-5 py-4 font-bold text-red-700 shadow-lg" role="alert">{examSaveErr}</div> : null}
       <DoctorAppHeader activeTab="exam" user={user} onLogout={logout} />
 
       <main className="dr-view dr-view--exam" role="main">
@@ -1341,16 +1475,19 @@ export default function DoctorHome() {
           </div>
           <div className="dr-clinic-heading-actions">
             <button type="button" className="dr-btn dr-btn--ghost" onClick={() => navigate('/dashboard')}>Lịch sử khám</button>
-            <button type="button" className="dr-btn dr-btn--solid" disabled={!selectedAppt || examLocked || examSaving} onClick={() => requestFinishAndPrint()}>✓ Hoàn thành khám</button>
+            <button type="button" className="dr-btn dr-btn--solid" disabled={!selectedAppt || examLocked || examSaving} title={finishDisabledTitle} onClick={() => requestFinishExam()}>{examSaving ? 'Đang hoàn thành…' : '✓ Hoàn thành khám'}</button>
           </div>
         </div>
+        {finishAttempted && selectedAppt && !examLocked && !canFinishExam ? <div className="dr-banner dr-banner--warning dr-banner--flush" role="status"><b>Chưa thể hoàn thành khám:</b> {finishExamCheck.reasons.join(' ')}</div> : null}
         {error ? (
           <div className="dr-banner dr-banner--error dr-banner--flush" role="alert">
             {error}
           </div>
         ) : null}
-        <div className="dr-stitch-workspace">
+        <div className={`dr-stitch-workspace${contextCollapsed ? ' is-context-collapsed' : ''}`}>
           <aside className="dr-stitch-context">
+            <button type="button" className="dr-stitch-context-toggle" onClick={() => setContextCollapsed((value) => !value)} aria-expanded={!contextCollapsed} aria-label={contextCollapsed ? 'Mở thông tin bệnh nhân' : 'Thu gọn thông tin bệnh nhân'} title={contextCollapsed ? 'Mở thông tin bệnh nhân' : 'Thu gọn cột bên trái'}>{contextCollapsed ? '›' : '‹'}</button>
+            {!contextCollapsed ? <>
             <section className="dr-stitch-card dr-stitch-patient">
               {selectedAppt ? (
                 <>
@@ -1382,6 +1519,22 @@ export default function DoctorHome() {
             </section>
 
             <section className="dr-stitch-card dr-stitch-schedule">
+              <header><b>Hồ sơ đang khám</b><span>{inExaminationQueue.length} bệnh nhân</span></header>
+              <div className="dr-stitch-schedule-list">
+                {inExaminationQueue.map((appointment) => (
+                  <div key={appointment.id || appointment._id} className={`dr-stitch-waiting-row${String(appointment.id || appointment._id) === String(selectedApptId) ? ' is-active' : ''}`}>
+                    <button type="button" className="dr-stitch-waiting-info" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>
+                      <span><b>{appointment?.startTime || '—'}</b> · {patientLabel(appointment)}</span>
+                      <small>STT {appointment?.visitQueueNumber || '—'} · Đang khám / đã lưu nháp</small>
+                    </button>
+                    <button type="button" className="dr-stitch-start dr-stitch-reopen" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>{String(appointment.id || appointment._id) === String(selectedApptId) ? 'Đang mở' : 'Mở lại'}</button>
+                  </div>
+                ))}
+                {!inExaminationQueue.length ? <div className="dr-stitch-empty"><b>Không có hồ sơ đang khám</b></div> : null}
+              </div>
+            </section>
+
+            <section className="dr-stitch-card dr-stitch-schedule">
               <header><b>Bệnh nhân đang đợi</b><span>{waitingQueue.length} bệnh nhân</span></header>
               <div className="dr-stitch-schedule-list">
                 {waitingQueue.slice(0, 5).map((appointment) => (
@@ -1396,6 +1549,7 @@ export default function DoctorHome() {
                 {!waitingQueue.length ? <div className="dr-stitch-empty"><b>Chưa có bệnh nhân đang đợi</b><p>Danh sách sẽ cập nhật khi lễ tân check-in.</p></div> : null}
               </div>
             </section>
+            </> : null}
           </aside>
 
           <section className="dr-stitch-clinical">
@@ -1407,30 +1561,47 @@ export default function DoctorHome() {
               </label>
               <div className="dr-stitch-diagnosis-row">
                 <IcdDiagnosisField token={token} value={diagnosisIcd} onChange={(pick) => { setDiagnosisIcd(pick); setDiagnosisError(''); setVitals((state) => ({ ...state, diagnosis: pick ? formatIcdLabel(pick.code, pick.name) : '' })) }} disabled={examLocked || !selectedAppt} error={diagnosisError} />
-                <label className="dr-stitch-field"><span>Chỉ định cận lâm sàng</span><button type="button" className="dr-stitch-dashed" disabled={!selectedAppt || examLocked}>⊕ Thêm chỉ định</button></label>
+                <label className="dr-stitch-field"><span>Chỉ định cận lâm sàng</span><button type="button" className="dr-stitch-dashed" disabled={!selectedAppt || Boolean(startingAppointmentId) || isAppointmentExamined(selectedAppt?.status)} onClick={() => void openClinicalOrdering()}>{startingAppointmentId ? 'Đang bắt đầu khám…' : '⊕ Thêm chỉ định'}</button></label>
               </div>
-              <details className="dr-stitch-details">
+              <details className="dr-stitch-details" open={vitalsOpen} onToggle={(e) => setVitalsOpen(e.currentTarget.open)}>
                 <summary>Sinh hiệu và ghi chú điều trị</summary>
+                {!examLocked ? <label className="dr-stitch-vitals-skip"><input type="checkbox" checked={vitalsSkipConfirmed} onChange={(e) => { const checked = e.target.checked; setVitalsSkipConfirmed(checked); if (checked) { setVitalsErrors({}); setVitalsFormError('') } }}/><span>Bỏ qua sinh hiệu (không đo lần này)</span></label> : null}
+                {vitalsFormError ? <div className="dr-vitals-form-error" role="alert">{vitalsFormError}</div> : null}
                 <div className="dr-stitch-vitals">
-                  {VITAL_FIELD_UI.map(({ key, label, inputMode, placeholder }) => <label key={key}><span>{label}</span><input type="text" inputMode={inputMode || 'text'} placeholder={placeholder || VITAL_PLACEHOLDER} value={vitals[key]} onChange={(e) => setVitalField(key, e.target.value)} disabled={examLocked || !selectedAppt} /></label>)}
+                  {VITAL_FIELD_UI.map(({ key, label, inputMode, placeholder }) => { const err = vitalsSkipConfirmed ? '' : vitalsErrors[key]; return <label key={key}><span>{label}</span><input className={err ? 'dr-input--invalid' : ''} type="text" inputMode={inputMode || 'text'} placeholder={placeholder || VITAL_PLACEHOLDER} value={vitals[key]} onChange={(e) => setVitalField(key, e.target.value)} onBlur={() => blurVitalField(key)} disabled={examLocked || !selectedAppt || vitalsSkipConfirmed} />{err ? <small className="dr-field-error" role="alert">{err}</small> : null}</label> })}
                 </div>
                 <label className="dr-stitch-field dr-stitch-field--full"><span>Hướng điều trị</span><textarea rows={2} value={vitals.treatment} onChange={(e) => setVitals((state) => ({ ...state, treatment: e.target.value }))} disabled={examLocked || !selectedAppt} /></label>
               </details>
             </article>
 
+            {examSubTab === 'clinical' ? <article className="dr-stitch-card dr-stitch-clinical-card">
+              <header className="dr-stitch-clinical-head"><div className="dr-stitch-card-title"><span>✚</span> Chỉ định cận lâm sàng</div><button type="button" className="dr-btn dr-btn--ghost" onClick={() => setExamSubTab('info')}>Đóng</button></header>
+              {examSaveOk ? <div className="dr-clinical-message dr-clinical-message--ok" role="status">{examSaveOk}</div> : null}
+              {examSaveErr ? <div className="dr-clinical-message dr-clinical-message--error" role="alert">{examSaveErr}</div> : null}
+              {!examLocked ? <div className="dr-clinical-add"><select className="dr-input" defaultValue="" onChange={(e) => { addClinicalOrder(e.target.value); e.target.value = '' }}><option value="">+ Chọn xét nghiệm hoặc chẩn đoán hình ảnh</option>{clinicalServices.map((service) => <option key={service.id} value={service.id}>{service.category === 'LAB_TEST' ? 'Xét nghiệm' : 'Hình ảnh'} — {service.name}</option>)}</select></div> : null}
+              {clinicalOrders.length === 0 ? <div className="dr-placeholder">Chưa có chỉ định cận lâm sàng.</div> : <div className="dr-clinical-list">{clinicalOrders.map((order) => <section className="dr-clinical-card" key={order.id || order.serviceId}>
+                <header><div><strong>{order.serviceName}</strong><small>{order.category === 'IMAGING' ? 'Chẩn đoán hình ảnh' : 'Xét nghiệm'} · {order.status === 'COMPLETED' ? 'Đã có kết quả' : order.status === 'IN_PROGRESS' ? `Đang chờ · STT ${order.queueNumber || '—'}` : 'Đã chỉ định'}</small></div><div>{!examLocked && order.status === 'ORDERED' ? <button type="button" className="dr-clinical-remove" aria-label="Xóa chỉ định" onClick={() => setClinicalOrders((items) => items.filter((item) => item !== order))}>×</button> : null}</div></header>
+                <div className="dr-clinical-room"><label className="dr-stitch-field"><span>Phòng thực hiện</span><select value={order.assignedRoomId || ''} disabled={examLocked || order.status !== 'ORDERED' || clinicalRoomsForSelectedBranch.length === 0} onChange={(e) => setClinicalOrders((items) => items.map((item) => item === order ? { ...item, assignedRoomId: e.target.value } : item))}><option value="">{clinicalRoomsForSelectedBranch.length ? 'Chọn phòng cận lâm sàng' : 'Chi nhánh chưa cấu hình phòng'}</option>{clinicalRoomsForSelectedBranch.map((room) => <option key={room.id} value={room.id}>{room.code} · {room.name}</option>)}</select></label>{clinicalRoomsForSelectedBranch.length === 0 ? <p className="dr-clinical-room-warning">Chi nhánh của lịch khám chưa có phòng hoạt động.</p> : null}</div>
+                {order.result?.observations ? <div className="dr-table-wrap"><table className="dr-table"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Tham chiếu</th><th>Đánh giá</th></tr></thead><tbody>{order.result.observations.map((obs) => <tr key={obs.code}><td>{obs.name}</td><td><strong>{obs.value}</strong> {obs.unit}</td><td>{obs.referenceRange}</td><td className={obs.flag === 'HIGH' ? 'dr-result-high' : 'dr-result-normal'}>{obs.flag === 'HIGH' ? 'Cao' : 'Bình thường'}</td></tr>)}</tbody></table><p className="dr-result-conclusion">Kết luận: {order.result.conclusion}</p></div> : null}
+                {order.result?.imageUrl ? <div className="dr-pacs-result"><img src={order.result.imageUrl} alt="Ảnh X-quang ngực mô phỏng"/><div><p><b>StudyInstanceUID</b><br/><code>{order.result.studyInstanceUid}</code></p><label className="dr-stitch-field"><span>Kết luận hình ảnh</span><textarea rows={3} value={order.result.conclusion || ''} readOnly placeholder="Chưa có kết luận" /></label></div></div> : null}
+              </section>)}</div>}
+              {clinicalPass?.qrImageDataUrl ? <div className="dr-clinical-pass"><img src={clinicalPass.qrImageDataUrl} alt="QR phiếu chỉ định cận lâm sàng"/><div><strong>Phiếu chỉ định cận lâm sàng</strong><p>Đưa QR cho bệnh nhân mang đến phòng thực hiện để tiếp nhận và cấp số thứ tự.</p><button type="button" className="dr-btn dr-btn--ghost" onClick={() => window.print()}>In phiếu</button></div></div> : null}
+              {!examLocked ? <footer className="dr-stitch-clinical-actions"><p>Chọn phòng cho từng dịch vụ rồi lưu để phát hành QR.</p><button type="button" className="dr-btn dr-btn--primary" disabled={!selectedAppt || examSaving} onClick={() => void handleSaveMedicalVisit({ clinicalOnly: true })}>{examSaving ? 'Đang lưu…' : 'Lưu & tạo QR'}</button></footer> : null}
+            </article> : null}
+
             <article className="dr-stitch-card dr-stitch-rx-card">
               <header className="dr-stitch-rx-header"><div className="dr-stitch-card-title"><span>▤</span> Kê thuốc</div><button type="button" className="dr-stitch-voice" disabled>♩ Kê thuốc bằng giọng nói</button></header>
               <div className="dr-stitch-rx-table">
-                <div className="dr-stitch-rx-row dr-stitch-rx-head"><span>Tên thuốc</span><span>Liều lượng</span><span>Cách dùng</span><span /></div>
+                <div className="dr-stitch-rx-row dr-stitch-rx-head"><span>Tên thuốc</span><span>Số lượng (SL)</span><span>Cách dùng</span><span /></div>
                 {prescriptionLines.map((line, idx) => <div className="dr-stitch-rx-row" key={idx}>
                   <button type="button" className="dr-stitch-medicine-pick" onClick={() => openMedicinePicker(idx)} disabled={examLocked || !selectedAppt}>{line.medicineDisplayName || line.medicineName || 'Tìm và chọn thuốc...'}</button>
-                  <input value={line.dosageAmount} onChange={(e) => updateRxLine(idx, { dosageAmount: sanitizeDosageAmountInput(e.target.value) })} placeholder="1 viên/lần" disabled={examLocked || !selectedAppt} />
+                  <input type="text" inputMode="decimal" value={line.quantity} onChange={(e) => updateRxLine(idx, { quantity: sanitizeQuantityInput(e.target.value), quantityManual: true })} placeholder="Nhập số lượng" aria-label="Số lượng thuốc" disabled={examLocked || !selectedAppt} />
                   <select value={line.frequencyPerDay} onChange={(e) => updateRxLine(idx, { frequencyPerDay: e.target.value })} disabled={examLocked || !selectedAppt}><option value="">Chọn cách dùng</option>{RX_FREQUENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
                   <button type="button" className="dr-stitch-remove" onClick={() => removeRxLine(idx)} disabled={examLocked || prescriptionLines.length < 2}>×</button>
                 </div>)}
                 {!examLocked ? <button type="button" className="dr-stitch-add-rx" onClick={addRxLine} disabled={!selectedAppt}>＋ Thêm thuốc</button> : null}
               </div>
-              <footer className="dr-stitch-rx-footer"><button type="button" className="dr-btn dr-btn--ghost" onClick={() => void handleSaveMedicalVisit()} disabled={!selectedAppt || examLocked || examSaving}>Lưu nháp</button><button type="button" className="dr-btn dr-btn--solid" onClick={() => requestFinishAndPrint()} disabled={!selectedAppt || examLocked || examSaving}>▣ In đơn thuốc</button></footer>
+              <footer className="dr-stitch-rx-footer"><button type="button" className="dr-btn dr-btn--ghost" onClick={() => void handleSaveMedicalVisit({ draftOnly: true })} disabled={!selectedAppt || examLocked || examSaving}>Lưu nháp</button><button type="button" className="dr-btn dr-btn--solid" onClick={() => requestFinishExam()} disabled={!selectedAppt || examLocked || examSaving}>{examSaving ? 'Đang hoàn thành…' : '✓ Hoàn thành khám'}</button></footer>
             </article>
           </section>
         </div>
@@ -1679,6 +1850,7 @@ export default function DoctorHome() {
                 <div className="dr-subtabs" role="tablist">
                   {[
                     { id: 'info', label: 'Thông tin khám bệnh' },
+                    { id: 'clinical', label: 'Cận lâm sàng' },
                     { id: 'prescription', label: 'Kê đơn thuốc' },
                     { id: 'history', label: 'Lịch sử khám' },
                   ].map((t) => (
@@ -1713,7 +1885,7 @@ export default function DoctorHome() {
                           ? 'Lưu, in 02 bản và kết thúc khám'
                           : finishDisabledTitle || 'Chưa đủ điều kiện — bấm để xem chi tiết'
                       }
-                      onClick={() => requestFinishAndPrint()}
+                      onClick={() => requestFinishExam()}
                     >
                       {examSaving ? 'Đang xử lý…' : 'Kết thúc & In'}
                     </button>
@@ -1955,6 +2127,17 @@ export default function DoctorHome() {
                       <strong>Kết thúc &amp; In</strong> để lưu, in 02 bản và khóa hồ sơ.
                     </p>
                   ) : null}
+                </div>
+              ) : examSubTab === 'clinical' ? (
+                <div className="dr-section">
+                  <div className="dr-section-title">Chỉ định và kết quả LIS/PACS mô phỏng</div>
+                  {!examLocked ? <div className="dr-clinical-add"><select className="dr-input" defaultValue="" onChange={(e) => { addClinicalOrder(e.target.value); e.target.value = '' }}><option value="">+ Chọn dịch vụ để chỉ định</option>{clinicalServices.map((service) => <option key={service.id} value={service.id}>{service.category === 'LAB_TEST' ? 'Xét nghiệm' : 'Hình ảnh'} — {service.name}</option>)}</select></div> : null}
+                  {clinicalOrders.length === 0 ? <div className="dr-placeholder">Chưa có chỉ định cận lâm sàng.</div> : <div className="dr-clinical-list">{clinicalOrders.map((order) => <article className="dr-clinical-card" key={order.id || order.serviceId}>
+                    <header><div><strong>{order.serviceName}</strong><small>{order.category === 'IMAGING' ? 'PACS mô phỏng' : 'LIS mô phỏng'} · {order.status === 'COMPLETED' ? 'Đã có kết quả' : 'Đã chỉ định'}</small></div><div>{!examLocked && order.status !== 'COMPLETED' ? <><button type="button" className="dr-btn dr-btn--ghost" disabled={!order.id || clinicalBusy === order.id} onClick={() => void simulateClinicalResult(order)}>{clinicalBusy === order.id ? 'Đang tạo…' : 'Mô phỏng có kết quả'}</button><button type="button" className="dr-clinical-remove" onClick={() => setClinicalOrders((items) => items.filter((item) => item !== order))}>×</button></> : null}</div></header>
+                    {order.result?.observations ? <div className="dr-table-wrap"><table className="dr-table"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Tham chiếu</th><th>Đánh giá</th></tr></thead><tbody>{order.result.observations.map((obs) => <tr key={obs.code}><td>{obs.name}</td><td><strong>{obs.value}</strong> {obs.unit}</td><td>{obs.referenceRange}</td><td className={obs.flag === 'HIGH' ? 'dr-result-high' : 'dr-result-normal'}>{obs.flag === 'HIGH' ? 'Cao' : 'Bình thường'}</td></tr>)}</tbody></table><p className="dr-result-conclusion">Kết luận: {order.result.conclusion}</p></div> : null}
+                    {order.result?.imageUrl ? <div className="dr-pacs-result"><img src={order.result.imageUrl} alt="Ảnh X-quang ngực mô phỏng"/><div><p><b>StudyInstanceUID</b><br/><code>{order.result.studyInstanceUid}</code></p><label className="dr-field"><span className="dr-field-label">Kết luận hình ảnh</span><textarea className="dr-textarea" rows={3} placeholder="Nhập kết luận chẩn đoán hình ảnh…" value={order.result.conclusion || ''} readOnly /></label></div></div> : null}
+                  </article>)}</div>}
+                  {!examLocked ? <p className="dr-modal-hint">Lưu hồ sơ để tạo mã chỉ định, sau đó bấm “Mô phỏng có kết quả”. Dữ liệu chỉ dùng cho demo.</p> : null}
                 </div>
               ) : examSubTab === 'history' ? (
                 <div className="dr-section">
@@ -2316,7 +2499,7 @@ export default function DoctorHome() {
                 className="dr-btn dr-btn--solid"
                 onClick={() => {
                   setEmptyRxConfirmOpen(false)
-                  void handleFinishExam({ withPrint: true, skipEmptyRxConfirm: true })
+                  void handleFinishExam({ withPrint: false, skipEmptyRxConfirm: true })
                 }}
               >
                 Xác nhận (Không kê đơn)

@@ -30,6 +30,7 @@ apiClient.interceptors.response.use(
         await refreshPromise
         return apiClient(request)
       } catch (refreshError) {
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('auth-session-expired'))
         return Promise.reject(refreshError)
       }
     }

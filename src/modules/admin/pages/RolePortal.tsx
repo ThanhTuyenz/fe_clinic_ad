@@ -15,7 +15,7 @@ const ROLE_LABELS = { admin: 'Quản trị viên', branch_manager: 'Quản lý c
 const NAV = {
   admin: [['dashboard','Tổng quan','/dashboard'],['staff','Tài khoản & phân quyền','/staff'],['patients','Bệnh nhân','/reception'],['appointments','Lịch hẹn','/reception'],['booking-methods','Quản lý hình thức đặt khám','/booking-methods'],['booking-packages','Quản lý gói khám','/booking-packages'],['inventory','Kho thuốc','/inventory'],['billing','Thanh toán','/billing']],
   branch_manager: [['dashboard','Thống kê & Tổng quan','/dashboard'],['doctors','👥 Nhân sự phòng khám','/doctors'],['patients','   Bệnh nhân','/patients'],['roles','   Vai trò & Phân quyền','/roles-permissions'],['slots','📅 Lịch làm việc & Slot','/work-schedules'],['appointments','   Danh sách lịch hẹn','/appointments'],['branches','🏥 Chi nhánh phòng khám','/branches'],['specialties','   Chuyên khoa','/specialties'],['services','   Dịch vụ khám & xét nghiệm','/services'],['inventory','   Thuốc & Vật tư','/inventory']],
-  pharmacist: [['dashboard','Tổng quan','/dashboard'],['inventory','Kho thuốc','/inventory'],['schedule','Đơn thuốc','/schedule']],
+  pharmacist: [['pharmacy','Cấp thuốc','/pharmacy'],['inventory','Kho thuốc','/inventory']],
   cashier: [['dashboard','Tổng quan','/dashboard'],['billing','Thu tiền','/billing'],['schedule','Giao dịch','/schedule']],
 }
 

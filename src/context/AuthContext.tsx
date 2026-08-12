@@ -56,7 +56,15 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     verifySession().finally(() => setIsInitializing(false))
     window.addEventListener('staff-session-changed', syncRuntimeSession)
-    return () => window.removeEventListener('staff-session-changed', syncRuntimeSession)
+    const expireSession = () => {
+      clearStaffSession()
+      setSession({ token: null, user: null })
+    }
+    window.addEventListener('auth-session-expired', expireSession)
+    return () => {
+      window.removeEventListener('staff-session-changed', syncRuntimeSession)
+      window.removeEventListener('auth-session-expired', expireSession)
+    }
   }, [syncRuntimeSession, verifySession])
 
   const login = useCallback(({ user }) => {
