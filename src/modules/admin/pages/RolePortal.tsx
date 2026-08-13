@@ -13,20 +13,46 @@ import { staffRole } from '../utils/staffSession'
 
 const ROLE_LABELS = { admin: 'Quản trị viên', branch_manager: 'Quản lý chi nhánh', pharmacist: 'Dược sĩ', cashier: 'Thu ngân' }
 const NAV = {
-  admin: [['dashboard','Tổng quan','/dashboard'],['staff','Tài khoản & phân quyền','/staff'],['patients','Bệnh nhân','/reception'],['appointments','Lịch hẹn','/reception'],['booking-methods','Quản lý hình thức đặt khám','/booking-methods'],['booking-packages','Quản lý gói khám','/booking-packages'],['inventory','Kho thuốc','/inventory'],['billing','Thanh toán','/billing']],
-  branch_manager: [['dashboard','Thống kê & Tổng quan','/dashboard'],['doctors','👥 Nhân sự phòng khám','/doctors'],['patients','   Bệnh nhân','/patients'],['roles','   Vai trò & Phân quyền','/roles-permissions'],['slots','📅 Lịch làm việc & Slot','/work-schedules'],['appointments','   Danh sách lịch hẹn','/appointments'],['branches','🏥 Chi nhánh phòng khám','/branches'],['specialties','   Chuyên khoa','/specialties'],['services','   Dịch vụ khám & xét nghiệm','/services'],['inventory','   Thuốc & Vật tư','/inventory']],
-  pharmacist: [['pharmacy','Cấp thuốc','/pharmacy'],['inventory','Kho thuốc','/inventory']],
-  cashier: [['dashboard','Tổng quan','/dashboard'],['billing','Thu tiền','/billing'],['schedule','Giao dịch','/schedule']],
+  admin: [
+    ['dashboard', 'Tổng quan', '/dashboard'],
+    ['doctors', 'Nhân sự phòng khám', '/doctors'],
+    ['staff', 'Tài khoản & phân quyền', '/staff'],
+    ['patients', 'Bệnh nhân', '/patients'],
+    ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
+    ['slots', 'Lịch làm việc & Slot', '/work-schedules'],
+    ['appointments', 'Danh sách lịch hẹn', '/appointments'],
+    ['branches', 'Chi nhánh phòng khám', '/branches'],
+    ['specialties', 'Chuyên khoa', '/specialties'],
+    ['services', 'Dịch vụ & Xét nghiệm', '/services'],
+    ['booking-methods', 'Quản lý hình thức đặt khám', '/booking-methods'],
+    ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
+    ['inventory', 'Kho thuốc', '/inventory'],
+    ['billing', 'Thanh toán', '/billing'],
+  ],
+  branch_manager: [
+    ['dashboard', 'Thống kê & Tổng quan', '/dashboard'],
+    ['doctors', '👥 Nhân sự phòng khám', '/doctors'],
+    ['patients', '   Bệnh nhân', '/patients'],
+    ['roles', '   Vai trò & Phân quyền', '/roles-permissions'],
+    ['slots', '📅 Lịch làm việc & Slot', '/work-schedules'],
+    ['appointments', '   Danh sách lịch hẹn', '/appointments'],
+    ['branches', '🏥 Chi nhánh phòng khám', '/branches'],
+    ['specialties', '   Chuyên khoa', '/specialties'],
+    ['services', '   Dịch vụ khám & xét nghiệm', '/services'],
+    ['inventory', '   Thuốc & Vật tư', '/inventory'],
+  ],
+  pharmacist: [['pharmacy', 'Cấp thuốc', '/pharmacy'], ['inventory', 'Kho thuốc', '/inventory']],
+  cashier: [['dashboard', 'Tổng quan', '/dashboard'], ['billing', 'Thu tiền', '/billing'], ['schedule', 'Giao dịch', '/schedule']],
 }
 
 const PATHS = {
-  dashboard:'M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z',
-  staff:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-3h5m-2.5-2.5v5',
-  patients:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
-  appointments:'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z',
-  schedule:'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z',
-  inventory:'m4 7 8-4 8 4-8 4-8-4Zm0 0v10l8 4 8-4V7M12 11v10',
-  billing:'M4 5h16v14H4V5Zm0 4h16M8 15h3',
+  dashboard: 'M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z',
+  staff: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-3h5m-2.5-2.5v5',
+  patients: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
+  appointments: 'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z',
+  schedule: 'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z',
+  inventory: 'm4 7 8-4 8 4-8 4-8-4Zm0 0v10l8 4 8-4V7M12 11v10',
+  billing: 'M4 5h16v14H4V5Zm0 4h16M8 15h3',
 }
 
 function Icon({ name, className = 'h-[18px] w-[18px]' }) {
@@ -75,32 +101,47 @@ function ManagerDashboard({ stats, loading }) {
   return <><PageTitle eyebrow="Chi nhánh Quận 1" title="Tổng quan chi nhánh" subtitle="Hoạt động vận hành và lịch khám hôm nay"><button className="rounded-md border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600">09 tháng 08, 2026</button></PageTitle><div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Lịch hẹn hôm nay" value={loading?'—':t.total??0} detail="+8% so với hôm qua"/><Kpi label="Bác sĩ làm việc" value="12" detail="4 chuyên khoa" tone="blue" icon="staff"/><Kpi label="Đang chờ khám" value={loading?'—':t.checkedIn??0} detail="Thời gian chờ TB 12 phút" tone="amber" icon="patients"/><Kpi label="Hoàn thành" value={loading?'—':t.completed??0} detail="Tỷ lệ đúng giờ 92%" icon="appointments"/></div><div className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_.75fr]"><ActivityTable/><Card title="Phân bổ lịch khám"><div className="mx-auto grid h-36 w-36 place-items-center rounded-full" style={{background:'conic-gradient(#047857 0 46%, #60a5fa 46% 73%, #f59e0b 73% 90%, #e2e8f0 90%)'}}><div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center"><div><b className="text-2xl text-slate-900">{t.total??0}</b><p className="text-[10px] text-slate-400">lịch hẹn</p></div></div></div><div className="mt-5 grid grid-cols-2 gap-2 text-[11px] text-slate-500"><span>● Nội tổng quát</span><span className="text-blue-600">● Tim mạch</span><span className="text-amber-500">● Da liễu</span><span className="text-slate-400">● Khác</span></div></Card></div></>
 }
 
-function StaffPage() {
- const users=[['Nguyễn Hoàng Long','long.nguyen@medilink.vn','Quản trị viên','Trụ sở chính','Hoạt động'],['Trần Minh Khoa','khoa.tran@medilink.vn','Quản lý chi nhánh','Quận 1','Hoạt động'],['Lê Thị Ngọc','ngoc.le@medilink.vn','Lễ tân','Quận 1','Hoạt động'],['Phạm Tuấn Anh','tuan.pham@medilink.vn','Bác sĩ','Quận 3','Tạm khóa']]
- return <><PageTitle eyebrow="Quản trị hệ thống" title="Tài khoản & Phân quyền" subtitle="Quản lý tài khoản nhân viên và phạm vi truy cập hệ thống."><button className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">+ Thêm tài khoản</button></PageTitle><section className="mt-5 rounded-lg border border-slate-200 bg-white"><div className="flex flex-wrap gap-3 border-b border-slate-100 p-4"><div className="relative min-w-64 flex-1"><span className="absolute left-3 top-2.5 text-slate-400">⌕</span><input className="w-full rounded-md border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-emerald-600" placeholder="Tìm theo tên, email..."/></div><select className="rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600"><option>Tất cả vai trò</option></select><select className="rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600"><option>Tất cả chi nhánh</option></select></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-[#f8faf9] text-[10px] uppercase tracking-wider text-slate-500"><tr>{['Nhân viên','Vai trò','Chi nhánh','Trạng thái',''].map(x=><th key={x} className="px-5 py-3">{x}</th>)}</tr></thead><tbody>{users.map((u,i)=><tr key={u[1]} className="border-t border-slate-100"><td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-50 text-[10px] font-bold text-emerald-700">{u[0].split(' ').slice(-2).map(x=>x[0]).join('')}</span><div><p className="font-semibold text-slate-900">{u[0]}</p><p className="text-xs text-slate-400">{u[1]}</p></div></div></td><td className="px-5 py-3 text-slate-600">{u[2]}</td><td className="px-5 py-3 text-slate-600">{u[3]}</td><td className="px-5 py-3"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${i===3?'bg-slate-100 text-slate-500':'bg-emerald-50 text-emerald-700'}`}>{u[4]}</span></td><td className="px-5 py-3 text-right text-lg text-slate-400">•••</td></tr>)}</tbody></table></div><footer className="flex justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-400"><span>Hiển thị 4 tài khoản</span><span>‹ &nbsp; 1 &nbsp; ›</span></footer></section></>
-}
-
 function SchedulePage() {
  const days=['Thứ 2\n10/08','Thứ 3\n11/08','Thứ 4\n12/08','Thứ 5\n13/08','Thứ 6\n14/08','Thứ 7\n15/08']; const shifts=[['BS. Nguyễn Văn An','Nội tổng quát'],['BS. Trần Thu Hà','Tim mạch'],['BS. Lê Minh Đức','Da liễu']]
  return <><PageTitle eyebrow="Quản lý nhân sự" title="Lịch bác sĩ" subtitle="Theo dõi và điều phối ca làm việc tại chi nhánh."><button className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">+ Xếp lịch</button></PageTitle><div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="flex items-center gap-2"><button className="rounded border border-slate-200 px-2.5 py-1.5">‹</button><b className="px-2 text-sm">10 – 15 tháng 08, 2026</b><button className="rounded border border-slate-200 px-2.5 py-1.5">›</button></div><div className="flex gap-2"><select className="rounded border border-slate-200 px-3 py-2 text-xs"><option>Tất cả chuyên khoa</option></select><button className="rounded bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">Tuần</button></div></div><section className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white"><div className="grid min-w-[900px] grid-cols-[180px_repeat(6,1fr)]"><div className="border-b border-r border-slate-100 p-3 text-xs font-bold text-slate-400">BÁC SĨ</div>{days.map(d=><div key={d} className="whitespace-pre-line border-b border-r border-slate-100 p-3 text-center text-xs font-semibold text-slate-600">{d}</div>)}{shifts.flatMap((s,r)=>[<div key={`${r}-d`} className="border-b border-r border-slate-100 p-4"><b className="text-xs text-slate-800">{s[0]}</b><p className="mt-1 text-[10px] text-slate-400">{s[1]}</p></div>,...days.map((_,c)=><div key={`${r}-${c}`} className="min-h-24 border-b border-r border-slate-100 p-2">{!(r===1&&c===3)&&<div className={`rounded-md border-l-2 p-2 text-[10px] ${c%3===1?'border-blue-500 bg-blue-50 text-blue-700':'border-emerald-500 bg-emerald-50 text-emerald-700'}`}><b>{c%2?'13:00 – 17:00':'08:00 – 12:00'}</b><p className="mt-1 opacity-70">Phòng {r+1}0{c%3+1}</p></div>}</div>)])}</div></section></>
 }
 
-function GenericPage({ section, role }) { const title={inventory:'Danh mục Thuốc & Vật tư',billing:'Thanh toán & Đối soát',doctors:'Nhân sự phòng khám',pharmacists:'Quản lý dược sĩ',patients:'Quản lý bệnh nhân',roles:'Vai trò & Phân quyền',appointments:'Danh sách lịch hẹn',branches:'Chi nhánh phòng khám',specialties:'Quản lý chuyên khoa',services:'Dịch vụ khám & xét nghiệm',slots:'Lịch làm việc & Slot'}[section]||ROLE_LABELS[role]; return <><PageTitle eyebrow={ROLE_LABELS[role]} title={title} subtitle="Dữ liệu nghiệp vụ được cập nhật theo thời gian thực."/><div className="mt-5 grid gap-4 sm:grid-cols-3"><Kpi label="Chờ xử lý" value="0" detail="Trong hôm nay" tone="amber"/><Kpi label="Đã hoàn thành" value="0" detail="Trong hôm nay"/><Kpi label="Cần kiểm tra" value="0" detail="Không có cảnh báo" tone="blue"/></div><div className="mt-5"><ActivityTable title="Danh sách gần đây"/></div></> }
+function GenericPage({ section, role }) { const title={inventory:'Danh mục Thuốc & Vật tư',billing:'Thanh toán & Đối soát',doctors:'Nhân sự phòng khám',pharmacists:'Quản lý dược sĩ',patients:'Quản lý bệnh nhân',roles:'Vai trò & Phân quyền',appointments:'Danh sách lịch hẹn',branches:'Chi nhánh phòng khám',specialties:'Quản lý chuyên khoa',services:'Dịch vụ khám & xét nghiệm',slots:'Lịch làm việc & Slot'}[section]||ROLE_LABELS[role]; return <><PageTitle eyebrow={ROLE_LABELS[role]||'Hệ thống'} title={title} subtitle="Dữ liệu nghiệp vụ được cập nhật theo thời gian thực."/><div className="mt-5 grid gap-4 sm:grid-cols-3"><Kpi label="Chờ xử lý" value="0" detail="Trong hôm nay" tone="amber"/><Kpi label="Đã hoàn thành" value="0" detail="Trong hôm nay"/><Kpi label="Cần kiểm tra" value="0" detail="Không có cảnh báo" tone="blue"/></div><div className="mt-5"><ActivityTable title="Danh sách gần đây"/></div></> }
+
+const ADMIN_GROUPS = [
+  { id: 'users', label: 'Quản lý người dùng', icon: 'staff', children: [
+    ['doctors', 'Nhân sự phòng khám', '/doctors'], ['staff', 'Tài khoản & Phân quyền', '/staff'], ['patients', 'Bệnh nhân', '/patients'], ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
+  ]},
+  { id: 'work-schedules', label: 'Quản lý lịch làm việc', icon: 'appointments', children: [
+    ['slots', 'Lịch làm việc & Slot', '/work-schedules'],
+  ]},
+  { id: 'appointments-group', label: 'Quản lý lịch khám', icon: 'receptionist', children: [
+    ['appointments', 'Danh sách lịch hẹn', '/appointments'],
+  ]},
+  { id: 'system', label: 'Quản lý hệ thống', icon: 'inventory', children: [
+    ['branches', 'Chi nhánh phòng khám', '/branches'], ['specialties', 'Chuyên khoa', '/specialties'], ['services', 'Dịch vụ khám & xét nghiệm', '/services'], ['booking-methods', 'Hình thức đặt khám', '/booking-methods'], ['booking-packages', 'Gói khám sức khỏe', '/booking-packages'], ['inventory', 'Thuốc & Vật tư', '/inventory'], ['billing', 'Thanh toán & Hóa đơn', '/billing'],
+  ]},
+]
 
 const MANAGER_GROUPS = [
   { id: 'users', label: 'Quản lý người dùng', icon: 'staff', children: [
     ['doctors', 'Nhân sự phòng khám', '/doctors'], ['patients', 'Bệnh nhân', '/patients'], ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
   ]},
-  { id: 'calendar', label: 'Quản lý lịch khám', icon: 'appointments', children: [
-    ['slots', 'Lịch làm việc & Slot', '/work-schedules'], ['appointments', 'Danh sách lịch hẹn', '/appointments'],
+  { id: 'work-schedules', label: 'Quản lý lịch làm việc', icon: 'appointments', children: [
+    ['slots', 'Lịch làm việc & Slot', '/work-schedules'],
+  ]},
+  { id: 'appointments-group', label: 'Quản lý lịch khám', icon: 'receptionist', children: [
+    ['appointments', 'Danh sách lịch hẹn', '/appointments'],
   ]},
   { id: 'system', label: 'Quản lý hệ thống', icon: 'inventory', children: [
-    ['branches', 'Chi nhánh phòng khám', '/branches'], ['specialties', 'Chuyên khoa', '/specialties'], ['booking-methods', 'Quản lý hình thức đặt khám', '/booking-methods'], ['booking-packages', 'Quản lý gói khám', '/booking-packages'], ['services', 'Cận lâm sàng & xét nghiệm', '/services'], ['inventory', 'Thuốc & Vật tư', '/inventory'],
+    ['branches', 'Chi nhánh phòng khám', '/branches'], ['specialties', 'Chuyên khoa', '/specialties'], ['booking-methods', 'Hình thức đặt khám', '/booking-methods'], ['booking-packages', 'Gói khám sức khỏe', '/booking-packages'], ['services', 'Cận lâm sàng & xét nghiệm', '/services'], ['inventory', 'Thuốc & Vật tư', '/inventory'],
   ]},
 ]
 
-function BranchManagerPortal({ section, user, content, menu, setMenu, navigate, logout }) {
-  const initialOpen = Object.fromEntries(MANAGER_GROUPS.map((group) => [group.id, group.children.some(([id]) => id === section)]))
+function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, logout }) {
+  const groups = role === 'admin' ? ADMIN_GROUPS : MANAGER_GROUPS
+  const roleTitle = ROLE_LABELS[role] || 'Quản trị viên'
+  const initialOpen = Object.fromEntries(groups.map((group) => [group.id, group.children.some(([id]) => id === section)]))
   const [openGroups, setOpenGroups] = useState(initialOpen)
   const go = (href) => { navigate(href); setMenu(false) }
   return <div className="min-h-screen bg-[#f5f8f5] text-slate-800">
@@ -109,18 +150,34 @@ function BranchManagerPortal({ section, user, content, menu, setMenu, navigate, 
       <nav className="flex-1 overflow-y-auto p-3">
         <p className="px-3 pb-2 pt-2 text-[9px] font-bold uppercase tracking-[.16em] text-slate-400">Không gian làm việc</p>
         <button onClick={()=>go('/dashboard')} className={`mb-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] ${section==='dashboard'?'bg-emerald-50 font-bold text-emerald-800':'font-medium text-slate-600 hover:bg-slate-50'}`}><Icon name="dashboard"/>Thống kê & Tổng quan</button>
-        {MANAGER_GROUPS.map((group) => {
+        {groups.map((group) => {
+          if (group.children?.length === 1) {
+            const [id, _, href] = group.children[0]
+            const active = section === id || section === group.id
+            return (
+              <button
+                key={group.id}
+                onClick={() => go(href)}
+                className={`mb-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] transition ${
+                  active ? 'bg-emerald-50 font-bold text-emerald-800' : 'font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <Icon name={group.icon} />
+                <span>{group.label}</span>
+              </button>
+            )
+          }
           const active = group.children.some(([id]) => id === section)
           const open = openGroups[group.id]
           return <div key={group.id} className="mb-1">
             <button onClick={()=>setOpenGroups((old)=>({...old,[group.id]:!old[group.id]}))} className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] ${active?'font-bold text-emerald-800':'font-semibold text-slate-600 hover:bg-slate-50'}`}><Icon name={group.icon}/><span className="flex-1">{group.label}</span><span className={`text-[10px] transition-transform ${open?'rotate-180':''}`}>⌄</span></button>
-            {open&&<div className="ml-5 border-l border-slate-200 pl-2">{group.children.map(([id,label,href])=><button key={id} onClick={()=>go(href)} className={`mt-0.5 block w-full rounded-md px-3 py-2 text-left text-xs ${section===id?'bg-emerald-50 font-bold text-emerald-800':'font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}>{label}</button>)}</div>}
+            {open&&<div className="ml-5 border-l border-slate-200 pl-2">{group.children.map(([id,label,href])=><button key={id} onClick={()=>go(href)} className={`mt-0.5 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs ${section===id?'bg-emerald-50 font-bold text-emerald-800':'font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><span className={`h-1.5 w-1.5 rounded-full ${section===id?'bg-emerald-600':'bg-slate-300'}`}/>{label}</button>)}</div>}
           </div>
         })}
       </nav>
-      <div className="border-t border-slate-100 p-3"><div className="mb-2 flex items-center gap-3 rounded-md bg-slate-50 p-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-700 text-[10px] font-bold text-white">{initials(user)}</span><div className="min-w-0"><p className="truncate text-xs font-bold">{user?.fullName||user?.email}</p><p className="text-[10px] text-slate-400">Quản lý chi nhánh</p></div></div><button onClick={logout} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-600">Đăng xuất</button></div>
+      <div className="border-t border-slate-100 p-3"><div className="mb-2 flex items-center gap-3 rounded-md bg-slate-50 p-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-700 text-[10px] font-bold text-white">{initials(user)}</span><div className="min-w-0"><p className="truncate text-xs font-bold">{user?.fullName||user?.email}</p><p className="text-[10px] text-slate-400">{roleTitle}</p></div></div><button onClick={logout} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-600">Đăng xuất</button></div>
     </aside>
-    {menu&&<button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-slate-900/20 lg:hidden" onClick={()=>setMenu(false)}/>}<div className="lg:pl-[264px]"><header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200 bg-white px-4 lg:px-7"><button onClick={()=>setMenu(true)} className="rounded border border-slate-200 px-2.5 py-1.5 lg:hidden">☰</button><div className="ml-auto flex items-center gap-3"><div className="hidden text-right sm:block"><b className="text-xs">Chi nhánh chính</b><p className="text-[10px] text-slate-400">TP. Hồ Chí Minh</p></div><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-800">{initials(user)}</span></div></header><main className="mx-auto max-w-[1440px] p-4 sm:p-6 lg:p-7">{content}</main></div>
+    {menu&&<button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-slate-900/20 lg:hidden" onClick={()=>setMenu(false)}/>}<div className="lg:pl-[264px]"><header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200 bg-white px-4 lg:px-7"><button onClick={()=>setMenu(true)} className="rounded border border-slate-200 px-2.5 py-1.5 lg:hidden">☰</button><div className="ml-auto flex items-center gap-3"><div className="hidden text-right sm:block"><b className="text-xs">{role === 'admin' ? 'Hệ thống Trung tâm' : 'Chi nhánh chính'}</b><p className="text-[10px] text-slate-400">TP. Hồ Chí Minh</p></div><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-800">{initials(user)}</span></div></header><main className="mx-auto max-w-[1440px] p-4 sm:p-6 lg:p-7">{content}</main></div>
   </div>
 }
 
@@ -128,7 +185,8 @@ export default function RolePortal({ section='dashboard' }) {
  const navigate=useNavigate(); const { token, user, logout: clearAuthSession }=useAuth(); const session={ user }; const role=staffRole(user)||'admin'; const [stats,setStats]=useState(null); const [loading,setLoading]=useState(true); const [menu,setMenu]=useState(false)
  useEffect(()=>{if(!token)return; fetchDashboardStats({token}).then(setStats).catch(()=>setStats(null)).finally(()=>setLoading(false))},[token])
  const logout=async()=>{await clearAuthSession();navigate('/login',{replace:true})}; const nav=NAV[role]||NAV.admin
- let content=section==='booking-methods'?<BookingMethodsPage/>:section==='booking-packages'?<BookingPackagesPage/>:['branches','specialties','service-packages','services','inventory'].includes(section)&&['admin','branch_manager'].includes(role)?<SystemCatalogCrudPage resource={section==='inventory'?'medicines':section}/>:section==='doctors'?(role==='branch_manager'?<ClinicStaffPage/>:<StaffCrudPage role="doctor"/>):section==='pharmacists'?<StaffCrudPage role="pharmacist"/>:section==='staff'?<StaffPage/>:section==='schedule'&&role==='branch_manager'?<SchedulePage/>:section==='dashboard'?(role==='branch_manager'?<ManagerDashboard stats={stats} loading={loading}/>:<AdminDashboard stats={stats} loading={loading}/>):<GenericPage section={section} role={role}/>
- if(role==='branch_manager') return <BranchManagerPortal section={section} user={user} content={content} menu={menu} setMenu={setMenu} navigate={navigate} logout={logout}/>
+ let content=section==='booking-methods'?<BookingMethodsPage/>:section==='booking-packages'?<BookingPackagesPage/>:['branches','specialties','service-packages','services','inventory'].includes(section)&&['admin','branch_manager'].includes(role)?<SystemCatalogCrudPage resource={section==='inventory'?'medicines':section}/>:['doctors','staff'].includes(section)?(['admin','branch_manager'].includes(role)?<ClinicStaffPage/>:<StaffCrudPage role="doctor"/>):section==='pharmacists'?<StaffCrudPage role="pharmacist"/>:['schedule','slots'].includes(section)&&['admin','branch_manager'].includes(role)?<SchedulePage/>:section==='dashboard'?(role==='branch_manager'?<ManagerDashboard stats={stats} loading={loading}/>:<AdminDashboard stats={stats} loading={loading}/>):<GenericPage section={section} role={role}/>
+ if(['admin','branch_manager'].includes(role)) return <GroupedPortal section={section} user={user} role={role} content={content} menu={menu} setMenu={setMenu} navigate={navigate} logout={logout}/>
  return <div className="min-h-screen bg-[#f5f8f5] font-sans text-slate-800"><aside className={`fixed inset-y-0 left-0 z-30 flex w-[244px] flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 ${menu?'translate-x-0':'-translate-x-full'}`}><div className="flex h-[70px] items-center gap-3 border-b border-slate-100 px-5"><span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-700 text-lg font-black text-white">M</span><div><p className="text-sm font-extrabold tracking-tight text-emerald-800">MediLink Global</p><p className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">Healthcare System</p></div></div><nav className="flex-1 space-y-1 overflow-y-auto p-3"><p className="px-3 pb-2 pt-2 text-[9px] font-bold uppercase tracking-[.16em] text-slate-400">Không gian làm việc</p>{nav.map(([id,label,href])=><button key={id} onClick={()=>{navigate(href);setMenu(false)}} className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] transition ${section===id?'bg-emerald-50 font-bold text-emerald-800':'font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><Icon name={id}/>{label}</button>)}</nav><div className="border-t border-slate-100 p-3"><div className="mb-2 flex items-center gap-3 rounded-md bg-slate-50 p-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-700 text-[10px] font-bold text-white">{initials(session.user)}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-800">{session.user?.fullName||session.user?.email||'Nhân viên'}</p><p className="truncate text-[10px] text-slate-400">{ROLE_LABELS[role]}</p></div></div><button onClick={logout} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-600">Đăng xuất</button></div></aside>{menu&&<button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-slate-900/20 lg:hidden" onClick={()=>setMenu(false)}/>}<div className="lg:pl-[244px]"><header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-7"><div className="flex items-center gap-3"><button onClick={()=>setMenu(true)} className="rounded border border-slate-200 px-2.5 py-1.5 lg:hidden">☰</button><div className="relative hidden md:block"><span className="absolute left-3 top-2 text-slate-400">⌕</span><input className="w-72 rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs outline-none focus:border-emerald-500" placeholder="Tìm kiếm nhanh..."/></div></div><div className="flex items-center gap-4"><button className="relative text-lg text-slate-500">♧<i className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-rose-500"/></button><div className="hidden border-l border-slate-200 pl-4 text-right sm:block"><p className="text-xs font-bold text-slate-700">Chi nhánh chính</p><p className="text-[10px] text-slate-400">TP. Hồ Chí Minh</p></div><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-800">{initials(session.user)}</span></div></header><main className="mx-auto max-w-[1440px] p-4 sm:p-6 lg:p-7">{content}</main></div></div>
 }
+
