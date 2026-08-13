@@ -9,6 +9,8 @@ import ClinicStaffPage from './ClinicStaffPage'
 import SystemCatalogCrudPage from './SystemCatalogCrudPage'
 import BookingMethodsPage from './BookingMethodsPage'
 import BookingPackagesPage from './BookingPackagesPage'
+import DoctorWorkSchedulesPage from './DoctorWorkSchedulesPage'
+import BillingPage from './BillingPage'
 import { staffRole } from '../utils/staffSession'
 
 const ROLE_LABELS = { admin: 'Quản trị viên', branch_manager: 'Quản lý chi nhánh', pharmacist: 'Dược sĩ', cashier: 'Thu ngân' }
@@ -72,28 +74,144 @@ function Kpi({ label, value, detail, tone = 'emerald', icon = 'appointments' }) 
   </article>
 }
 
-function AdminDashboard({ stats, loading }) {
+function AdminDashboard({ stats, loading }: any) {
   const today = stats?.today || stats?.data?.today || {}
-  const values = [today.total ?? stats?.totalAppointments ?? 0, today.checkedIn ?? 0, today.completed ?? 0, today.pending ?? 0]
-  return <>
-    <PageTitle eyebrow="Tổng quan hệ thống" title="Xin chào, Quản trị viên" subtitle="Theo dõi hoạt động toàn hệ thống trong hôm nay." />
-    <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Kpi label="Tổng lịch hẹn" value={loading?'—':values[0]} detail="Tất cả chi nhánh"/><Kpi label="Đã check-in" value={loading?'—':values[1]} detail="Bệnh nhân đang phục vụ" tone="blue" icon="patients"/><Kpi label="Đã hoàn thành" value={loading?'—':values[2]} detail="Cập nhật theo thời gian thực" icon="staff"/><Kpi label="Cần xử lý" value={loading?'—':values[3]} detail="Lịch đang chờ xác nhận" tone="rose" icon="billing"/>
-    </div>
-    <div className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_.75fr]">
-      <Card title="Lưu lượng khám toàn hệ thống" action="7 ngày gần nhất"><div className="flex h-52 items-end gap-3 px-2 pt-8">{[42,58,47,72,61,84,70].map((v,i)=><div key={i} className="flex flex-1 flex-col items-center gap-2"><div className="relative h-36 w-full rounded-t bg-emerald-50"><div className="absolute inset-x-0 bottom-0 rounded-t bg-emerald-600" style={{height:`${v}%`}}/></div><span className="text-[10px] text-slate-400">T{i+2}</span></div>)}</div></Card>
-      <Card title="Tình trạng hệ thống"><div className="space-y-4 py-1">{[['Máy chủ API','Hoạt động'],['Cơ sở dữ liệu','Ổn định'],['Cổng thanh toán','Kết nối'],['Dịch vụ thông báo','Hoạt động']].map(([a,b])=><div key={a} className="flex items-center justify-between border-b border-slate-100 pb-3 text-sm"><span className="text-slate-600">{a}</span><span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><i className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>{b}</span></div>)}</div></Card>
-    </div>
-    <div className="mt-5"><ActivityTable title="Hoạt động gần đây" /></div>
-  </>
+  const checkedInCount = today.confirmed ?? ((today.checkedIn || 0) + (today.inExamination || 0))
+  const values = [
+    today.total ?? stats?.totalAppointments ?? 0,
+    checkedInCount,
+    today.examined ?? today.completed ?? 0,
+    today.pending ?? 0,
+  ]
+  const todayRows = stats?.todayRows || stats?.data?.todayRows || []
+
+  return (
+    <>
+      <PageTitle eyebrow="Tổng quan hệ thống" title="Xin chào, Quản trị viên" subtitle="Theo dõi hoạt động toàn hệ thống trong hôm nay." />
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi label="Tổng lịch hẹn" value={loading ? '—' : values[0]} detail="Tất cả chi nhánh" />
+        <Kpi label="Đã check-in" value={loading ? '—' : values[1]} detail="Bệnh nhân đang phục vụ" tone="blue" icon="patients" />
+        <Kpi label="Đã hoàn thành" value={loading ? '—' : values[2]} detail="Cập nhật theo thời gian thực" icon="staff" />
+        <Kpi label="Cần xử lý" value={loading ? '—' : values[3]} detail="Lịch đang chờ xác nhận" tone="rose" icon="billing" />
+      </div>
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_.75fr]">
+        <Card title="Lưu lượng khám toàn hệ thống" action="7 ngày gần nhất">
+          <div className="flex h-52 items-end gap-3 px-2 pt-8">
+            {[42, 58, 47, 72, 61, 84, 70].map((v, i) => (
+              <div key={i} className="flex flex-1 flex-col items-center gap-2">
+                <div className="relative h-36 w-full rounded-t bg-emerald-50">
+                  <div className="absolute inset-x-0 bottom-0 rounded-t bg-emerald-600" style={{ height: `${v}%` }} />
+                </div>
+                <span className="text-[10px] text-slate-400">T{i + 2}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card title="Tình trạng hệ thống">
+          <div className="space-y-4 py-1">
+            {[
+              ['Máy chủ API', 'Hoạt động'],
+              ['Cơ sở dữ liệu', 'Ổn định'],
+              ['Cổng thanh toán', 'Kết nối'],
+              ['Dịch vụ thông báo', 'Hoạt động'],
+            ].map(([a, b]) => (
+              <div key={a} className="flex items-center justify-between border-b border-slate-100 pb-3 text-sm">
+                <span className="text-slate-600">{a}</span>
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                  <i className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  {b}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+      <div className="mt-5">
+        <ActivityTable title="Hoạt động gần đây" items={todayRows} />
+      </div>
+    </>
+  )
 }
 
-function PageTitle({ eyebrow, title, subtitle, children }) { return <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-[11px] font-bold uppercase tracking-[.13em] text-emerald-700">{eyebrow}</p><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">{title}</h1><p className="mt-1 text-sm text-slate-500">{subtitle}</p></div>{children}</div> }
-function Card({ title, action, children }) { return <section className="rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,.03)]"><header className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5"><h2 className="text-sm font-bold text-slate-900">{title}</h2>{action&&<span className="text-xs text-slate-400">{action}</span>}</header><div className="p-5">{children}</div></section> }
+function PageTitle({ eyebrow, title, subtitle, children }: any) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-[.13em] text-emerald-700">{eyebrow}</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">{title}</h1>
+        <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+      </div>
+      {children}
+    </div>
+  )
+}
 
-function ActivityTable({ title = 'Lịch hẹn hôm nay' }) {
-  const rows=[['08:30','Nguyễn Minh Anh','Khám Nội tổng quát','Đã check-in'],['09:15','Trần Hoàng Nam','Khám Tim mạch','Đang chờ'],['10:00','Lê Thu Hà','Tái khám','Đã xác nhận'],['10:30','Phạm Quốc Bảo','Khám Da liễu','Chờ xác nhận']]
-  return <Card title={title} action="Xem tất cả →"><div className="-m-5 overflow-x-auto"><table className="w-full min-w-[650px] text-left text-sm"><thead className="bg-[#f8faf9] text-[10px] font-bold uppercase tracking-wider text-slate-500"><tr>{['Thời gian','Bệnh nhân','Dịch vụ','Trạng thái'].map(x=><th key={x} className="px-5 py-3">{x}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100"><td className="px-5 py-3 font-semibold text-slate-700">{r[0]}</td><td className="px-5 py-3 font-medium text-slate-900">{r[1]}</td><td className="px-5 py-3 text-slate-500">{r[2]}</td><td className="px-5 py-3"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${i===0?'bg-emerald-50 text-emerald-700':i===3?'bg-amber-50 text-amber-700':'bg-blue-50 text-blue-700'}`}>{r[3]}</span></td></tr>)}</tbody></table></div></Card>
+function Card({ title, action, children }: any) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,.03)]">
+      <header className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+        <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+        {action && <span className="text-xs text-slate-400">{action}</span>}
+      </header>
+      <div className="p-5">{children}</div>
+    </section>
+  )
+}
+
+function ActivityTable({ title = 'Lịch hẹn hôm nay', items = [] }: { title?: string; items?: any[] }) {
+  const rows = items.length
+    ? items.map((it: any) => [
+        it.startTime || '08:00',
+        it.patientProfile?.fullName || 'Bệnh nhân',
+        it.doctor?.fullName ? `BS. ${it.doctor.fullName}` : 'Khám tổng quát',
+        it.status === 'CHECKED_IN' ? 'Đã check-in' : it.status === 'COMPLETED' ? 'Đã khám' : 'Chờ xử lý',
+      ])
+    : [
+        ['08:30', 'Nguyễn Minh Anh', 'Khám Nội tổng quát', 'Đã check-in'],
+        ['09:15', 'Trần Hoàng Nam', 'Khám Tim mạch', 'Đang chờ'],
+        ['10:00', 'Lê Thu Hà', 'Tái khám', 'Đã xác nhận'],
+        ['10:30', 'Phạm Quốc Bảo', 'Khám Da liễu', 'Chờ xác nhận'],
+      ]
+
+  return (
+    <Card title={title} action="Xem tất cả →">
+      <div className="-m-5 overflow-x-auto">
+        <table className="w-full min-w-[650px] text-left text-sm">
+          <thead className="bg-[#f8faf9] text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <tr>
+              {['Thời gian', 'Bệnh nhân', 'Dịch vụ / Bác sĩ', 'Trạng thái'].map((x) => (
+                <th key={x} className="px-5 py-3">
+                  {x}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r: any, i: number) => (
+              <tr key={i} className="border-t border-slate-100">
+                <td className="px-5 py-3 font-semibold text-slate-700">{r[0]}</td>
+                <td className="px-5 py-3 font-medium text-slate-900">{r[1]}</td>
+                <td className="px-5 py-3 text-slate-500">{r[2]}</td>
+                <td className="px-5 py-3">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                      r[3] === 'Đã check-in'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : r[3] === 'Chờ xử lý'
+                        ? 'bg-amber-50 text-amber-700'
+                        : 'bg-blue-50 text-blue-700'
+                    }`}
+                  >
+                    {r[3]}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
 }
 
 function ManagerDashboard({ stats, loading }) {
@@ -118,7 +236,7 @@ const ADMIN_GROUPS = [
   { id: 'appointments-group', label: 'Quản lý lịch khám', icon: 'receptionist', children: [
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
   ]},
-  { id: 'system', label: 'Quản lý hệ thống', icon: 'inventory', children: [
+  { id: 'system', label: 'Quản lý danh mục & Cơ sở', icon: 'inventory', children: [
     ['branches', 'Chi nhánh phòng khám', '/branches'], ['specialties', 'Chuyên khoa', '/specialties'], ['services', 'Dịch vụ khám & xét nghiệm', '/services'], ['booking-methods', 'Hình thức đặt khám', '/booking-methods'], ['booking-packages', 'Gói khám sức khỏe', '/booking-packages'], ['inventory', 'Thuốc & Vật tư', '/inventory'], ['billing', 'Thanh toán & Hóa đơn', '/billing'],
   ]},
 ]
@@ -133,7 +251,7 @@ const MANAGER_GROUPS = [
   { id: 'appointments-group', label: 'Quản lý lịch khám', icon: 'receptionist', children: [
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
   ]},
-  { id: 'system', label: 'Quản lý hệ thống', icon: 'inventory', children: [
+  { id: 'system', label: 'Quản lý danh mục & Cơ sở', icon: 'inventory', children: [
     ['branches', 'Chi nhánh phòng khám', '/branches'], ['specialties', 'Chuyên khoa', '/specialties'], ['booking-methods', 'Hình thức đặt khám', '/booking-methods'], ['booking-packages', 'Gói khám sức khỏe', '/booking-packages'], ['services', 'Cận lâm sàng & xét nghiệm', '/services'], ['inventory', 'Thuốc & Vật tư', '/inventory'],
   ]},
 ]
@@ -147,7 +265,7 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
   return <div className="min-h-screen bg-[#f5f8f5] text-slate-800">
     <aside className={`fixed inset-y-0 left-0 z-30 flex w-[264px] flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 ${menu?'translate-x-0':'-translate-x-full'}`}>
       <div className="flex h-[70px] items-center gap-3 border-b border-slate-100 px-5"><span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-700 font-black text-white">M</span><div><b className="text-sm text-emerald-800">MediLink Global</b><p className="text-[9px] uppercase tracking-[.14em] text-slate-400">Healthcare System</p></div></div>
-      <nav className="flex-1 overflow-y-auto p-3">
+      <nav className="flex-1 overflow-y-auto p-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <p className="px-3 pb-2 pt-2 text-[9px] font-bold uppercase tracking-[.16em] text-slate-400">Không gian làm việc</p>
         <button onClick={()=>go('/dashboard')} className={`mb-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] ${section==='dashboard'?'bg-emerald-50 font-bold text-emerald-800':'font-medium text-slate-600 hover:bg-slate-50'}`}><Icon name="dashboard"/>Thống kê & Tổng quan</button>
         {groups.map((group) => {
@@ -170,7 +288,13 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
           const active = group.children.some(([id]) => id === section)
           const open = openGroups[group.id]
           return <div key={group.id} className="mb-1">
-            <button onClick={()=>setOpenGroups((old)=>({...old,[group.id]:!old[group.id]}))} className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] ${active?'font-bold text-emerald-800':'font-semibold text-slate-600 hover:bg-slate-50'}`}><Icon name={group.icon}/><span className="flex-1">{group.label}</span><span className={`text-[10px] transition-transform ${open?'rotate-180':''}`}>⌄</span></button>
+            <button onClick={()=>setOpenGroups((old)=>({...old,[group.id]:!old[group.id]}))} className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] ${active?'font-bold text-emerald-800':'font-semibold text-slate-600 hover:bg-slate-50'}`}>
+              <Icon name={group.icon}/>
+              <span className="flex-1">{group.label}</span>
+              <svg className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180 text-emerald-700' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
             {open&&<div className="ml-5 border-l border-slate-200 pl-2">{group.children.map(([id,label,href])=><button key={id} onClick={()=>go(href)} className={`mt-0.5 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs ${section===id?'bg-emerald-50 font-bold text-emerald-800':'font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><span className={`h-1.5 w-1.5 rounded-full ${section===id?'bg-emerald-600':'bg-slate-300'}`}/>{label}</button>)}</div>}
           </div>
         })}
@@ -185,8 +309,7 @@ export default function RolePortal({ section='dashboard' }) {
  const navigate=useNavigate(); const { token, user, logout: clearAuthSession }=useAuth(); const session={ user }; const role=staffRole(user)||'admin'; const [stats,setStats]=useState(null); const [loading,setLoading]=useState(true); const [menu,setMenu]=useState(false)
  useEffect(()=>{if(!token)return; fetchDashboardStats({token}).then(setStats).catch(()=>setStats(null)).finally(()=>setLoading(false))},[token])
  const logout=async()=>{await clearAuthSession();navigate('/login',{replace:true})}; const nav=NAV[role]||NAV.admin
- let content=section==='booking-methods'?<BookingMethodsPage/>:section==='booking-packages'?<BookingPackagesPage/>:['branches','specialties','service-packages','services','inventory'].includes(section)&&['admin','branch_manager'].includes(role)?<SystemCatalogCrudPage resource={section==='inventory'?'medicines':section}/>:['doctors','staff'].includes(section)?(['admin','branch_manager'].includes(role)?<ClinicStaffPage/>:<StaffCrudPage role="doctor"/>):section==='pharmacists'?<StaffCrudPage role="pharmacist"/>:['schedule','slots'].includes(section)&&['admin','branch_manager'].includes(role)?<SchedulePage/>:section==='dashboard'?(role==='branch_manager'?<ManagerDashboard stats={stats} loading={loading}/>:<AdminDashboard stats={stats} loading={loading}/>):<GenericPage section={section} role={role}/>
+ let content=section==='billing'?<BillingPage/>:section==='booking-methods'?<BookingMethodsPage/>:section==='booking-packages'?<BookingPackagesPage/>:['branches','specialties','service-packages','services','inventory'].includes(section)&&['admin','branch_manager'].includes(role)?<SystemCatalogCrudPage resource={section==='inventory'?'medicines':section}/>:['doctors','staff'].includes(section)?(['admin','branch_manager'].includes(role)?<ClinicStaffPage/>:<StaffCrudPage role="doctor"/>):section==='pharmacists'?<StaffCrudPage role="pharmacist"/>:['schedule','slots','work-schedules'].includes(section)&&['admin','branch_manager'].includes(role)?<DoctorWorkSchedulesPage/>:section==='dashboard'?(role==='branch_manager'?<ManagerDashboard stats={stats} loading={loading}/>:<AdminDashboard stats={stats} loading={loading}/>):<GenericPage section={section} role={role}/>
  if(['admin','branch_manager'].includes(role)) return <GroupedPortal section={section} user={user} role={role} content={content} menu={menu} setMenu={setMenu} navigate={navigate} logout={logout}/>
- return <div className="min-h-screen bg-[#f5f8f5] font-sans text-slate-800"><aside className={`fixed inset-y-0 left-0 z-30 flex w-[244px] flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 ${menu?'translate-x-0':'-translate-x-full'}`}><div className="flex h-[70px] items-center gap-3 border-b border-slate-100 px-5"><span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-700 text-lg font-black text-white">M</span><div><p className="text-sm font-extrabold tracking-tight text-emerald-800">MediLink Global</p><p className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">Healthcare System</p></div></div><nav className="flex-1 space-y-1 overflow-y-auto p-3"><p className="px-3 pb-2 pt-2 text-[9px] font-bold uppercase tracking-[.16em] text-slate-400">Không gian làm việc</p>{nav.map(([id,label,href])=><button key={id} onClick={()=>{navigate(href);setMenu(false)}} className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] transition ${section===id?'bg-emerald-50 font-bold text-emerald-800':'font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><Icon name={id}/>{label}</button>)}</nav><div className="border-t border-slate-100 p-3"><div className="mb-2 flex items-center gap-3 rounded-md bg-slate-50 p-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-700 text-[10px] font-bold text-white">{initials(session.user)}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-800">{session.user?.fullName||session.user?.email||'Nhân viên'}</p><p className="truncate text-[10px] text-slate-400">{ROLE_LABELS[role]}</p></div></div><button onClick={logout} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-600">Đăng xuất</button></div></aside>{menu&&<button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-slate-900/20 lg:hidden" onClick={()=>setMenu(false)}/>}<div className="lg:pl-[244px]"><header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-7"><div className="flex items-center gap-3"><button onClick={()=>setMenu(true)} className="rounded border border-slate-200 px-2.5 py-1.5 lg:hidden">☰</button><div className="relative hidden md:block"><span className="absolute left-3 top-2 text-slate-400">⌕</span><input className="w-72 rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs outline-none focus:border-emerald-500" placeholder="Tìm kiếm nhanh..."/></div></div><div className="flex items-center gap-4"><button className="relative text-lg text-slate-500">♧<i className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-rose-500"/></button><div className="hidden border-l border-slate-200 pl-4 text-right sm:block"><p className="text-xs font-bold text-slate-700">Chi nhánh chính</p><p className="text-[10px] text-slate-400">TP. Hồ Chí Minh</p></div><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-800">{initials(session.user)}</span></div></header><main className="mx-auto max-w-[1440px] p-4 sm:p-6 lg:p-7">{content}</main></div></div>
+ return <div className="min-h-screen bg-[#f5f8f5] font-sans text-slate-800"><aside className={`fixed inset-y-0 left-0 z-30 flex w-[244px] flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 ${menu?'translate-x-0':'-translate-x-full'}`}><div className="flex h-[70px] items-center gap-3 border-b border-slate-100 px-5"><span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-700 text-lg font-black text-white">M</span><div><p className="text-sm font-extrabold tracking-tight text-emerald-800">MediLink Global</p><p className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">Healthcare System</p></div></div><nav className="flex-1 space-y-1 overflow-y-auto p-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"><p className="px-3 pb-2 pt-2 text-[9px] font-bold uppercase tracking-[.16em] text-slate-400">Không gian làm việc</p>{nav.map(([id,label,href])=><button key={id} onClick={()=>{navigate(href);setMenu(false)}} className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] transition ${section===id?'bg-emerald-50 font-bold text-emerald-800':'font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><Icon name={id}/>{label}</button>)}</nav><div className="border-t border-slate-100 p-3"><div className="mb-2 flex items-center gap-3 rounded-md bg-slate-50 p-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-700 text-[10px] font-bold text-white">{initials(session.user)}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-800">{session.user?.fullName||session.user?.email||'Nhân viên'}</p><p className="truncate text-[10px] text-slate-400">{ROLE_LABELS[role]}</p></div></div><button onClick={logout} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-600">Đăng xuất</button></div></aside>{menu&&<button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-slate-900/20 lg:hidden" onClick={()=>setMenu(false)}/>}<div className="lg:pl-[244px]"><header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-7"><div className="flex items-center gap-3"><button onClick={()=>setMenu(true)} className="rounded border border-slate-200 px-2.5 py-1.5 lg:hidden">☰</button><div className="relative hidden md:block"><span className="absolute left-3 top-2 text-slate-400">⌕</span><input className="w-72 rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs outline-none focus:border-emerald-500" placeholder="Tìm kiếm nhanh..."/></div></div><div className="flex items-center gap-4"><button className="relative text-lg text-slate-500">♧<i className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-rose-500"/></button><div className="hidden border-l border-slate-200 pl-4 text-right sm:block"><p className="text-xs font-bold text-slate-700">Chi nhánh chính</p><p className="text-[10px] text-slate-400">TP. Hồ Chí Minh</p></div><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-800">{initials(session.user)}</span></div></header><main className="mx-auto max-w-[1440px] p-4 sm:p-6 lg:p-7">{content}</main></div></div>
 }
-
