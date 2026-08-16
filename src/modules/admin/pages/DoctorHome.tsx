@@ -622,6 +622,26 @@ export default function DoctorHome() {
     setPage(1)
   }, [location.state?.dashNavAt])
 
+  useEffect(() => {
+    void listClinicRooms()
+      .then((rows) => setClinicRooms(Array.isArray(rows) ? rows : []))
+      .catch(() => setClinicRooms([]))
+  }, [])
+
+  // Bộ lọc từ Thống kê — mỗi lần bấm thẻ KPI áp dụng lại
+  useEffect(() => {
+    const navAt = location.state?.dashNavAt
+    if (navAt == null || navAt === '') return
+    const n = readDoctorNavState(location)
+    setFilterFrom(n.fromDate)
+    setFilterTo(n.toDate)
+    setFilterStatus(n.statusFilter)
+    setFiltersOpen(n.filtersOpen)
+    setListSearch('')
+    setQrListFocusTicket('')
+    setPage(1)
+  }, [location.state?.dashNavAt])
+
   const loadAppointments = useMemo(() => {
     return async ({ silent } = { silent: false }) => {
       if (!token) return
@@ -633,6 +653,17 @@ export default function DoctorHome() {
       if (silent) setRefreshing(true)
       try {
         const rows = await listDoctorAppointments({ token })
+        // DEBUG LOG — xóa sau khi kiểm tra xong
+        console.log('[DoctorHome] 📋 Raw API rows:', rows)
+        console.log('[DoctorHome] 📊 Tổng lịch trả về:', rows?.length ?? 0)
+        console.log('[DoctorHome] 🔍 Phân tích từng lịch:', (rows || []).map((a) => ({
+          id: a?.id,
+          status: a?.status,
+          workflowStatus: a?.workflowStatus,
+          paymentStatus: a?.payment?.status,
+          patient: a?.patient?.firstName || a?.patient?.displayName,
+          appointmentDate: a?.appointmentDate,
+        })))
         setError('')
         setItems(rows || [])
       } catch (err) {
@@ -656,13 +687,14 @@ export default function DoctorHome() {
     }
   }, [loadAppointments])
 
-  useEffect(() => {
-    if (!token || currentStaffRole !== 'doctor') return
-    const t = setInterval(() => {
-      void loadAppointments({ silent: true })
-    }, 15000)
-    return () => clearInterval(t)
-  }, [token, currentStaffRole, loadAppointments])
+  // Tắt Polling tự động 15s (dùng F5 để làm mới)
+  // useEffect(() => {
+  //   if (!token || currentStaffRole !== 'doctor') return
+  //   const t = setInterval(() => {
+  //     void loadAppointments({ silent: true })
+  //   }, 15000)
+  //   return () => clearInterval(t)
+  // }, [token, currentStaffRole, loadAppointments])
 
   // Sau F5, React state bị mất nhưng ca khám vẫn là IN_EXAMINATION trong DB.
   // Tự mở lại ca đang khám của bác sĩ; nếu id đã chọn không còn trong dữ liệu thì
@@ -692,26 +724,59 @@ export default function DoctorHome() {
     rows = rows.filter((a) => {
       const st = String(a?.status || '').toLowerCase()
       const workflow = String(a?.workflowStatus || '').toUpperCase()
-      if (st === 'cancelled' || st === 'pending') return false
-      if (st === 'confirmed' && !isAppointmentPaymentPaid(a)) return false
-      if (workflow && !['CHECKED_IN', 'IN_EXAMINATION', 'COMPLETED'].includes(workflow)) return false
-      return st === 'confirmed' || isAppointmentExamined(st)
+      const paid = isAppointmentPaymentPaid(a)
+      // DEBUG — xóa sau khi kiểm tra xong
+      if (st === 'cancelled' || st === 'pending') {
+        console.warn('[DoctorHome] ❌ BỊ LOẠI — status cancelled/pending:', { id: a?.id, st, workflow, paid, payment: a?.payment })
+        return false
+      }
+      if (st === 'confirmed' && !paid) {
+        console.warn('[DoctorHome] ❌ BỊ LOẠI — confirmed nhưng chưa thu phí:', { id: a?.id, st, workflow, paid, payment: a?.payment })
+        return false
+      }
+      if (workflow && !['CHECKED_IN', 'IN_EXAMINATION', 'COMPLETED'].includes(workflow)) {
+        console.warn('[DoctorHome] ❌ BỊ LOẠI — workflowStatus không hợp lệ:', { id: a?.id, st, workflow, paid })
+        return false
+      }
+      if (!(st === 'confirmed' || isAppointmentExamined(st))) {
+        console.warn('[DoctorHome] ❌ BỊ LOẠI — status không phải confirmed/examined:', { id: a?.id, st, workflow, paid })
+        return false
+      }
+      console.log('[DoctorHome] ✅ PASS filter chính:', { id: a?.id, st, workflow, paid })
+      return true
     })
 
-    if (filterFrom) {
-      rows = rows.filter((a) => {
-        const k = dateKeyFromAppointmentDate(a?.appointmentDate)
-        return k && k >= filterFrom
-      })
-    }
-    if (filterTo) {
-      rows = rows.filter((a) => {
-        const k = dateKeyFromAppointmentDate(a?.appointmentDate)
-        return k && k <= filterTo
-      })
-    }
+    // DEBUG — xóa sau khi kiểm tra xong
+    console.log('[DoctorHome] 📅 Bộ lọc ngày đang áp dụng:', { filterFrom, filterTo, filterStatus })
+    // ⚠️ TẠM TẮT BỘ LỌC NGÀY ĐỂ TEST — bỏ comment khi xong
+    // if (filterFrom) {
+    //   const beforeDate = rows.length
+    //   rows = rows.filter((a) => {
+    //     const k = dateKeyFromAppointmentDate(a?.appointmentDate)
+    //     const pass = k && k >= filterFrom
+    //     if (!pass) console.warn('[DoctorHome] ❌ BỊ LOẠI — appointmentDate < filterFrom:', { id: a?.id, appointmentDate: a?.appointmentDate, k, filterFrom })
+    //     return pass
+    //   })
+    //   if (beforeDate !== rows.length) console.log(`[DoctorHome] filterFrom loại ${beforeDate - rows.length} lịch`)
+    // }
+    // if (filterTo) {
+    //   const beforeDate = rows.length
+    //   rows = rows.filter((a) => {
+    //     const k = dateKeyFromAppointmentDate(a?.appointmentDate)
+    //     const pass = k && k <= filterTo
+    //     if (!pass) console.warn('[DoctorHome] ❌ BỊ LOẠI — appointmentDate > filterTo:', { id: a?.id, appointmentDate: a?.appointmentDate, k, filterTo })
+    //     return pass
+    //   })
+    //   if (beforeDate !== rows.length) console.log(`[DoctorHome] filterTo loại ${beforeDate - rows.length} lịch`)
+    // }
     if (filterStatus !== 'all') {
-      rows = rows.filter((a) => String(a?.status || '').toLowerCase() === filterStatus)
+      const beforeSt = rows.length
+      rows = rows.filter((a) => {
+        const pass = String(a?.status || '').toLowerCase() === filterStatus
+        if (!pass) console.warn('[DoctorHome] ❌ BỊ LOẠI — filterStatus không khớp:', { id: a?.id, status: a?.status, filterStatus })
+        return pass
+      })
+      if (beforeSt !== rows.length) console.log(`[DoctorHome] filterStatus loại ${beforeSt - rows.length} lịch`)
     }
 
     const focus = qrListFocusTicket.trim().toLowerCase()
@@ -729,13 +794,26 @@ export default function DoctorHome() {
         return ticket.includes(q) || code.includes(q) || name.includes(q)
       })
     }
+    // DEBUG LOG — xóa sau khi kiểm tra xong
+    console.log('[DoctorHome] 🎯 filteredQueue (sau tất cả bộ lọc):', rows.length, rows.map((a) => ({ id: a?.id, status: a?.status, workflowStatus: a?.workflowStatus })))
     return rows
   }, [items, filterFrom, filterTo, filterStatus, listSearch, qrListFocusTicket])
 
-  const waitingQueue = useMemo(() => filteredQueue.filter((appointment) => {
-    const workflowStatus = String(appointment?.workflowStatus || '').toUpperCase()
-    return workflowStatus ? workflowStatus === 'CHECKED_IN' : String(appointment?.status || '').toLowerCase() === 'confirmed'
-  }), [filteredQueue])
+  const waitingQueue = useMemo(() => {
+    const result = filteredQueue.filter((appointment) => {
+      const workflowStatus = String(appointment?.workflowStatus || '').toUpperCase()
+      return workflowStatus ? workflowStatus === 'CHECKED_IN' : String(appointment?.status || '').toLowerCase() === 'confirmed'
+    })
+    // DEBUG LOG — xóa sau khi kiểm tra xong
+    console.log('[DoctorHome] ⏳ waitingQueue (bệnh nhân đang chờ):', result.length, result.map((a) => ({
+      id: a?.id,
+      patient: a?.patient?.firstName || a?.patient?.displayName,
+      workflowStatus: a?.workflowStatus,
+      status: a?.status,
+      paymentStatus: a?.payment?.status,
+    })))
+    return result
+  }, [filteredQueue])
 
   const inExaminationQueue = useMemo(() => filteredQueue.filter((appointment) =>
     String(appointment?.workflowStatus || '').toUpperCase() === 'IN_EXAMINATION'

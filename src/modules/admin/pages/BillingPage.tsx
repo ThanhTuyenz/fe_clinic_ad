@@ -481,6 +481,46 @@ export default function BillingPage() {
                 </div>
               </div>
 
+              {/* Itemized Fee Breakdown Table */}
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Bảng kê chi tiết dịch vụ & khoản phí</span>
+                  <span className="text-[11px] font-semibold text-slate-500">Mã HĐ: {getInvoiceCode(selectedItem)}</span>
+                </div>
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                    <tr>
+                      <th className="px-4 py-2 font-bold">Nội dung thanh toán</th>
+                      <th className="px-3 py-2 text-center font-bold">SL</th>
+                      <th className="px-4 py-2 text-right font-bold">Đơn giá</th>
+                      <th className="px-4 py-2 text-right font-bold">Thành tiền</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-normal text-slate-700">
+                    {selectedItem.invoice?.items?.length ? (
+                      selectedItem.invoice.items.map((item: any, idx: number) => (
+                        <tr key={item.id || idx}>
+                          <td className="px-4 py-2.5 font-medium text-slate-900">{item.description}</td>
+                          <td className="px-3 py-2.5 text-center font-mono">{item.quantity || 1}</td>
+                          <td className="px-4 py-2.5 text-right font-mono">{money(item.unitPrice)}</td>
+                          <td className="px-4 py-2.5 text-right font-bold text-slate-900 font-mono">{money(item.amount)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="px-4 py-2.5 font-medium text-slate-900">
+                          {selectedItem.servicePackage?.name ||
+                            (selectedItem.specialty?.name ? `Phí khám ${selectedItem.specialty.name}` : 'Phí dịch vụ khám chuyên khoa')}
+                        </td>
+                        <td className="px-3 py-2.5 text-center font-mono">1</td>
+                        <td className="px-4 py-2.5 text-right font-mono">{money(getInvoiceAmount(selectedItem))}</td>
+                        <td className="px-4 py-2.5 text-right font-bold text-slate-900 font-mono">{money(getInvoiceAmount(selectedItem))}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
               <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-700">Tổng tiền cần thanh toán</span>

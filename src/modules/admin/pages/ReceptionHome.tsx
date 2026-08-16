@@ -435,7 +435,10 @@ export default function ReceptionHome() {
         to: toDate,
         status: statusFilter,
       })
+      console.log('🔍 [FE ReceptionHome] Params:', { fromDate, toDate, statusFilter })
+      console.log('🔍 [FE ReceptionHome] List nhận từ API:', rows)
       const didExpire = await expireStalePendingInRange({ token, from: fromDate, to: toDate })
+
       if (didExpire) {
         rows = await listReceptionAppointments({
           token,
@@ -462,13 +465,14 @@ export default function ReceptionHome() {
     setPage(0)
   }, [listSearch])
 
-  useEffect(() => {
-    if (!token) return undefined
-    const t = setInterval(() => {
-      void loadList()
-    }, 60000)
-    return () => clearInterval(t)
-  }, [token, loadList])
+  // Tắt Polling tự động định kỳ 60 giây (tạm thời bấm F5 để làm mới)
+  // useEffect(() => {
+  //   if (!token) return undefined
+  //   const t = setInterval(() => {
+  //     void loadList()
+  //   }, 60000)
+  //   return () => clearInterval(t)
+  // }, [token, loadList])
 
   const filteredRows = useMemo(() => {
     let base = list || []
@@ -530,6 +534,7 @@ export default function ReceptionHome() {
   /** Chỉnh phòng / STT khi lịch còn Chờ — ghi DB khi Xác nhận + Lưu. */
   const canEditVisit = currentStatus === 'pending'
   const paymentStatus = String(activeDetail?.payment?.status || 'unpaid').toLowerCase()
+
   const isPaid = paymentStatus === 'paid'
   const hasClinicRoom = Boolean(String(clinicRoomDraft || '').trim())
   const consultationFee = resolveConsultationFee(

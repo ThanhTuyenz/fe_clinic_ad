@@ -252,10 +252,11 @@ export default function Dashboard() {
       return
     }
     void loadStats()
-    const id = setInterval(() => void loadStats({ silent: true }), REFRESH_MS)
+    // Tắt Polling tự động định kỳ (bấm F5 để làm mới)
+    // const id = setInterval(() => void loadStats({ silent: true }), REFRESH_MS)
     return () => {
       fetchGenRef.current += 1
-      clearInterval(id)
+      // clearInterval(id)
     }
   }, [token, user, navigate, loadStats])
 
@@ -295,6 +296,7 @@ export default function Dashboard() {
     },
     [navigate, stats?.today, isDoctor, goDoctor],
   )
+
 
   const openTicket = useCallback(
     (ticket) => {

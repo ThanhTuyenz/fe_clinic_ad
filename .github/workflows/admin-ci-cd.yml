@@ -1,0 +1,33 @@
+name: Admin Client CI (Build Check)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-check:
+    name: Build & Verify Admin Web App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: './fe_clinic_ad/package-lock.json'
+
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: ./fe_clinic_ad
+
+      - name: Build Next.js Admin App
+        run: npm run build
+        working-directory: ./fe_clinic_ad
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://be-clinic.onrender.com/api/v1' }}
