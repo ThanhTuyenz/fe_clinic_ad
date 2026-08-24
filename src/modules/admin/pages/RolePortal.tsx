@@ -13,7 +13,7 @@ import DoctorWorkSchedulesPage from './DoctorWorkSchedulesPage'
 import BillingPage from './BillingPage'
 import { staffRole } from '../utils/staffSession'
 
-const ROLE_LABELS = { admin: 'Quản trị viên', branch_manager: 'Quản lý chi nhánh', pharmacist: 'Dược sĩ', cashier: 'Thu ngân' }
+const ROLE_LABELS = { admin: 'Quản trị viên', branch_manager: 'Quản lý chi nhánh', receptionist: 'Tiếp nhận', doctor: 'Bác sĩ' }
 const NAV = {
   admin: [
     ['dashboard', 'Tổng quan', '/dashboard'],
@@ -28,23 +28,30 @@ const NAV = {
     ['services', 'Dịch vụ & Xét nghiệm', '/services'],
     ['booking-methods', 'Quản lý hình thức đặt khám', '/booking-methods'],
     ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
-    ['inventory', 'Kho thuốc', '/inventory'],
     ['billing', 'Thanh toán', '/billing'],
   ],
   branch_manager: [
     ['dashboard', 'Thống kê & Tổng quan', '/dashboard'],
     ['doctors', '👥 Nhân sự phòng khám', '/doctors'],
-    ['patients', '   Bệnh nhân', '/patients'],
-    ['roles', '   Vai trò & Phân quyền', '/roles-permissions'],
+    ['patients', 'Bệnh nhân', '/patients'],
+    ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
     ['slots', '📅 Lịch làm việc & Slot', '/work-schedules'],
-    ['appointments', '   Danh sách lịch hẹn', '/appointments'],
+    ['appointments', 'Danh sách lịch hẹn', '/appointments'],
     ['branches', '🏥 Chi nhánh phòng khám', '/branches'],
-    ['specialties', '   Chuyên khoa', '/specialties'],
-    ['services', '   Dịch vụ khám & xét nghiệm', '/services'],
-    ['inventory', '   Thuốc & Vật tư', '/inventory'],
+    ['specialties', 'Chuyên khoa', '/specialties'],
+    ['services', 'Dịch vụ khám & xét nghiệm', '/services'],
+    ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
+    ['billing', 'Thanh toán', '/billing'],
   ],
-  pharmacist: [['pharmacy', 'Cấp thuốc', '/pharmacy'], ['inventory', 'Kho thuốc', '/inventory']],
-  cashier: [['dashboard', 'Tổng quan', '/dashboard'], ['billing', 'Thu tiền', '/billing'], ['schedule', 'Giao dịch', '/schedule']],
+  receptionist: [
+    ['dashboard', 'Tổng quan', '/dashboard'],
+    ['appointments', 'Tiếp đón & Lịch hẹn', '/appointments'],
+    ['billing', 'Thanh toán', '/billing'],
+  ],
+  doctor: [
+    ['dashboard', 'Tổng quan', '/dashboard'],
+    ['appointments', 'Lịch khám của tôi', '/appointments'],
+  ],
 }
 
 const PATHS = {
@@ -237,7 +244,7 @@ const ADMIN_GROUPS = [
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
   ]},
   { id: 'system', label: 'Quản lý danh mục & Cơ sở', icon: 'inventory', children: [
-    ['branches', 'Chi nhánh phòng khám', '/branches'], ['specialties', 'Chuyên khoa', '/specialties'], ['services', 'Dịch vụ khám & xét nghiệm', '/services'], ['booking-methods', 'Hình thức đặt khám', '/booking-methods'], ['booking-packages', 'Gói khám sức khỏe', '/booking-packages'], ['inventory', 'Thuốc & Vật tư', '/inventory'], ['billing', 'Thanh toán & Hóa đơn', '/billing'],
+    ['branches', 'Chi nhánh phòng khám', '/branches'], ['specialties', 'Chuyên khoa', '/specialties'], ['services', 'Dịch vụ khám & xét nghiệm', '/services'], ['booking-methods', 'Hình thức đặt khám', '/booking-methods'], ['booking-packages', 'Gói khám sức khỏe', '/booking-packages'], ['billing', 'Thanh toán & Hóa đơn', '/billing'],
   ]},
 ]
 
@@ -252,7 +259,7 @@ const MANAGER_GROUPS = [
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
   ]},
   { id: 'system', label: 'Quản lý danh mục & Cơ sở', icon: 'inventory', children: [
-    ['branches', 'Chi nhánh phòng khám', '/branches'], ['specialties', 'Chuyên khoa', '/specialties'], ['booking-methods', 'Hình thức đặt khám', '/booking-methods'], ['booking-packages', 'Gói khám sức khỏe', '/booking-packages'], ['services', 'Cận lâm sàng & xét nghiệm', '/services'], ['inventory', 'Thuốc & Vật tư', '/inventory'],
+    ['branches', 'Chi nhánh phòng khám', '/branches'], ['specialties', 'Chuyên khoa', '/specialties'], ['booking-methods', 'Hình thức đặt khám', '/booking-methods'], ['booking-packages', 'Gói khám sức khỏe', '/booking-packages'], ['services', 'Cận lâm sàng & xét nghiệm', '/services'],
   ]},
 ]
 

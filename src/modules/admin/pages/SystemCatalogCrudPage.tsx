@@ -29,13 +29,13 @@ const CONFIG: Record<string, Config> = {
     singular: 'chuyên khoa',
     fields: [
       ['name', 'Tên chuyên khoa', 'text'],
-      ['departmentId', 'Mã khoa/phòng ban', 'number'],
+      ['slug', 'Slug', 'text'],
       ['description', 'Mô tả', 'textarea'],
     ],
     columns: [
       ['id', 'ID'],
       ['name', 'Chuyên khoa'],
-      ['departmentId', 'Khoa/phòng ban'],
+      ['slug', 'Slug'],
       ['description', 'Mô tả'],
     ],
   },
@@ -48,7 +48,6 @@ const CONFIG: Record<string, Config> = {
     ],
     columns: [
       ['branch.name', 'Cơ sở'],
-      ['specialty.department.name', 'Khoa chính'],
       ['specialty.name', 'Chuyên khoa'],
     ],
   },
@@ -63,18 +62,17 @@ const CONFIG: Record<string, Config> = {
     columns: [
       ['room.branch.name', 'Cơ sở'],
       ['room.name', 'Phòng khám'],
-      ['specialty.department.name', 'Khoa chính'],
       ['specialty.name', 'Chuyên khoa'],
       ['priority', 'Ưu tiên'],
     ],
   },
   services: {
-    title: 'Dịch vụ cận lâm sàng',
+    title: 'Dịch vụ y tế & cận lâm sàng',
     singular: 'dịch vụ',
     fields: [
       ['code', 'Mã dịch vụ', 'text'],
       ['name', 'Tên dịch vụ', 'text'],
-      ['departmentId', 'Mã khoa/phòng ban', 'number'],
+      ['specialtyId', 'Chuyên khoa (không bắt buộc)', 'select', 'specialties'],
       ['price', 'Đơn giá', 'number'],
       ['durationMin', 'Thời lượng (phút)', 'number'],
       ['description', 'Mô tả', 'textarea'],
@@ -84,27 +82,6 @@ const CONFIG: Record<string, Config> = {
       ['name', 'Dịch vụ'],
       ['price', 'Đơn giá'],
       ['durationMin', 'Thời lượng'],
-    ],
-  },
-  medicines: {
-    title: 'Danh mục Thuốc & Vật tư',
-    singular: 'thuốc/vật tư',
-    fields: [
-      ['code', 'Mã thuốc', 'text'],
-      ['name', 'Tên thuốc/vật tư', 'text'],
-      ['activeIngredient', 'Hoạt chất', 'text'],
-      ['strength', 'Hàm lượng', 'text'],
-      ['unit', 'Đơn vị tính', 'text'],
-      ['unitPrice', 'Đơn giá', 'number'],
-      ['stockQuantity', 'Tồn kho', 'number'],
-    ],
-    columns: [
-      ['code', 'Mã'],
-      ['name', 'Tên thuốc'],
-      ['activeIngredient', 'Hoạt chất'],
-      ['unit', 'ĐVT'],
-      ['unitPrice', 'Đơn giá'],
-      ['stockQuantity', 'Tồn kho'],
     ],
   },
   'service-packages': {
