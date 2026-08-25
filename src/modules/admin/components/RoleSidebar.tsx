@@ -15,7 +15,7 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
   const links = doctor
     ? [['exam', 'Khám bệnh', '/doctor'], ['calendar', 'Lịch khám', '/doctor?view=schedule'], ['history', 'Lịch sử bệnh nhân', '/doctor?view=history'], ['laboratory', 'Cận lâm sàng', '/clinical-orders'], ['prescription', 'Đơn thuốc', '/doctor/prescriptions']]
     : pharmacist ? [['pharmacy', 'Cấp thuốc', '/pharmacy'], ['inventory', 'Kho thuốc', '/inventory']]
-    : [['dashboard', 'Tổng quan', '/dashboard'], ['reception', 'Tiếp nhận', '/reception'], ['clinical', 'Cận lâm sàng', '/clinical-orders'], ['registration', 'Đăng ký bệnh nhân', '/registration']]
+    : [['dashboard', 'Tổng quan', '/dashboard'], ['reception', 'Tiếp nhận', '/reception'], ['registration', 'Đăng ký bệnh nhân', '/registration']]
   const name = String(user?.fullName || user?.displayName || user?.email || (doctor ? 'Bác sĩ' : 'Lễ tân'))
   const avatar = name.split(/\s+/).slice(-2).map((x) => x[0]).join('').toUpperCase()
   return <aside className="role-sidebar">

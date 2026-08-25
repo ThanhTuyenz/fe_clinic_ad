@@ -379,33 +379,7 @@ export default function Dashboard() {
       ) : (
         <>
         <RoleSidebar role="receptionist" active="dashboard" user={user} onLogout={logout} />
-        <header className="tcl-top">
-          <div className="tcl-brand">VITACARE</div>
-          <nav className="tcl-nav" aria-label="Module">
-            <button type="button" className="is-active">
-              Thống kê
-            </button>
-            {showStaffExtras ? (
-              <>
-                <button type="button" onClick={() => navigate('/reception')}>
-                  Lịch hẹn
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate('/registration', { state: { createNew: true } })}
-                >
-                  Đăng ký
-                </button>
-              </>
-            ) : null}
-          </nav>
-          <div className="tcl-top-user">
-            <span>{displayName(user)}</span>
-            <button type="button" className="tcl-btn" onClick={logout}>
-              Đăng xuất
-            </button>
-          </div>
-        </header>
+        
         </>
       )}
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import { apiErrorMessage } from '../services/apiBase'
 import { createUser, deleteUser, listUsers, updateUser } from '../services/users'
 
 const LABELS = {
@@ -12,8 +12,7 @@ const LABELS = {
 const EMPTY_FORM = { fullName: '', email: '', password: '', status: 'active', isBlocked: false }
 
 function errorMessage(error: any) {
-  if (axios.isAxiosError(error)) return String(error.response?.data?.message || error.message || 'Không thể xử lý yêu cầu.')
-  return String(error?.message || 'Không thể xử lý yêu cầu.')
+  return apiErrorMessage(error, 'Không thể xử lý yêu cầu.')
 }
 
 export default function StaffCrudPage({ role }: { role: 'doctor' | 'pharmacist' }) {

@@ -10,14 +10,8 @@ import {
   lookupAppointmentByTicket,
   updateAppointmentStatus,
 } from '../services/appointments'
-import {
-  appointmentCreatorName,
-  appointmentSourceLabel,
-  appointmentSourceTitle,
-  appointmentSourceValue,
-} from '../utils/appointmentSource'
 import { isPendingAppointmentPastSlot } from '../utils/appointmentExpiry'
-import { clearStaffSession, getStaffSession, staffRole } from '../utils/staffSession'
+import { getStaffSession, staffRole } from '../utils/staffSession'
 import { listClinicRooms } from '../services/clinicRooms'
 import { recordAppointmentPayment } from '../services/payments'
 import { Html5Qrcode } from 'html5-qrcode'
@@ -28,313 +22,36 @@ import { printVisitSlip } from '../utils/printVisitSlip'
 import { ticketFromQrPayload } from '../utils/ticketQr'
 import { staffCheckInByQr } from '../services/checkIn'
 
-const QR_READER_ELEMENT_ID = 'tcl-ticket-qr-reader'
-
-function cameraErrorMessage(error) {
-  const name = String(error?.name || '').trim()
-  const detail = String(error?.message || error || '').trim()
-  if (typeof window !== 'undefined' && !window.isSecureContext) return 'Camera chỉ hoạt động trên HTTPS hoặc localhost.'
-  if (name === 'NotAllowedError' || /permission|notallowed/i.test(detail)) return 'Trình duyệt đang chặn camera cho trang này. Hãy cho phép camera trong thanh địa chỉ.'
-  if (name === 'NotReadableError' || /could not start|notreadable|track start/i.test(detail)) return 'Trình duyệt không khởi động được camera. Có thể camera/driver chưa sẵn sàng hoặc phiên camera cũ chưa được giải phóng.'
-  if (name === 'NotFoundError' || /not found|no camera/i.test(detail)) return 'Không tìm thấy camera trên thiết bị.'
-  if (name === 'OverconstrainedError') return 'Camera không hỗ trợ chế độ quét đã yêu cầu.'
-  return detail || 'Không mở được camera.'
-}
-
-function getSession() {
-  return getStaffSession()
-}
-
-function displayName(user) {
-  const first = String(user?.firstName || '').trim()
-  const last = String(user?.lastName || '').trim()
-  const full = `${last} ${first}`.trim()
-  return full || String(user?.displayName || '').trim() || user?.email || 'Nhân viên'
-}
-
-function sourceCreatorLabel(appointment) {
-  if (appointmentSourceValue(appointment) !== 'clinic') return '—'
-  return appointmentCreatorName(appointment) || 'Nhân viên phòng khám'
-}
-
-function pad2(n) {
-  return String(n).padStart(2, '0')
-}
-
-function ymd(d) {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-}
-
-function formatDateVi(isoOrDate) {
-  const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)
-  if (Number.isNaN(d.getTime())) return '—'
-  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`
-}
-
-function formatDateTimeVi(iso) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
-}
-
-function formatVnd(amount) {
-  const n = Number(amount)
-  if (!Number.isFinite(n)) return '—'
-  return `${n.toLocaleString('vi-VN')} đ`
-}
-
-function paymentMethodLabel(method) {
-  const m = String(method || '').trim().toLowerCase()
-  if (m === 'cash') return 'Tiền mặt'
-  if (m === 'transfer') return 'Chuyển khoản'
-  if (['online', 'wallet', 'momo'].includes(m)) return 'MoMo / Trực tuyến'
-  if (['card', 'credit_card'].includes(m)) return 'Thẻ thanh toán'
-  return '—'
-}
-
-function formatPaidByLine(paidBy) {
-  if (!paidBy || typeof paidBy !== 'object') return '—'
-  const name = String(paidBy.displayName || '').trim() || String(paidBy.email || '').trim()
-  return name || '—'
-}
-
-/** Ưu tiên bản đã thu khi gộp payment từ list + cache chi tiết. */
-function mergePayment(primary, secondary) {
-  const isPaid = (p) => String(p?.status || 'unpaid').trim().toLowerCase() === 'paid'
-  if (isPaid(primary)) return primary
-  if (isPaid(secondary)) return secondary
-  return primary ?? secondary ?? null
-}
-
-function formatDob(iso) {
-  if (!iso) return '—'
-  return formatDateVi(iso)
-}
-
-function buildPatientCode(userId) {
-  const raw = String(userId || '').replace(/[^a-fA-F0-9]/g, '')
-  const yy = String(new Date().getFullYear()).slice(-2)
-  const pad = (raw + '00000000').slice(0, 8).toUpperCase()
-  return `YM${yy}${pad}`
-}
-
-/** Hiển thị chuyên khoa — đồng bộ với be_clinic doctorEmbed / fe_clinic khi API thiếu specialtyName. */
-function doctorDisplayName(d) {
-  if (!d) return '—'
-  const name = String(d.fullName || d.name || d.displayName || '').trim()
-  if (name) return name
-  const last = String(d.lastName || '').trim()
-  const first = String(d.firstName || '').trim()
-  return `${last} ${first}`.trim() || String(d.email || '').trim() || '—'
-}
-
-function clinicRoomLabel(roomId, rooms) {
-  const id = String(roomId || '').trim()
-  if (!id) return '—'
-  const hit = (rooms || []).find((r) => String(r.id || r.roomID) === id)
-  return hit?.name ? String(hit.name).trim() : id
-}
-
-function mergeReceptionDetail(cached, row) {
-  if (!row) return cached ?? null
-  if (!cached) return row
-  const rowRoom = String(row.clinicRoom ?? '').trim()
-  const cachedRoom = String(cached.clinicRoom ?? '').trim()
-  const rowPatient = row.patient
-  const rowDoctor = row.doctor
-  return {
-    ...cached,
-    status: row.status ?? cached.status,
-    workflowStatus: row.workflowStatus ?? cached.workflowStatus,
-    cancelReason: row.cancelReason ?? cached.cancelReason,
-    cancelledAt: row.cancelledAt ?? cached.cancelledAt,
-    cancelledBy: row.cancelledBy ?? cached.cancelledBy,
-    confirmedAt: row.confirmedAt ?? cached.confirmedAt,
-    confirmedBy: row.confirmedBy ?? cached.confirmedBy,
-    visitQueueNumber:
-      row.visitQueueNumber != null && row.visitQueueNumber !== ''
-        ? row.visitQueueNumber
-        : cached.visitQueueNumber,
-    clinicRoom: rowRoom || cachedRoom,
-    payment: mergePayment(row.payment, cached.payment),
-    patient:
-      rowPatient && (rowPatient.id || rowPatient.patientCode || rowPatient.phone)
-        ? { ...cached.patient, ...rowPatient }
-        : cached.patient,
-    doctor:
-      rowDoctor && (rowDoctor.id || rowDoctor.email || rowDoctor.displayName)
-        ? { ...cached.doctor, ...rowDoctor }
-        : cached.doctor,
-    specialty: row.specialty ?? cached.specialty,
-    servicePackage: row.servicePackage ?? cached.servicePackage,
-    bookingMethod: row.bookingMethod ?? cached.bookingMethod,
-    branch: row.branch ?? cached.branch,
-    clinicRoomName: row.clinicRoomName || cached.clinicRoomName,
-    ticket: row.ticket || cached.ticket,
-    appointmentDate: row.appointmentDate || cached.appointmentDate,
-    startTime: row.startTime || cached.startTime,
-    endTime: row.endTime != null && row.endTime !== '' ? row.endTime : cached.endTime,
-  }
-}
-
-function detailMissingForSlip(detail) {
-  if (!detail) return true
-  if (patientListDisplayName(detail.patient) === '—') return true
-  if (doctorDisplayName(detail.doctor) === '—') return true
-  if (!String(detail.startTime || '').trim()) return true
-  return false
-}
-
-function buildVisitSlipView(detail, rooms, overrides = {}) {
-  if (!detail) return null
-  const roomId = String(overrides.clinicRoom ?? detail.clinicRoom ?? '').trim()
-  let q = overrides.visitQueueNumber ?? detail.visitQueueNumber
-  if (q === '' || q == null) q = null
-  const patientName = patientListDisplayName(detail.patient)
-  const clinicRoom = roomId ? clinicRoomLabel(roomId, rooms) : '—'
-  const doctorName = doctorDisplayName(detail.doctor)
-  const examTime = formatExamTimeLine(detail.startTime, detail.endTime)
-  const examDate = formatDateVi(detail.appointmentDate)
-  const ticket = String(detail.ticket || '').trim() || '—'
-  return {
-    queueNumber: q != null && q !== '' ? String(q) : '—',
-    patientName: patientName === '—' ? '—' : patientName,
-    clinicRoom: clinicRoom === '—' ? '—' : clinicRoom,
-    doctorName: doctorName === '—' ? '—' : doctorName,
-    examTime: examTime === '—' ? '—' : examTime,
-    examDate: examDate === '—' ? '—' : examDate,
-    ticket,
-  }
-}
-
-function formatExamTimeLine(start, end) {
-  const s = String(start || '').trim().slice(0, 5)
-  if (!s) return '—'
-  const e = String(end || '').trim().slice(0, 5)
-  return e && e !== s ? `${s} – ${e}` : s
-}
-
-function doctorSpecialtyDisplay(d) {
-  if (!d || typeof d !== 'object') return '—'
-  const direct = String(d.specialtyName || d.specialty || '').trim()
-  if (direct) return direct
-  const sid = String(d.specialtyID || d.specialtyId || d.chuyenKhoaId || '').trim()
-  if (sid) return sid
-  const dept = String(d.deptName || d.department || d.departmentName || '').trim()
-  if (dept) return dept
-  const bio = String(d.bio || '').trim()
-  if (bio) {
-    const dash = bio.match(/(?:—|-)\s*([^\n]+)/)
-    if (dash) return String(dash[1]).trim().slice(0, 120)
-    const head = bio.match(/^Bác sĩ\s*([^\n—-]+)/i)
-    if (head) return String(head[1]).trim().slice(0, 120)
-    const linhvuc = bio.match(/lĩnh vực\s+([^.\n]+)/i)
-    if (linhvuc) return String(linhvuc[1]).trim().slice(0, 120)
-  }
-  return '—'
-}
-
-function patientListDisplayName(p) {
-  if (!p) return '—'
-  const dn = String(p.displayName || p.fullName || p.name || '').trim()
-  if (dn) return dn
-  const last = String(p.lastName || '').trim()
-  const first = String(p.firstName || '').trim()
-  const vi = `${last} ${first}`.trim()
-  if (vi) return vi
-  const en = `${first} ${last}`.trim()
-  return en || '—'
-}
-
-function ageFromDobField(dob) {
-  if (dob == null || dob === '') return ''
-  const d = dob instanceof Date ? dob : new Date(dob)
-  if (Number.isNaN(d.getTime())) return ''
-  const today = new Date()
-  let age = today.getFullYear() - d.getFullYear()
-  const m = today.getMonth() - d.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age -= 1
-  return age >= 0 ? String(age) : ''
-}
-
-function statusLabelVi(st) {
-  const s = String(st || '').toLowerCase()
-  if (s === 'confirmed') return 'Đã xác nhận'
-  if (s === 'cancelled') return 'Từ chối'
-  if (s === 'examined' || s === 'completed' || s === 'done') return 'Đã khám'
-  return 'Chờ'
-}
-
-function receptionStatusMeta(row) {
-  const workflow = String(row?.workflowStatus || '').toUpperCase()
-  if (workflow === 'PENDING_PAYMENT') return { label: 'Chờ thanh toán', tone: 'pending' }
-  if (workflow === 'BOOKED') return { label: 'Chờ check-in', tone: 'booked' }
-  if (workflow === 'CHECKED_IN') return { label: 'Đã check-in', tone: 'checked-in' }
-  if (workflow === 'IN_EXAMINATION') return { label: 'Đang khám', tone: 'examining' }
-  if (workflow === 'COMPLETED') return { label: 'Đã khám', tone: 'completed' }
-  if (workflow === 'CANCELLED') return { label: 'Đã hủy', tone: 'cancelled' }
-  if (workflow === 'EXPIRED') return { label: 'Hết hạn', tone: 'cancelled' }
-  const status = normalizeStatus(row?.status)
-  if (status === 'confirmed') return { label: 'Đã xác nhận', tone: 'booked' }
-  if (status === 'examined') return { label: 'Đã khám', tone: 'completed' }
-  if (status === 'cancelled') return { label: 'Đã hủy', tone: 'cancelled' }
-  return { label: 'Chờ xử lý', tone: 'pending' }
-}
-
-const PAGE_SIZE = 10
-
-function normalizeStatus(st) {
-  const s = String(st || '').toLowerCase()
-  if (s === 'done' || s === 'completed') return 'examined'
-  return s || 'pending'
-}
-
-function readReceptionNavState(location) {
-  const from = String(location?.state?.fromDate || '').trim()
-  const to = String(location?.state?.toDate || '').trim()
-  const st = String(location?.state?.statusFilter || '').trim()
-  const dashFilter = String(location?.state?.dashFilter || '').trim()
-  return {
-    fromDate: from,
-    toDate: to,
-    statusFilter: st || 'all',
-    dashFilter,
-    filtersOpen: Boolean(from || to || st || dashFilter),
-  }
-}
-
-function dashFilterLabelVi(key) {
-  if (key === 'unpaid') return 'Chưa thu phí'
-  if (key === 'noRoom') return 'Chưa chọn phòng'
-  if (key === 'ready') return 'Sẵn sàng xác nhận'
-  if (key === 'expiring') return 'Quá giờ — sắp tự hủy'
-  return ''
-}
-
-function matchesDashFilter(row, dashFilter) {
-  const f = String(dashFilter || '').trim()
-  if (!f) return true
-  if (normalizeStatus(row?.status) !== 'pending') return false
-  const isPaid = String(row?.payment?.status || '').toLowerCase() === 'paid'
-  const room = String(row?.clinicRoom || '').trim()
-  const expiring = isPendingAppointmentPastSlot(row)
-  if (f === 'expiring') return expiring
-  if (expiring) return false
-  if (f === 'unpaid') return !isPaid
-  if (f === 'noRoom') return isPaid && !room
-  if (f === 'ready') return isPaid && Boolean(room)
-  return true
-}
+import {
+  PAGE_SIZE,
+  QR_READER_ELEMENT_ID,
+  buildVisitSlipView,
+  cameraErrorMessage,
+  detailMissingForSlip,
+  displayName,
+  matchesDashFilter,
+  mergePayment,
+  mergeReceptionDetail,
+  normalizeLookup,
+  normalizeStatus,
+  readReceptionNavState,
+  ymd,
+} from '../components/reception/receptionHelpers'
+import ReceptionStatsBar from '../components/reception/ReceptionStatsBar'
+import ReceptionAppointmentTable from '../components/reception/ReceptionAppointmentTable'
+import ReceptionDetailModal from '../components/reception/ReceptionDetailModal'
+import ReceptionQrScannerModal from '../components/reception/ReceptionQrScannerModal'
+import { PlusIcon } from '../components/reception/ReceptionIcons'
 
 /** Quét pending trong khoảng ngày; hủy các lịch đã quá hết khung giờ mà chưa được xác nhận. */
-async function expireStalePendingInRange({ token, from, to }) {
+async function expireStalePendingInRange({ token, from, to }: { token: string; from?: string; to?: string }) {
   const pendingRows = await listReceptionAppointments({
     token,
     from,
     to,
     status: 'pending',
   })
-  const stale = (pendingRows || []).filter((r) => isPendingAppointmentPastSlot(r))
+  const stale = (pendingRows || []).filter((r: any) => isPendingAppointmentPastSlot(r))
   let anyOk = false
   const systemCancelReason =
     'Quá thời gian chờ xác nhận — khung giờ khám đã kết thúc, hệ thống tự hủy lịch.'
@@ -359,26 +76,26 @@ export default function ReceptionHome() {
   const { performLogout } = useStaffLogout()
   const navigate = useNavigate()
   const location = useLocation()
-  const { token, user } = getSession()
+  const { token, user } = getStaffSession()
   const navInit = useMemo(() => readReceptionNavState(location), [])
 
   const [fromDate, setFromDate] = useState(navInit.fromDate)
   const [toDate, setToDate] = useState(navInit.toDate)
   const [statusFilter, setStatusFilter] = useState(navInit.statusFilter)
   const [dashFilter, setDashFilter] = useState(navInit.dashFilter)
-  /** Tìm nhanh trong danh sách đã tải: mã lịch hẹn, mã BN hoặc tên. */
   const [listSearch, setListSearch] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(navInit.filtersOpen)
 
-  const [list, setList] = useState([])
+  const [list, setList] = useState<any[]>([])
   const [listLoading, setListLoading] = useState(false)
   const [listErr, setListErr] = useState('')
   const [page, setPage] = useState(0)
 
-  const [selectedId, setSelectedId] = useState(null)
-  const [lookupDetail, setLookupDetail] = useState(null)
-  const [detailById, setDetailById] = useState(() => ({}))
-  const [detailLoadingId, setDetailLoadingId] = useState(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [lookupDetail, setLookupDetail] = useState<any>(null)
+  const [detailById, setDetailById] = useState<Record<string, any>>(() => ({}))
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null)
   const [detailErr, setDetailErr] = useState('')
 
   const [detailStatus, setDetailStatus] = useState('pending')
@@ -388,7 +105,7 @@ export default function ReceptionHome() {
 
   const [visitQueueDraft, setVisitQueueDraft] = useState('')
   const [clinicRoomDraft, setClinicRoomDraft] = useState('')
-  const [clinicRooms, setClinicRooms] = useState([])
+  const [clinicRooms, setClinicRooms] = useState<any[]>([])
   const [clinicRoomsErr, setClinicRoomsErr] = useState('')
   const [visitErr, setVisitErr] = useState('')
 
@@ -403,12 +120,8 @@ export default function ReceptionHome() {
   const [qrOpen, setQrOpen] = useState(false)
   const [qrErr, setQrErr] = useState('')
   const [qrListFocusTicket, setQrListFocusTicket] = useState('')
-  const runLookupRef = useRef(async () => ({ ok: false }))
-  const qrScanDoneRef = useRef(false)
-  const qrScannerRef = useRef(null)
-  const qrDecodeHandlerRef = useRef(null)
+  const qrDecodeHandlerRef = useRef<any>(null)
   const [qrImageLoading, setQrImageLoading] = useState(false)
-  const didAutoLookupRef = useRef(false)
   const roomSttReqRef = useRef(0)
 
   const [flashOk, setFlashOk] = useState('')
@@ -435,8 +148,6 @@ export default function ReceptionHome() {
         to: toDate,
         status: statusFilter,
       })
-      console.log('🔍 [FE ReceptionHome] Params:', { fromDate, toDate, statusFilter })
-      console.log('🔍 [FE ReceptionHome] List nhận từ API:', rows)
       const didExpire = await expireStalePendingInRange({ token, from: fromDate, to: toDate })
 
       if (didExpire) {
@@ -448,10 +159,8 @@ export default function ReceptionHome() {
         })
       }
       setList(rows || [])
-      setPage(0)
-    } catch (e) {
+    } catch (e: any) {
       setListErr(e?.message || 'Không tải được danh sách.')
-      setList([])
     } finally {
       setListLoading(false)
     }
@@ -462,516 +171,70 @@ export default function ReceptionHome() {
   }, [loadList])
 
   useEffect(() => {
-    setPage(0)
-  }, [listSearch])
-
-  // Tắt Polling tự động định kỳ 60 giây (tạm thời bấm F5 để làm mới)
-  // useEffect(() => {
-  //   if (!token) return undefined
-  //   const t = setInterval(() => {
-  //     void loadList()
-  //   }, 60000)
-  //   return () => clearInterval(t)
-  // }, [token, loadList])
-
-  const filteredRows = useMemo(() => {
-    let base = list || []
-    if (dashFilter) base = base.filter((r) => matchesDashFilter(r, dashFilter))
-
-    const focus = qrListFocusTicket.trim().toLowerCase()
-    if (focus) {
-      const hits = base.filter((r) => String(r.ticket || '').toLowerCase() === focus)
-      if (hits.length) return hits
-      if (lookupDetail && String(lookupDetail.ticket || '').toLowerCase() === focus) {
-        return [lookupDetail]
-      }
-      return []
+    if (!token) return
+    let c = false
+    setClinicRoomsErr('')
+    listClinicRooms({ token })
+      .then((rows) => {
+        if (c) return
+        setClinicRooms(Array.isArray(rows) ? rows : [])
+      })
+      .catch((e: any) => {
+        if (c) return
+        setClinicRoomsErr(e?.message || 'Không tải được danh sách phòng khám.')
+      })
+    return () => {
+      c = true
     }
-    const q = listSearch.trim().toLowerCase()
-    if (!q) return base
-    return base.filter((r) => {
-      const ticket = String(r.ticket || '').toLowerCase()
-      const code = String(r.patient?.patientCode || '').toLowerCase()
-      const name = patientListDisplayName(r.patient).toLowerCase()
-      return ticket.includes(q) || code.includes(q) || name.includes(q)
-    })
-  }, [list, lookupDetail, qrListFocusTicket, listSearch, dashFilter])
+  }, [token])
 
-  const pageRows = useMemo(() => {
-    const start = page * PAGE_SIZE
-    return filteredRows.slice(start, start + PAGE_SIZE)
-  }, [filteredRows, page])
-
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
+  const activeRow = useMemo(() => {
+    if (!selectedId) return null
+    return list.find((r) => String(r.id) === String(selectedId)) ?? null
+  }, [list, selectedId])
 
   const activeDetail = useMemo(() => {
-    if (selectedId) {
-      const idStr = String(selectedId)
-      const cached = detailById[idStr]
-      const row = list.find((a) => String(a.id) === idStr)
-      if (cached && row) {
-        return mergeReceptionDetail(cached, row)
-      }
-      if (cached) return cached
-      if (row) return row
-    }
-    if (lookupDetail) {
-      const cached = detailById[String(lookupDetail.id)]
-      if (cached) {
-        return {
-          ...lookupDetail,
-          ...cached,
-          payment: mergePayment(lookupDetail.payment, cached.payment),
-        }
-      }
-      return lookupDetail
-    }
-    return null
-  }, [selectedId, list, lookupDetail, detailById])
+    if (lookupDetail) return lookupDetail
+    if (!selectedId) return null
+    const cached = detailById[selectedId]
+    return mergeReceptionDetail(cached, activeRow)
+  }, [lookupDetail, selectedId, detailById, activeRow])
 
-  const currentStatus = useMemo(() => normalizeStatus(activeDetail?.status), [activeDetail?.status])
-  const canEditStatus = currentStatus === 'pending'
-  /** Chỉnh phòng / STT khi lịch còn Chờ — ghi DB khi Xác nhận + Lưu. */
-  const canEditVisit = currentStatus === 'pending'
-  const paymentStatus = String(activeDetail?.payment?.status || 'unpaid').toLowerCase()
-
-  const isPaid = paymentStatus === 'paid'
-  const hasClinicRoom = Boolean(String(clinicRoomDraft || '').trim())
-  const consultationFee = resolveConsultationFee(
-    activeDetail?.payment?.amount,
-    activeDetail?.consultationFee ?? activeDetail?.doctor?.consultationFee,
-  )
-  /** Thu phí + xác nhận lịch: cần chọn phòng trước (một nút «Xác nhận đã thu»). */
-  const canRecordPayment = canEditStatus && !isPaid && hasClinicRoom
-  /** Lịch đã thu phí nhưng chưa xác nhận (dữ liệu cũ / lỗi tách bước). */
-  const canFinishConfirm = canEditStatus && isPaid && hasClinicRoom
-  const canPrintVisitSlip = currentStatus === 'confirmed'
-  const slipOverrides = useMemo(
-    () => ({
-      clinicRoom: clinicRoomDraft || activeDetail?.clinicRoom,
-      visitQueueNumber:
-        visitQueueDraft !== '' && visitQueueDraft != null
-          ? visitQueueDraft
-          : activeDetail?.visitQueueNumber,
-    }),
-    [activeDetail?.clinicRoom, activeDetail?.visitQueueNumber, clinicRoomDraft, visitQueueDraft],
-  )
-  const visitSlipView = useMemo(() => {
-    if (!activeDetail || !canPrintVisitSlip) return null
-    return buildVisitSlipView(activeDetail, clinicRooms, slipOverrides)
-  }, [activeDetail, canPrintVisitSlip, clinicRooms, slipOverrides])
-  const canPrintPaymentInvoice = isPaid
-  const paymentInvoiceView = useMemo(() => {
-    if (!activeDetail || !canPrintPaymentInvoice) return null
-    return buildPaymentInvoiceView(activeDetail, slipOverrides)
-  }, [activeDetail, canPrintPaymentInvoice, slipOverrides])
-  const applyClinicRoomSelection = useCallback(
-    async (roomValue) => {
-      const r = String(roomValue ?? '').trim()
-      if (!r) {
-        setVisitQueueDraft('')
-        return
-      }
-      if (!token || !activeDetail?.id) return
-      const dateStr = String(activeDetail.appointmentDate || '').trim().slice(0, 10)
-      if (!dateStr || dateStr.length < 10) return
-      setVisitErr('')
-      const reqId = ++roomSttReqRef.current
-      try {
-        const next = await getNextVisitQueueNumber({
-          token,
-          appointmentDate: dateStr,
-          clinicRoom: r,
-          excludeAppointmentId: activeDetail.id,
-        })
-        if (reqId !== roomSttReqRef.current) return
-        setVisitQueueDraft(String(next))
-      } catch (e) {
-        if (reqId !== roomSttReqRef.current) return
-        setVisitErr(e?.message || 'Không lấy được số thứ tự gợi ý.')
-      }
-    },
-    [token, activeDetail?.id, activeDetail?.appointmentDate],
-  )
-
-  useEffect(() => {
-    let alive = true
-    setClinicRoomsErr('')
-    listClinicRooms()
-      .then((rows) => {
-        if (alive) setClinicRooms(Array.isArray(rows) ? rows : [])
-      })
-      .catch((e) => {
-        if (alive) {
-          setClinicRooms([])
-          setClinicRoomsErr(e?.message || 'Không tải được danh sách phòng.')
-        }
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  const lastDetailIdRef = useRef(null)
   useEffect(() => {
     if (!activeDetail) return
-    const currentId = String(activeDetail.id ?? '')
-    if (currentId && lastDetailIdRef.current === currentId) return
-    lastDetailIdRef.current = currentId
-    setDetailStatus(normalizeStatus(activeDetail.status || 'pending'))
-  }, [activeDetail])
-
-  useEffect(() => {
-    if (!activeDetail?.id) {
-      setVisitQueueDraft('')
-      setClinicRoomDraft('')
-      return
-    }
+    const st = normalizeStatus(activeDetail.status)
+    setDetailStatus(st)
+    setClinicRoomDraft(String(activeDetail.clinicRoom || '').trim())
     const q = activeDetail.visitQueueNumber
     setVisitQueueDraft(q != null && q !== '' ? String(q) : '')
-    const savedRoom = String(activeDetail.clinicRoom || '').trim()
-    if (savedRoom) {
-      setClinicRoomDraft(savedRoom)
-    } else {
-      const dr = String(activeDetail.doctor?.clinicRoomID || '').trim()
-      setClinicRoomDraft(dr)
-    }
-  }, [activeDetail?.id, activeDetail?.visitQueueNumber, activeDetail?.clinicRoom, activeDetail?.doctor?.clinicRoomID])
+  }, [activeDetail?.id, activeDetail?.status, activeDetail?.clinicRoom, activeDetail?.visitQueueNumber])
 
-  useEffect(() => {
-    if (!activeDetail?.id) return
-    setPaymentMethod('cash')
-    setPaymentErr('')
-  }, [activeDetail?.id])
+  const consultationFee = useMemo(() => {
+    if (!activeDetail) return 0
+    return resolveConsultationFee(activeDetail)
+  }, [activeDetail])
 
-  async function handlePrintVisitSlip() {
-    if (!activeDetail?.id) return false
-    if (!canPrintVisitSlip) {
-      setSaveErr('Chỉ in phiếu khi lịch đã xác nhận.')
-      return false
-    }
-    setSaveErr('')
-    let detail = activeDetail
-    const ticket = String(detail.ticket || '').trim()
-    if (detailMissingForSlip(detail) && ticket && token) {
-      setDetailLoadingId(String(detail.id))
-      try {
-        const data = await lookupAppointmentByTicket({ token, ticket })
-        const norm = normalizeLookup(data)
-        setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
-        detail = mergeReceptionDetail(norm, list.find((r) => String(r.id) === String(norm.id)))
-      } catch (e) {
-        setSaveErr(e?.message || 'Không tải được dữ liệu lịch hẹn để in.')
-        return false
-      } finally {
-        setDetailLoadingId(null)
-      }
-    }
-    const view = buildVisitSlipView(detail, clinicRooms, {
-      clinicRoom: clinicRoomDraft || detail.clinicRoom,
-      visitQueueNumber:
-        visitQueueDraft !== '' && visitQueueDraft != null
-          ? visitQueueDraft
-          : detail.visitQueueNumber,
-    })
-    if (!view) {
-      setSaveErr('Không tạo được phiếu khám.')
-      return false
-    }
-    const ok = printVisitSlip(view)
-    if (!ok) setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
-    return ok
-  }
+  const isPaid = useMemo(() => {
+    return String(activeDetail?.payment?.status || '').toLowerCase() === 'paid'
+  }, [activeDetail?.payment?.status])
 
-  function handlePrintPaymentInvoice() {
-    if (!activeDetail?.id || !isPaid) {
-      setSaveErr('Chỉ in hóa đơn khi đã thu phí.')
-      return false
-    }
-    setSaveErr('')
-    const view = buildPaymentInvoiceView(activeDetail, slipOverrides)
-    if (!view) {
-      setSaveErr('Không tạo được hóa đơn — thiếu thông tin thanh toán.')
-      return false
-    }
-    const ok = printPaymentInvoice(view)
-    if (!ok) setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
-    return ok
-  }
+  const currentStatus = normalizeStatus(activeDetail?.status || detailStatus)
+  const canEditStatus = currentStatus === 'pending'
+  const pastSlotDetail = useMemo(() => isPendingAppointmentPastSlot(activeDetail), [activeDetail])
+  const hasClinicRoom = Boolean(String(clinicRoomDraft || activeDetail?.clinicRoom || '').trim())
+  const canFinishConfirm = canEditStatus && isPaid && hasClinicRoom
 
-  function printAfterConfirm({ visitSlip, invoice }) {
-    return printPaymentThenVisitSlip({
-      invoice,
-      visitSlip,
-      printVisitSlip,
-    })
-  }
+  const printInvoiceDisabled = useMemo(() => {
+    return !activeDetail || !isPaid
+  }, [activeDetail, isPaid])
 
-  function normalizeLookup(data) {
-    const appointment = data.appointment || data
-    return {
-      id: appointment.id,
-      ticket: appointment.ticket || appointment.bookingCode || data.ticket,
-      appointmentDate: appointment.appointmentDate,
-      startTime: appointment.startTime,
-      endTime: appointment.endTime || '',
-      status: appointment.status,
-      workflowStatus: appointment.workflowStatus,
-      source: appointment.source || appointment.bookingSource || data.source,
-      bookingSource: appointment.bookingSource || appointment.source || data.source,
-      createdByStaff: appointment.createdByStaff || appointment.createdByReceptionist || data.createdByStaff,
-      note: appointment.note || appointment.symptoms || '',
-      cancelReason: appointment.cancelReason || '',
-      cancelledAt: appointment.cancelledAt ?? null,
-      cancelledBy: appointment.cancelledBy ?? null,
-      confirmedAt: appointment.confirmedAt ?? null,
-      confirmedBy: appointment.confirmedBy ?? null,
-      createdAt: appointment.createdAt,
-      visitQueueNumber: appointment.visitQueueNumber ?? null,
-      clinicRoom: appointment.clinicRoom || '',
-      clinicRoomName: appointment.clinicRoomName || '',
-      payment: appointment.payment || null,
-      consultationFee: data.consultationFee ?? appointment.doctor?.consultationFee ?? null,
-      patient: (data.patient || appointment.patient)
-        ? {
-            ...(data.patient || appointment.patient),
-            patientCode: (data.patient || appointment.patient).patientCode || buildPatientCode((data.patient || appointment.patient).id),
-          }
-        : null,
-      doctor: data.doctor || appointment.doctor || null,
-      specialty: appointment.specialty || null,
-      servicePackage: appointment.servicePackage || null,
-      bookingMethod: appointment.bookingMethod || null,
-      branch: appointment.branch || null,
-    }
-  }
+  const printSlipDisabled = useMemo(() => {
+    return !activeDetail || currentStatus !== 'confirmed' || !activeDetail.clinicRoom
+  }, [activeDetail, currentStatus])
 
-  const runLookup = useCallback(
-    async (raw, options = {}) => {
-      const t = String(raw != null ? raw : ticket).trim()
-      setTicketErr('')
-      setLookupLoading(true)
-      setDetailErr('')
-      if (!t) {
-        setTicketErr('Vui lòng nhập mã vé (YMA…).')
-        setLookupLoading(false)
-        return { ok: false }
-      }
-      try {
-        const data = await lookupAppointmentByTicket({ token, ticket: t })
-        const norm = normalizeLookup(data)
-        const ticketCode = String(norm.ticket || t).trim()
-        setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
-        const found = list.find((r) => String(r.id) === String(norm.id))
-        if (found) {
-          setSelectedId(String(found.id))
-          setLookupDetail(null)
-        } else {
-          setSelectedId(null)
-          setLookupDetail(norm)
-        }
-        if (options.focusList) {
-          setQrListFocusTicket(ticketCode)
-          setListSearch(ticketCode)
-          setPage(0)
-        }
-        setSaveMsg('')
-        setSaveErr('')
-        setVisitErr('')
-        return { ok: true, norm, ticket: ticketCode }
-      } catch (e) {
-        setTicketErr(e?.message || 'Không tra cứu được.')
-        setLookupDetail(null)
-        return { ok: false }
-      } finally {
-        setLookupLoading(false)
-      }
-    },
-    [token, ticket, list],
-  )
+  const printBothDisabled = printInvoiceDisabled || printSlipDisabled
 
-  runLookupRef.current = runLookup
-
-  // Auto tra cứu khi chuyển từ trang Đăng ký về (state.lookupTicket)
-  useEffect(() => {
-    const t = String(location.state?.lookupTicket || '').trim()
-    if (!token || !t) return
-    if (didAutoLookupRef.current) return
-    didAutoLookupRef.current = true
-    setTicket(t)
-    void runLookup(t)
-  }, [token, location.state, runLookup])
-
-  // Flash message khi điều hướng từ trang khác sang (vd. đăng ký thành công).
-  useEffect(() => {
-    const msg = location.state?.flash
-    const type = String(msg?.type || '').toLowerCase()
-    const text = String(msg?.message || '').trim()
-    if (!text) return
-    if (type === 'error' || type === 'err') {
-      setFlashErr(text)
-      setFlashOk('')
-    } else {
-      setFlashOk(text)
-      setFlashErr('')
-    }
-    const t = setTimeout(() => {
-      setFlashOk('')
-      setFlashErr('')
-    }, 4500)
-    return () => clearTimeout(t)
-  }, [location.state])
-
-  // Bộ lọc từ trang Thống kê (Dashboard) — mỗi lần bấm ô KPI áp dụng lại
-  useEffect(() => {
-    const navAt = location.state?.dashNavAt
-    if (navAt == null || navAt === '') return
-    const n = readReceptionNavState(location)
-    setFromDate(n.fromDate)
-    setToDate(n.toDate)
-    setStatusFilter(n.statusFilter)
-    setDashFilter(n.dashFilter)
-    setFiltersOpen(n.filtersOpen)
-    setListSearch('')
-    setQrListFocusTicket('')
-    setPage(0)
-  }, [location.state?.dashNavAt])
-
-  useEffect(() => {
-    if (!location.state?.openQrScan) return
-    setTicketErr('')
-    setQrErr('')
-    setQrOpen(true)
-  }, [location.state?.qrNavAt, location.state?.openQrScan])
-
-  useEffect(() => {
-    if (!qrOpen) return undefined
-    setQrErr('')
-    qrScanDoneRef.current = false
-    const html5 = new Html5Qrcode(QR_READER_ELEMENT_ID, { verbose: false })
-    qrScannerRef.current = html5
-    const config = { fps: 10, qrbox: { width: 250, height: 250 } }
-
-    const onScan = async (decodedText) => {
-      if (qrScanDoneRef.current) return
-      if (String(decodedText || '').trim().startsWith('VITACARE_CHECKIN:')) {
-        qrScanDoneRef.current = true
-        try {
-          await html5.stop()
-        } catch { /* scanner đã dừng */ }
-        try { html5.clear() } catch { /* ignore */ }
-        try {
-          const result = await staffCheckInByQr(decodedText)
-          setQrOpen(false)
-          setFlashOk(
-            `Check-in thành công · STT ${result.queueNumber} · ${result.doctor?.fullName || 'Bác sĩ đang cập nhật'} · ${result.room?.name || result.room?.code || 'Phòng đang cập nhật'}`,
-          )
-          if (result.bookingCode) {
-            setTicket(result.bookingCode)
-            await runLookupRef.current(result.bookingCode, { focusList: true })
-          }
-        } catch (scanError) {
-          setQrErr(scanError?.message || 'Không thể check-in mã QR này.')
-          setQrOpen(false)
-        }
-        return
-      }
-      const code = ticketFromQrPayload(decodedText)
-      if (!code) return
-      qrScanDoneRef.current = true
-      try {
-        await html5.stop()
-      } catch {
-        /* ignore */
-      }
-      try {
-        html5.clear()
-      } catch {
-        /* ignore */
-      }
-      setQrOpen(false)
-      setTicket(code)
-      try {
-        await runLookupRef.current(code, { focusList: true })
-      } catch {
-        /* lỗi đã xử lý trong runLookup */
-      }
-    }
-
-    const onFail = () => {}
-    qrDecodeHandlerRef.current = onScan
-
-    let cancelled = false
-    // Trì hoãn một nhịp để modal render xong và tránh effect kép của React Strict Mode giữ camera.
-    const startTimer = window.setTimeout(async () => {
-      try {
-        const cameras = await Html5Qrcode.getCameras()
-        if (cancelled) return
-        if (!cameras.length) throw new DOMException('Không tìm thấy camera', 'NotFoundError')
-        const orderedCameras = [...cameras].sort((a, b) => {
-          const score = (camera) => /back|rear|environment|sau/i.test(camera.label) ? 0 : /integrated|front|user|facetime|webcam/i.test(camera.label) ? 1 : /virtual|obs|droidcam|snap/i.test(camera.label) ? 3 : 2
-          return score(a) - score(b)
-        })
-        let lastError
-        let started = false
-        for (const camera of orderedCameras) {
-          if (cancelled) return
-          try {
-            await html5.start(camera.id, config, onScan, onFail)
-            started = true
-            break
-          } catch (error) {
-            lastError = error
-          }
-        }
-        if (!started) {
-          const labels = orderedCameras.map((camera) => camera.label || 'Camera không tên').join(', ')
-          throw new Error(`${cameraErrorMessage(lastError)} Đã thử: ${labels}.`)
-        }
-        if (cancelled) await html5.stop().catch(() => {})
-      } catch (error) {
-        if (!cancelled) setQrErr(cameraErrorMessage(error))
-      }
-    }, 120)
-
-    return () => {
-      cancelled = true
-      window.clearTimeout(startTimer)
-      /** `stop()` throws đồng bộ nếu scanner đã dừng (vd. sau khi quét xong) — phải bắt để không crash React. */
-      let stopPromise
-      try {
-        stopPromise = html5.stop()
-      } catch {
-        stopPromise = Promise.resolve()
-      }
-      void stopPromise
-        .catch(() => {})
-        .finally(() => {
-          try {
-            html5.clear()
-          } catch {
-            /* ignore */
-          }
-          if (qrScannerRef.current === html5) qrScannerRef.current = null
-        })
-    }
-  }, [qrOpen])
-
-  const scanQrImage = async (file) => {
-    if (!file || !qrScannerRef.current || !qrDecodeHandlerRef.current) return
-    setQrImageLoading(true)
-    setQrErr('')
-    try {
-      const decodedText = await qrScannerRef.current.scanFile(file, true)
-      await qrDecodeHandlerRef.current(decodedText)
-    } catch (error) {
-      setQrErr(error?.message || 'Không tìm thấy mã QR trong ảnh đã chọn.')
-    } finally {
-      setQrImageLoading(false)
-    }
-  }
-
-  const applyPaymentToCaches = useCallback((id, payment, norm = null) => {
+  const applyPaymentToCaches = useCallback((id: string, payment: any, norm: any = null) => {
     const key = String(id)
     if (!key || !payment) return
     setDetailById((prev) => ({
@@ -989,8 +252,8 @@ export default function ReceptionHome() {
   }, [activeDetail])
 
   const refreshPaymentFromServer = useCallback(
-    async (ticket) => {
-      const t = String(ticket || activeDetail?.ticket || '').trim()
+    async (ticketCode: string) => {
+      const t = String(ticketCode || activeDetail?.ticket || '').trim()
       if (!t || !token) return false
       try {
         const data = await lookupAppointmentByTicket({ token, ticket: t })
@@ -1014,7 +277,7 @@ export default function ReceptionHome() {
     }
   }
 
-  async function persistAppointmentStatus(next, options = {}) {
+  async function persistAppointmentStatus(next: string, options: any = {}) {
     if (!activeDetail?.id) return
     const status = normalizeStatus(next)
     if (status !== 'confirmed' && status !== 'cancelled') {
@@ -1027,7 +290,7 @@ export default function ReceptionHome() {
       throw new Error('Chưa thu phí khám.')
     }
 
-    const visitExtra = {}
+    const visitExtra: any = {}
     if (status === 'confirmed') {
       const room = String(clinicRoomDraft || '').trim()
       if (!room) {
@@ -1055,7 +318,7 @@ export default function ReceptionHome() {
     const fallbackConfirm = staffConfirmFallback()
     const nowIso = new Date().toISOString()
     const paymentPatch = options.payment ? { payment: options.payment } : {}
-    let patch = {}
+    let patch: any = {}
     if (status === 'cancelled' && ap) {
       patch = {
         cancelReason: ap.cancelReason ?? activeDetail.cancelReason,
@@ -1134,6 +397,14 @@ export default function ReceptionHome() {
     }
   }
 
+  function printAfterConfirm(docs: any) {
+    if (!docs?.invoice || !docs?.visitSlip) return false
+    return printPaymentThenVisitSlip({
+      invoice: docs.invoice,
+      visitSlip: docs.visitSlip,
+    })
+  }
+
   async function handleRecordPayment() {
     if (!activeDetail?.id || !canEditStatus || isPaid) return
     if (!hasClinicRoom) {
@@ -1167,7 +438,7 @@ export default function ReceptionHome() {
       } else {
         setSaveMsg('Đã thu phí và xác nhận lịch hẹn.')
       }
-    } catch (e) {
+    } catch (e: any) {
       const msg = e?.message || 'Không ghi nhận được thanh toán.'
       if (/đã được ghi nhận thanh toán/i.test(msg)) {
         const synced = await refreshPaymentFromServer(activeDetail.ticket)
@@ -1183,7 +454,7 @@ export default function ReceptionHome() {
             } else {
               setSaveMsg('Lịch đã thu phí — đã xác nhận lịch hẹn.')
             }
-          } catch (e2) {
+          } catch (e2: any) {
             setPaymentErr('')
             setSaveMsg('Đã thu phí. Chưa xác nhận được lịch — bấm «Hoàn tất xác nhận» bên dưới.')
             setSaveErr(e2?.message || 'Không xác nhận được lịch.')
@@ -1217,7 +488,7 @@ export default function ReceptionHome() {
       } else {
         setSaveMsg('Đã xác nhận lịch hẹn.')
       }
-    } catch (e) {
+    } catch (e: any) {
       setSaveErr(e?.message || 'Không xác nhận được lịch.')
     } finally {
       setSaving(false)
@@ -1226,26 +497,27 @@ export default function ReceptionHome() {
 
   async function handleCancelAppointment() {
     if (!activeDetail?.id || !canEditStatus) return
-    const ticket = String(activeDetail.ticket || '').trim()
-    if (!window.confirm(ticket ? `Hủy lịch hẹn ${ticket}?` : 'Hủy lịch hẹn này?')) return
+    const ticketCode = String(activeDetail.ticket || '').trim()
+    if (!window.confirm(ticketCode ? `Hủy lịch hẹn ${ticketCode}?` : 'Hủy lịch hẹn này?')) return
     setSaveErr('')
     setSaveMsg('')
     setSaving(true)
     try {
       await persistAppointmentStatus('cancelled')
       setSaveMsg('Đã hủy lịch hẹn.')
-    } catch (e) {
+    } catch (e: any) {
       setSaveErr(e?.message || 'Không hủy được lịch.')
     } finally {
       setSaving(false)
     }
   }
 
-  async function selectRow(row) {
+  async function handleOpenDetail(row: any) {
     if (!row) return
     const id = String(row.id)
     setLookupDetail(null)
     setSelectedId(id)
+    setIsDetailOpen(true)
     setSaveMsg('')
     setSaveErr('')
     setVisitErr('')
@@ -1261,7 +533,7 @@ export default function ReceptionHome() {
       const data = await lookupAppointmentByTicket({ token, ticket: row.ticket })
       const norm = normalizeLookup(data)
       setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
-    } catch (e) {
+    } catch (e: any) {
       setDetailErr(e?.message || 'Không tải được chi tiết lịch hẹn.')
     } finally {
       setDetailLoadingId(null)
@@ -1293,7 +565,7 @@ export default function ReceptionHome() {
         const norm = normalizeLookup(data)
         setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
         detail = norm
-      } catch (e) {
+      } catch (e: any) {
         setDetailErr(e?.message || 'Không tải được chi tiết lịch hẹn.')
         return
       } finally {
@@ -1320,674 +592,253 @@ export default function ReceptionHome() {
     })
   }
 
+  const handleClinicRoomChange = useCallback(
+    async (newRoomId: string) => {
+      setClinicRoomDraft(newRoomId)
+      setVisitErr('')
+      const reqId = ++roomSttReqRef.current
+      if (!newRoomId || !token || !activeDetail?.appointmentDate) {
+        setVisitQueueDraft('')
+        return
+      }
+      try {
+        const nextQ = await getNextVisitQueueNumber({
+          token,
+          clinicRoom: newRoomId,
+          appointmentDate: ymd(new Date(activeDetail.appointmentDate)),
+        })
+        if (reqId === roomSttReqRef.current) {
+          setVisitQueueDraft(String(nextQ))
+        }
+      } catch {
+        /* giữ nguyên draft */
+      }
+    },
+    [token, activeDetail?.appointmentDate],
+  )
+
+  const printSlipOnly = useCallback(() => {
+    if (!activeDetail) return
+    const slip = buildVisitSlipView(activeDetail, clinicRooms, {
+      clinicRoom: clinicRoomDraft,
+      visitQueueNumber: visitQueueDraft,
+    })
+    if (!slip) return
+    printVisitSlip(slip)
+  }, [activeDetail, clinicRooms, clinicRoomDraft, visitQueueDraft])
+
+  const printInvoiceOnly = useCallback(() => {
+    if (!activeDetail) return
+    const invoice = buildPaymentInvoiceView(activeDetail, {
+      clinicRoom: clinicRoomDraft,
+      visitQueueNumber: visitQueueDraft,
+    })
+    if (!invoice) return
+    printPaymentInvoice(invoice)
+  }, [activeDetail, clinicRoomDraft, visitQueueDraft])
+
+  const printBothFromDetail = useCallback(() => {
+    if (!activeDetail) return
+    const invoice = buildPaymentInvoiceView(activeDetail, {
+      clinicRoom: clinicRoomDraft,
+      visitQueueNumber: visitQueueDraft,
+    })
+    const visitSlip = buildVisitSlipView(activeDetail, clinicRooms, {
+      clinicRoom: clinicRoomDraft,
+      visitQueueNumber: visitQueueDraft,
+    })
+    if (!invoice || !visitSlip) return
+    printPaymentThenVisitSlip({ invoice, visitSlip })
+  }, [activeDetail, clinicRooms, clinicRoomDraft, visitQueueDraft])
+
+  const filteredList = useMemo(() => {
+    return list.filter((row) => {
+      if (!matchesDashFilter(row, dashFilter)) return false
+      if (listSearch.trim()) {
+        const q = listSearch.trim().toLowerCase()
+        const ticketMatch = String(row.ticket || '').toLowerCase().includes(q)
+        const pCodeMatch = String(row.patient?.patientCode || '').toLowerCase().includes(q)
+        const nameMatch = displayName(row.patient).toLowerCase().includes(q)
+        if (!ticketMatch && !pCodeMatch && !nameMatch) return false
+      }
+      return true
+    })
+  }, [list, dashFilter, listSearch])
+
+  const totalPages = Math.ceil(filteredList.length / PAGE_SIZE) || 1
+  const paginatedList = useMemo(() => {
+    const start = page * PAGE_SIZE
+    return filteredList.slice(start, start + PAGE_SIZE)
+  }, [filteredList, page])
+
+  const stats = useMemo(() => {
+    let pending = 0
+    let unpaid = 0
+    let noRoom = 0
+    let ready = 0
+    let expiring = 0
+
+    for (const r of list) {
+      if (normalizeStatus(r?.status) === 'pending') {
+        pending++
+        const paid = String(r?.payment?.status || '').toLowerCase() === 'paid'
+        const room = String(r?.clinicRoom || '').trim()
+        const isExp = isPendingAppointmentPastSlot(r)
+        if (isExp) expiring++
+        else if (!paid) unpaid++
+        else if (!room) noRoom++
+        else ready++
+      }
+    }
+    return { pending, unpaid, noRoom, ready, expiring }
+  }, [list])
+
+  const handleQrFileInput = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setQrImageLoading(true)
+    setQrErr('')
+    try {
+      const html5QrCode = new Html5Qrcode('tcl-qr-hidden-reader')
+      const decodedText = await html5QrCode.scanFile(file, true)
+      if (qrDecodeHandlerRef.current) {
+        await qrDecodeHandlerRef.current(decodedText)
+      }
+    } catch (err: any) {
+      setQrErr(cameraErrorMessage(err))
+    } finally {
+      setQrImageLoading(false)
+    }
+  }, [])
+
   if (!token || !user || staffRole(user) !== 'receptionist') return null
 
   return (
-    <div className="tcl-shell">
+    <div className="min-h-screen bg-slate-100/60 flex flex-col pl-0 md:pl-[232px] transition-all">
       <RoleSidebar role="receptionist" active="reception" user={user} onLogout={performLogout} />
-      <header className="tcl-top">
-        <div className="tcl-brand">VITACARE</div>
-        <nav className="tcl-nav" aria-label="Module">
-          <button type="button" onClick={() => navigate('/dashboard')}>
-            Thống kê
-          </button>
-          <button type="button" className="is-active">
-            Lịch hẹn
-          </button>
-          <button type="button" onClick={() => navigate('/registration', { state: { createNew: true } })}>
-            Đăng ký
-          </button>
-        </nav>
-        <div className="tcl-top-user">
-          <span>{displayName(user)}</span>
+
+      <div className="flex-1 p-5 md:p-6 max-w-[1600px] w-full mx-auto flex flex-col">
+        {flashOk ? (
+          <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl shadow-xs">
+            {flashOk}
+          </div>
+        ) : null}
+        {flashErr ? (
+          <div className="mb-4 px-4 py-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl shadow-xs">
+            {flashErr}
+          </div>
+        ) : null}
+
+        {/* Header trang */}
+        <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Tiếp nhận & Điều phối lịch khám</h1>
+            <p className="text-xs text-slate-500 mt-0.5">Danh sách lịch hẹn, kiểm tra thanh toán và phân phòng khám</p>
+          </div>
           <button
             type="button"
-            className="tcl-btn"
-            onClick={performLogout}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm border border-emerald-600 transition-all cursor-pointer flex items-center gap-2 active:scale-[0.98]"
+            onClick={handleAdd}
           >
-            Đăng xuất
+            <PlusIcon className="w-4 h-4 text-white" />
+            <span>Tạo đăng ký mới</span>
           </button>
         </div>
-      </header>
 
-      <div className="tcl-page">
-        {flashOk ? <div className="tcl-banner-ok">{flashOk}</div> : null}
-        {flashErr ? <div className="tcl-banner-err">{flashErr}</div> : null}
-        <div className="tcl-bar">
-          <h1>Lịch hẹn</h1>
-          <div className="tcl-bar-actions">
-            <button type="button" className="tcl-btn tcl-btn--pri" onClick={handleAdd}>
-              + Thêm
-            </button>
-          </div>
-        </div>
+        {/* Thanh Thống kê */}
+        <ReceptionStatsBar
+          stats={stats}
+          dashFilter={dashFilter}
+          setDashFilter={setDashFilter}
+          statusFilter={statusFilter}
+        />
 
-        <div className="tcl-split">
-          <aside className="tcl-sidebar">
-            <div className="tcl-filters">
-              <div className="tcl-search-filter-row">
-                <input
-                  id="reception-list-search"
-                  className="tcl-list-search-input"
-                  type="search"
-                  value={listSearch}
-                  onChange={(e) => {
-                    setListSearch(e.target.value)
-                    setQrListFocusTicket('')
-                  }}
-                  placeholder="Tìm mã lịch hẹn, mã BN hoặc tên…"
-                  autoComplete="off"
-                  enterKeyHint="search"
-                  aria-label="Tìm trong danh sách đã tải"
-                />
-                <button
-                  type="button"
-                  className={`tcl-btn tcl-btn--filter-toggle${filtersOpen ? ' is-open' : ''}`}
-                  aria-expanded={filtersOpen}
-                  aria-controls="reception-advanced-filters"
-                  onClick={() => setFiltersOpen((o) => !o)}
-                >
-                  Lọc
-                </button>
-                <button
-                  type="button"
-                  className="tcl-btn"
-                  title="Mở camera để quét mã QR lịch hẹn"
-                  disabled={lookupLoading}
-                  onClick={() => {
-                    setTicketErr('')
-                    setQrErr('')
-                    setQrOpen(true)
-                  }}
-                >
-                  {lookupLoading ? '…' : 'Quét QR'}
-                </button>
-              </div>
-              {ticketErr ? <div className="tcl-banner-err">{ticketErr}</div> : null}
-              {filtersOpen ? (
-                <div
-                  id="reception-advanced-filters"
-                  className="tcl-filters-advanced"
-                  role="region"
-                  aria-label="Lọc theo trạng thái và khoảng ngày"
-                >
-                  <p className="tcl-filters-advanced-hint">
-                    Trạng thái và khoảng ngày dùng để tải danh sách từ máy chủ; ô phía trên lọc nhanh trong dữ liệu đã tải.
-                  </p>
-                  <div className="tcl-filters-body tcl-filters-body--advanced">
-                    <div className="tcl-filter-field">
-                      <label htmlFor="reception-status-filter">Trạng thái</label>
-                      <select
-                        id="reception-status-filter"
-                        value={statusFilter}
-                        onChange={(e) => {
-                          setStatusFilter(e.target.value)
-                          setDashFilter('')
-                        }}
-                      >
-                        <option value="all">Tất cả</option>
-                        <option value="pending">Chờ</option>
-                        <option value="confirmed">Đã xác nhận</option>
-                        <option value="examined">Đã khám</option>
-                        <option value="cancelled">Đã hủy</option>
-                      </select>
-                    </div>
-                    <div className="tcl-filter-field">
-                      <label htmlFor="reception-from-date">Từ ngày</label>
-                      <input id="reception-from-date" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                    </div>
-                    <div className="tcl-filter-field">
-                      <label htmlFor="reception-to-date">Đến ngày</label>
-                      <input id="reception-to-date" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            {dashFilter ? (
-              <div className="tcl-dash-filter-banner" role="status">
-                <span>
-                  Lọc từ Thống kê: <strong>{dashFilterLabelVi(dashFilter)}</strong>
-                  {' · '}
-                  {formatDateVi(fromDate)}
-                  {statusFilter !== 'all' ? ` · ${statusLabelVi(statusFilter)}` : ''}
-                </span>
-                <button
-                  type="button"
-                  className="tcl-btn"
-                  onClick={() => {
-                    setDashFilter('')
-                    setListSearch('')
-                  }}
-                >
-                  Bỏ lọc
-                </button>
-              </div>
-            ) : null}
-
-            <div className="tcl-list-panel">
-              <div className="tcl-list-head">
-                <div>
-                  <h3 className="tcl-list-title">Danh sách lịch hẹn</h3>
-                  <p className="tcl-list-meta">
-                    {listLoading
-                      ? 'Đang tải…'
-                      : `${filteredRows.length} lịch${dashFilter ? ` · ${dashFilterLabelVi(dashFilter)}` : ''}${listSearch.trim() ? ' · tìm kiếm' : ''}`}
-                  </p>
-                </div>
-                <span className="tcl-list-page">Trang {page + 1}/{pageCount}</span>
-              </div>
-              <div className="tcl-table-wrap">
-                <table className="tcl-table tcl-list-table">
-                  <thead>
-                    <tr>
-                      <th className="tcl-col-status" scope="col">Trạng thái</th>
-                      <th className="tcl-col-ticket" scope="col">Mã lịch hẹn</th>
-                      <th className="tcl-col-source" scope="col">Nguồn</th>
-                      <th className="tcl-col-code" scope="col">Mã bệnh nhân</th>
-                      <th className="tcl-col-name" scope="col">Tên bệnh nhân</th>
-                      <th className="tcl-col-method" scope="col">Hình thức khám</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {listLoading ? (
-                      <tr className="tcl-table-empty-row">
-                        <td colSpan={6} className="tcl-table-empty">
-                          Đang tải danh sách…
-                        </td>
-                      </tr>
-                    ) : pageRows.length === 0 ? (
-                      <tr className="tcl-table-empty-row">
-                        <td colSpan={6} className="tcl-table-empty">
-                          {listErr || 'Không có lịch trong khoảng thời gian này.'}
-                        </td>
-                      </tr>
-                    ) : (
-                      pageRows.map((row) => {
-                        const statusMeta = receptionStatusMeta(row)
-                        return (
-                        <tr
-                          key={String(row.id)}
-                          className={String(selectedId) === String(row.id) ? 'is-selected' : ''}
-                          onClick={() => selectRow(row)}
-                        >
-                          <td className="tcl-cell-status">
-                            <span className={`tcl-status-badge tcl-status-badge--${statusMeta.tone}`}>
-                              <span className="tcl-stt-dot" aria-hidden="true" />
-                              {statusMeta.label}
-                            </span>
-                          </td>
-                          <td className="tcl-cell-ticket">{row.ticket}</td>
-                          <td className="tcl-cell-source">
-                            <span
-                              className={`tcl-source-badge tcl-source-badge--${appointmentSourceValue(row)}`}
-                              title={appointmentSourceTitle(row)}
-                            >
-                              {appointmentSourceLabel(row)}
-                            </span>
-                          </td>
-                          <td className="tcl-cell-code">{row.patient?.patientCode || '—'}</td>
-                          <td className="tcl-cell-name">{patientListDisplayName(row.patient)}</td>
-                          <td className="tcl-cell-method">{row.bookingMethod?.name || (row.servicePackage ? 'Khám theo gói' : 'Khám với bác sĩ')}</td>
-                        </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="tcl-pager">
-                <span className="tcl-pager-summary">
-                  {filteredRows.length} lịch — trang {page + 1}/{pageCount}
-                </span>
-                <div className="tcl-pager-actions">
-                  <button
-                    type="button"
-                    className="tcl-btn"
-                    disabled={page <= 0}
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                    aria-label="Trang trước"
-                  >
-                    ‹
-                  </button>
-                  <button
-                    type="button"
-                    className="tcl-btn"
-                    disabled={page >= pageCount - 1}
-                    onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-                    aria-label="Trang sau"
-                  >
-                    ›
-                  </button>
-                </div>
-              </div>
-            </div>
-          </aside>
-
-          {activeDetail ? (
-            <div className="tcl-detail-modal-backdrop" role="presentation" onClick={() => { setSelectedId(null); setLookupDetail(null); setQrListFocusTicket('') }}>
-          <main className="tcl-detail tcl-detail--modal" role="dialog" aria-modal="true" aria-label="Chi tiết lịch hẹn" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="tcl-detail-modal-close" aria-label="Đóng chi tiết" onClick={() => { setSelectedId(null); setLookupDetail(null); setQrListFocusTicket('') }}>×</button>
-              <>
-                <div className="tcl-detail-head">
-                  <div className="tcl-banner-ok">{flashOk || 'Bạn đang xem thông tin lịch hẹn'}</div>
-                  {detailErr ? <div className="tcl-banner-err">{detailErr}</div> : null}
-                  {detailLoadingId && String(activeDetail?.id) === String(detailLoadingId) ? (
-                    <div className="tcl-banner-ok">Đang tải chi tiết…</div>
-                  ) : null}
-                  {saveErr ? <div className="tcl-banner-err">{saveErr}</div> : null}
-                  {saveMsg ? <div className="tcl-banner-ok">{saveMsg}</div> : null}
-                </div>
-
-                <div className="tcl-detail-layout">
-                  <div className="tcl-detail-col tcl-detail-col--info">
-                <section className="tcl-sec">
-                  <h2 className="tcl-sec-title">
-                    <span>1</span>
-                    Thông tin bệnh nhân
-                  </h2>
-                  <div className="tcl-grid-form">
-                    <div className="tcl-f">
-                      <label>Mã bệnh nhân</label>
-                      <input readOnly value={activeDetail.patient?.patientCode || '—'} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Họ tên</label>
-                      <input readOnly value={patientListDisplayName(activeDetail.patient)} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Ngày sinh</label>
-                      <input readOnly value={formatDob(activeDetail.patient?.dob)} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Độ tuổi</label>
-                      <input
-                        readOnly
-                        value={
-                          activeDetail.patient?.age != null && activeDetail.patient.age !== ''
-                            ? String(activeDetail.patient.age)
-                            : ageFromDobField(activeDetail.patient?.dob) || '—'
-                        }
-                      />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Điện thoại</label>
-                      <input readOnly value={activeDetail.patient?.phone || '—'} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Giới tính</label>
-                      <input
-                        readOnly
-                        value={(() => {
-                          const g = activeDetail.patient?.gender
-                          if (g === true || g === 'true') return 'Nam'
-                          if (g === false || g === 'false') return 'Nữ'
-                          const s = String(g ?? '').trim()
-                          return s || '—'
-                        })()}
-                      />
-                    </div>
-                    <div className="tcl-f tcl-f--full">
-                      <label>Địa chỉ</label>
-                      <input readOnly value={activeDetail.patient?.address || '—'} />
-                    </div>
-                  </div>
-                </section>
-
-                <section className="tcl-sec">
-                  <h2 className="tcl-sec-title">
-                    <span>2</span>
-                    Thông tin lịch hẹn
-                  </h2>
-                  <div className="tcl-grid-form">
-                    <div className="tcl-f">
-                      <label>Mã lịch hẹn</label>
-                      <input readOnly value={activeDetail.ticket || '—'} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Ngày đặt lịch</label>
-                      <input readOnly value={formatDateTimeVi(activeDetail.createdAt)} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Nguồn đăng ký</label>
-                      <input readOnly value={appointmentSourceTitle(activeDetail)} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Nhân viên tạo lịch</label>
-                      <input readOnly value={sourceCreatorLabel(activeDetail)} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Ngày khám</label>
-                      <input readOnly value={formatDateVi(activeDetail.appointmentDate)} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Giờ khám</label>
-                      <input readOnly value={formatExamTimeLine(activeDetail.startTime, activeDetail.endTime)} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Dịch vụ / Gói khám</label>
-                      <input readOnly value={activeDetail.servicePackage?.name || (activeDetail.doctor ? 'Khám với bác sĩ' : '—')} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Hình thức khám</label>
-                      <input readOnly value={activeDetail.bookingMethod?.name || (activeDetail.servicePackage ? 'Khám theo gói' : 'Khám với bác sĩ')} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Cơ sở y tế</label>
-                      <input readOnly value={activeDetail.branch?.name || '—'} />
-                    </div>
-                    <div className="tcl-f tcl-f--full">
-                      <label>Địa chỉ cơ sở</label>
-                      <input readOnly value={activeDetail.branch?.address || '—'} />
-                    </div>
-                  </div>
-                </section>
-                  </div>
-
-                  <div className="tcl-detail-col tcl-detail-col--actions">
-                <section className="tcl-sec tcl-sec--room">
-                  <h2 className="tcl-sec-title tcl-sec-title--plain">Xếp phòng khám</h2>
-                  <div className="tcl-grid-form">
-                    <div className="tcl-f">
-                      <label>Bác sĩ</label>
-                      <input readOnly value={doctorDisplayName(activeDetail.doctor)} />
-                    </div>
-                    <div className="tcl-f">
-                      <label>Chuyên khoa</label>
-                      <input readOnly value={activeDetail.specialty?.name || doctorSpecialtyDisplay(activeDetail.doctor)} />
-                    </div>
-                    <div
-                      className={`tcl-room-queue-row tcl-f--full${
-                        currentStatus === 'cancelled' || currentStatus === 'examined'
-                          ? ' tcl-room-queue-row--room-only'
-                          : ''
-                      }`}
-                    >
-                      <div className="tcl-f tcl-room-queue-row__room">
-                        <label htmlFor="reception-clinic-room">Chọn phòng</label>
-                        {clinicRoomsErr ? (
-                          <div className="tcl-banner-err" style={{ marginBottom: 8 }}>
-                            {clinicRoomsErr}
-                          </div>
-                        ) : null}
-                        <select
-                          id="reception-clinic-room"
-                          value={clinicRoomDraft}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            setClinicRoomDraft(v)
-                            if (!canEditVisit) return
-                            void applyClinicRoomSelection(v)
-                          }}
-                          disabled={!canEditVisit}
-                        >
-                          <option value="">— Chọn phòng —</option>
-                          {clinicRoomDraft &&
-                          !clinicRooms.some((r) => String(r.id || r.roomID) === String(clinicRoomDraft)) ? (
-                            <option value={clinicRoomDraft}>
-                              {clinicRoomDraft} (giá trị hiện tại / ngoài danh mục)
-                            </option>
-                          ) : null}
-                          {clinicRooms.map((r) => (
-                            <option key={r.id || r.roomID} value={r.id || r.roomID}>
-                              {r.name}{r.branch?.name ? ` · ${r.branch.name}` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {currentStatus !== 'cancelled' && currentStatus !== 'examined' ? (
-                        <div className="tcl-f tcl-room-queue-row__queue">
-                          <label htmlFor="reception-visit-queue">Số thứ tự</label>
-                          <input
-                            id="reception-visit-queue"
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={visitQueueDraft}
-                            onChange={(e) => setVisitQueueDraft(e.target.value)}
-                            disabled={!canEditVisit}
-                            placeholder="Tự gán"
-                            title="Để trống = tự gán theo phòng"
-                            autoComplete="off"
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="tcl-f tcl-f--full">
-                      <label>Triệu chứng / Ghi chú</label>
-                      <textarea readOnly rows={2} value={activeDetail.note || ''} placeholder="—" />
-                    </div>
-                    {currentStatus !== 'cancelled' && currentStatus !== 'examined' ? (
-                      <>
-                        {currentStatus === 'pending' ? (
-                          <div className="tcl-f tcl-f--full">
-                            <p className="tcl-muted" style={{ margin: 0, fontSize: '0.86rem' }}>
-                              Chọn <strong>phòng khám</strong>, sau đó bấm <strong>Xác nhận đã thu</strong> ở mục Thanh toán để
-                              thu phí và xác nhận lịch. <strong>Số thứ tự</strong> có thể để trống (tự gán theo phòng).
-                            </p>
-                          </div>
-                        ) : null}
-                        {visitErr ? (
-                          <div className="tcl-f tcl-f--full">
-                            <div className="tcl-banner-err">{visitErr}</div>
-                          </div>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </div>
-                </section>
-
-                <section className="tcl-sec">
-                  <h2 className="tcl-sec-title">
-                    <span>3</span>
-                    Thanh toán
-                  </h2>
-                  {currentStatus === 'pending' ? (
-                    <>
-                      <div className="tcl-payment-summary">
-                        <span className="tcl-payment-label">Phí khám</span>
-                        <strong className="tcl-payment-amount">{formatVnd(consultationFee)}</strong>
-                      </div>
-                      {isPaid ? (
-                        <div className="tcl-grid-form tcl-payment-readonly">
-                          <div className="tcl-f tcl-f--full">
-                            <span className="tcl-payment-badge">Đã thu phí — không thể chỉnh sửa</span>
-                          </div>
-                          <div className="tcl-f">
-                            <label>Số tiền</label>
-                            <input readOnly value={formatVnd(activeDetail.payment?.amount ?? consultationFee)} />
-                          </div>
-                          <div className="tcl-f">
-                            <label>Phương thức</label>
-                            <input readOnly value={paymentMethodLabel(activeDetail.payment?.method)} />
-                          </div>
-                          <div className="tcl-f">
-                            <label>Thu bởi</label>
-                            <input readOnly value={formatPaidByLine(activeDetail.payment?.paidBy)} />
-                          </div>
-                          <div className="tcl-f">
-                            <label>Thời điểm thu</label>
-                            <input
-                              readOnly
-                              value={
-                                activeDetail.payment?.paidAt
-                                  ? formatDateTimeVi(activeDetail.payment.paidAt)
-                                  : '—'
-                              }
-                            />
-                          </div>
-                          {activeDetail.payment?.invoiceNo ? (
-                            <div className="tcl-f">
-                              <label>Số hóa đơn</label>
-                              <input readOnly value={activeDetail.payment.invoiceNo} />
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="tcl-grid-form">
-                            <div className="tcl-f">
-                              <label htmlFor="reception-payment-method">Phương thức</label>
-                              <select
-                                id="reception-payment-method"
-                                value={paymentMethod}
-                                onChange={(e) => setPaymentMethod(e.target.value)}
-                                disabled={paymentSaving || isPaid}
-                              >
-                                <option value="cash">Tiền mặt</option>
-                                <option value="transfer">Chuyển khoản</option>
-                              </select>
-                            </div>
-                          </div>
-                          {paymentErr ? <div className="tcl-banner-err">{paymentErr}</div> : null}
-                          <div className="tcl-payment-actions">
-                            <button
-                              type="button"
-                              className="tcl-btn tcl-btn--pri"
-                              disabled={paymentSaving || saving || !canRecordPayment}
-                              title={
-                                !hasClinicRoom && canEditStatus && !isPaid
-                                  ? 'Chọn phòng khám trước'
-                                  : undefined
-                              }
-                              onClick={() => void handleRecordPayment()}
-                            >
-                              {paymentSaving ? 'Đang xử lý…' : 'Xác nhận đã thu'}
-                            </button>
-                          </div>
-                          <p className="tcl-payment-hint">
-                            Chọn phòng khám trước. Bấm <strong>Xác nhận đã thu</strong> để thu phí, xác nhận lịch và in{' '}
-                            <strong>hóa đơn</strong> + <strong>phiếu khám</strong>.
-                          </p>
-                        </>
-                      )}
-                    </>
-                  ) : isPaid ? (
-                    <div className="tcl-grid-form">
-                      <div className="tcl-f">
-                        <label>Trạng thái thu</label>
-                        <input readOnly value="Đã thu phí" />
-                      </div>
-                      <div className="tcl-f">
-                        <label>Số tiền</label>
-                        <input readOnly value={formatVnd(activeDetail.payment?.amount ?? consultationFee)} />
-                      </div>
-                      <div className="tcl-f">
-                        <label>Phương thức</label>
-                        <input readOnly value={paymentMethodLabel(activeDetail.payment?.method)} />
-                      </div>
-                      {activeDetail.payment?.invoiceNo ? (
-                        <div className="tcl-f">
-                          <label>Số hóa đơn</label>
-                          <input readOnly value={activeDetail.payment.invoiceNo} />
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <p className="tcl-payment-hint">Chưa ghi nhận thanh toán cho lịch này.</p>
-                  )}
-                  <div className="tcl-confirm-actions">
-                    {canFinishConfirm ? (
-                      <button
-                        type="button"
-                        className="tcl-btn tcl-btn--pri"
-                        disabled={saving || paymentSaving}
-                        onClick={() => void handleFinishConfirm()}
-                      >
-                        {saving ? 'Đang xác nhận…' : 'Hoàn tất xác nhận'}
-                      </button>
-                    ) : null}
-                    {canEditStatus ? (
-                      <button
-                        type="button"
-                        className="tcl-btn tcl-btn--danger"
-                        disabled={saving || paymentSaving}
-                        onClick={() => void handleCancelAppointment()}
-                      >
-                        {saving ? 'Đang hủy…' : 'Hủy lịch'}
-                      </button>
-                    ) : null}
-                  </div>
-                  {(canPrintPaymentInvoice && paymentInvoiceView) || (canPrintVisitSlip && visitSlipView) ? (
-                    <div className="tcl-print-actions">
-                    {canPrintPaymentInvoice && paymentInvoiceView ? (
-                      <button
-                        type="button"
-                        className="tcl-btn tcl-btn--print"
-                        onClick={() => handlePrintPaymentInvoice()}
-                      >
-                        In hóa đơn
-                      </button>
-                    ) : null}
-                    {canPrintVisitSlip && visitSlipView ? (
-                      <button
-                        type="button"
-                        className="tcl-btn tcl-btn--print"
-                        onClick={() => void handlePrintVisitSlip()}
-                      >
-                        In phiếu khám
-                      </button>
-                    ) : null}
-                    </div>
-                  ) : null}
-                </section>
-                  </div>
-                </div>
-              </>
-          </main>
-            </div>
-          ) : null}
-        </div>
+        {/* Bảng danh sách lịch hẹn toàn màn hình */}
+        <ReceptionAppointmentTable
+          listSearch={listSearch}
+          setListSearch={setListSearch}
+          setQrListFocusTicket={setQrListFocusTicket}
+          filtersOpen={filtersOpen}
+          setFiltersOpen={setFiltersOpen}
+          lookupLoading={lookupLoading}
+          setTicketErr={setTicketErr}
+          setQrErr={setQrErr}
+          setQrOpen={setQrOpen}
+          ticketErr={ticketErr}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          setDashFilter={setDashFilter}
+          fromDate={fromDate}
+          setFromDate={setFromDate}
+          toDate={toDate}
+          setToDate={setToDate}
+          list={list}
+          filteredList={filteredList}
+          dashFilter={dashFilter}
+          paginatedList={paginatedList}
+          selectedId={selectedId}
+          detailLoadingId={detailLoadingId}
+          onOpenDetail={handleOpenDetail}
+          page={page}
+          setPage={setPage}
+          totalPages={totalPages}
+          listLoading={listLoading}
+          listErr={listErr}
+          loadList={loadList}
+        />
       </div>
 
-      {qrOpen ? (
-        <div
-          className="tcl-qr-modal-backdrop"
-          role="presentation"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setQrOpen(false)
-          }}
-        >
-          <div
-            className="tcl-qr-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="tcl-qr-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="tcl-qr-title" className="tcl-qr-modal-title">
-              Quét mã QR lịch hẹn
-            </h2>
-            <p className="tcl-qr-modal-hint">Quét QR check-in để tiếp nhận ngay; mã vé cũ vẫn được hỗ trợ để tra cứu.</p>
-            <div id={QR_READER_ELEMENT_ID} className="tcl-qr-reader-wrap" />
-            {qrErr ? (
-              <div className="tcl-banner-err" style={{ marginTop: 8 }}>
-                {qrErr}
-              </div>
-            ) : null}
-            <div className="tcl-qr-modal-actions">
-              <label className="tcl-btn tcl-btn--pri" style={{ cursor: qrImageLoading ? 'wait' : 'pointer' }}>
-                {qrImageLoading ? 'Đang đọc QR…' : 'Chọn ảnh QR'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  disabled={qrImageLoading}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    event.target.value = ''
-                    if (file) void scanQrImage(file)
-                  }}
-                />
-              </label>
-              <button type="button" className="tcl-btn" onClick={() => setQrOpen(false)}>
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* Modal Chi tiết lịch hẹn */}
+      <ReceptionDetailModal
+        isOpen={isDetailOpen}
+        onClose={() => {
+          setIsDetailOpen(false)
+          setSelectedId(null)
+        }}
+        activeDetail={activeDetail}
+        detailStatus={detailStatus}
+        canEditStatus={canEditStatus}
+        pastSlotDetail={pastSlotDetail}
+        canFinishConfirm={canFinishConfirm}
+        hasClinicRoom={hasClinicRoom}
+        isPaid={isPaid}
+        consultationFee={consultationFee}
+        paymentMethod={paymentMethod}
+        setPaymentMethod={setPaymentMethod}
+        paymentSaving={paymentSaving}
+        handleRecordPayment={handleRecordPayment}
+        paymentErr={paymentErr}
+        clinicRoomDraft={clinicRoomDraft}
+        setClinicRoomDraft={setClinicRoomDraft}
+        handleClinicRoomChange={handleClinicRoomChange}
+        clinicRooms={clinicRooms}
+        clinicRoomsErr={clinicRoomsErr}
+        visitQueueDraft={visitQueueDraft}
+        setVisitQueueDraft={setVisitQueueDraft}
+        saving={saving}
+        handleFinishConfirm={handleFinishConfirm}
+        handleCancelAppointment={handleCancelAppointment}
+        openRegistrationFromActive={openRegistrationFromActive}
+        printInvoiceDisabled={printInvoiceDisabled}
+        printSlipDisabled={printSlipDisabled}
+        printBothDisabled={printBothDisabled}
+        printInvoiceOnly={printInvoiceOnly}
+        printSlipOnly={printSlipOnly}
+        printBothFromDetail={printBothFromDetail}
+        saveMsg={saveMsg}
+        saveErr={saveErr}
+        visitErr={visitErr}
+        detailErr={detailErr}
+      />
+
+      {/* Modal Quét QR */}
+      <ReceptionQrScannerModal
+        qrOpen={qrOpen}
+        setQrOpen={setQrOpen}
+        qrErr={qrErr}
+        qrImageLoading={qrImageLoading}
+        handleQrFileInput={handleQrFileInput}
+      />
     </div>
   )
 }
