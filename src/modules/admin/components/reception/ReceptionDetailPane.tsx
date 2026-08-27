@@ -238,6 +238,12 @@ export default function ReceptionDetailPane({
               <dd className="font-medium text-slate-800">{doctorSpecialtyDisplay(doctor)}</dd>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-200/50">
+              <dt className="text-slate-500">Dịch vụ / Gói khám</dt>
+              <dd className="font-bold text-emerald-800 text-right max-w-[200px]">
+                {activeDetail.servicePackage?.name || (doctor ? 'Khám với bác sĩ' : activeDetail.bookingMethod?.name || '—')}
+              </dd>
+            </div>
+            <div className="flex justify-between py-1 border-b border-slate-200/50">
               <dt className="text-slate-500">Người tạo</dt>
               <dd className="font-medium text-slate-800">{sourceCreatorLabel(activeDetail)}</dd>
             </div>

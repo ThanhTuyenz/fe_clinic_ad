@@ -263,6 +263,12 @@ export default function ReceptionDetailModal({
                 <dd className="font-semibold text-slate-700">{doctorSpecialtyDisplay(doctor)}</dd>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-200">
+                <dt className="text-slate-500 font-medium">Dịch vụ / Gói khám</dt>
+                <dd className="font-bold text-emerald-800 text-right max-w-[220px]">
+                  {activeDetail.servicePackage?.name || (doctor ? 'Khám với bác sĩ' : activeDetail.bookingMethod?.name || '—')}
+                </dd>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200">
                 <dt className="text-slate-500 font-medium">Người tạo</dt>
                 <dd className="font-semibold text-slate-700">{sourceCreatorLabel(activeDetail)}</dd>
               </div>
