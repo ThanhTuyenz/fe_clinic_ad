@@ -66,24 +66,6 @@ const CONFIG: Record<string, Config> = {
       ['priority', 'Ưu tiên'],
     ],
   },
-  services: {
-    title: 'Dịch vụ y tế & cận lâm sàng',
-    singular: 'dịch vụ',
-    fields: [
-      ['code', 'Mã dịch vụ', 'text'],
-      ['name', 'Tên dịch vụ', 'text'],
-      ['specialtyId', 'Chuyên khoa (không bắt buộc)', 'select', 'specialties'],
-      ['price', 'Đơn giá', 'number'],
-      ['durationMin', 'Thời lượng (phút)', 'number'],
-      ['description', 'Mô tả', 'textarea'],
-    ],
-    columns: [
-      ['code', 'Mã'],
-      ['name', 'Dịch vụ'],
-      ['price', 'Đơn giá'],
-      ['durationMin', 'Thời lượng'],
-    ],
-  },
   'service-packages': {
     title: 'Gói dịch vụ khám',
     singular: 'gói dịch vụ',
@@ -94,7 +76,6 @@ const CONFIG: Record<string, Config> = {
       ['specialtyId', 'Chuyên khoa (không bắt buộc)', 'select', 'specialties'],
       ['price', 'Giá gói', 'number'],
       ['durationMin', 'Thời lượng (phút)', 'number'],
-      ['medicalServiceIds', 'Dịch vụ thành phần', 'multiselect', 'services'],
       ['description', 'Mô tả', 'textarea'],
     ],
     columns: [
@@ -108,6 +89,7 @@ const CONFIG: Record<string, Config> = {
     ],
   },
 }
+
 
 const EMPTY_SLOT = { startTime: '08:00', endTime: '11:30', capacity: 20 }
 const EMPTY = {

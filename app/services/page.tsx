@@ -1,6 +1,6 @@
-import AuthGuard from '@/modules/auth/common/guards/AuthGuard'
-import RolePortal from '@/modules/admin/pages/RolePortal'
+import { redirect } from 'next/navigation'
 
 export default function ServicesPage() {
-  return <AuthGuard allowedRoles={['admin', 'branch_manager']}><RolePortal section="services" /></AuthGuard>
+  redirect('/booking-packages')
 }
+

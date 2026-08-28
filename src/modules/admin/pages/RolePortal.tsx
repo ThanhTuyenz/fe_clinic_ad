@@ -25,7 +25,6 @@ const NAV = {
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
     ['branches', 'Chi nhánh phòng khám', '/branches'],
     ['specialties', 'Chuyên khoa', '/specialties'],
-    ['services', 'Dịch vụ & Xét nghiệm', '/services'],
     ['booking-methods', 'Quản lý hình thức đặt khám', '/booking-methods'],
     ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
     ['billing', 'Thanh toán', '/billing'],
@@ -39,10 +38,10 @@ const NAV = {
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
     ['branches', '🏥 Chi nhánh phòng khám', '/branches'],
     ['specialties', 'Chuyên khoa', '/specialties'],
-    ['services', 'Dịch vụ khám & xét nghiệm', '/services'],
     ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
     ['billing', 'Thanh toán', '/billing'],
   ],
+
   receptionist: [
     ['dashboard', 'Tổng quan', '/dashboard'],
     ['appointments', 'Tiếp đón & Lịch hẹn', '/appointments'],
