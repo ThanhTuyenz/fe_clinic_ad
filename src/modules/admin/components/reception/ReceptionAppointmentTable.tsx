@@ -58,6 +58,7 @@ interface ReceptionAppointmentTableProps {
   listLoading: boolean
   listErr: string
   loadList: () => Promise<void>
+  onOpenCccdCheckIn?: () => void
 }
 
 export default function ReceptionAppointmentTable({
@@ -91,6 +92,7 @@ export default function ReceptionAppointmentTable({
   listLoading,
   listErr,
   loadList,
+  onOpenCccdCheckIn,
 }: ReceptionAppointmentTableProps) {
   return (
     <div className="bg-white border border-slate-300/80 rounded-2xl shadow-sm overflow-hidden flex flex-col">
@@ -108,7 +110,7 @@ export default function ReceptionAppointmentTable({
                   setListSearch(e.target.value)
                   setQrListFocusTicket('')
                 }}
-                placeholder="Tìm mã lịch hẹn, mã bệnh nhân hoặc họ tên…"
+                placeholder="Tìm mã lịch hẹn, họ tên, số CCCD hoặc SĐT…"
                 autoComplete="off"
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2">
@@ -117,7 +119,7 @@ export default function ReceptionAppointmentTable({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
             <button
               type="button"
               className={`px-3.5 py-2.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
@@ -130,6 +132,16 @@ export default function ReceptionAppointmentTable({
               <FilterIcon className={`w-4 h-4 ${filtersOpen ? 'text-emerald-700' : 'text-slate-500'}`} />
               <span>Bộ lọc nâng cao</span>
             </button>
+
+            {onOpenCccdCheckIn && (
+              <button
+                type="button"
+                className="px-3.5 py-2.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm border border-blue-600 transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98]"
+                onClick={onOpenCccdCheckIn}
+              >
+                <span>🆔 Check-in bằng CCCD</span>
+              </button>
+            )}
 
             <button
               type="button"

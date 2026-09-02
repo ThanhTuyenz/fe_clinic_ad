@@ -19,8 +19,7 @@ import { resolveConsultationFee } from '../utils/consultationFee'
 import { buildPaymentInvoiceView } from '../utils/paymentInvoiceView'
 import { printPaymentInvoice, printPaymentThenVisitSlip } from '../utils/printPaymentInvoice'
 import { printVisitSlip } from '../utils/printVisitSlip'
-import { ticketFromQrPayload } from '../utils/ticketQr'
-import { staffCheckInByQr } from '../services/checkIn'
+import { staffCheckInByQr, staffCheckInByNationalId } from '../services/checkIn'
 
 import {
   PAGE_SIZE,
@@ -126,6 +125,11 @@ export default function ReceptionHome() {
 
   const [flashOk, setFlashOk] = useState('')
   const [flashErr, setFlashErr] = useState('')
+
+  const [isCccdModalOpen, setIsCccdModalOpen] = useState(false)
+  const [cccdInput, setCccdInput] = useState('')
+  const [cccdLoading, setCccdLoading] = useState(false)
+  const [cccdErr, setCccdErr] = useState('')
 
   useEffect(() => {
     if (!token || !user) {
@@ -512,6 +516,124 @@ export default function ReceptionHome() {
     }
   }
 
+  const handleManualCheckIn = useCallback(async () => {
+    if (!activeDetail?.id || !token) return
+    setSaveErr('')
+    setSaveMsg('')
+    setSaving(true)
+    try {
+      await updateAppointmentStatus({
+        appointmentId: activeDetail.id,
+        status: 'checked_in',
+        clinicRoom: clinicRoomDraft || undefined,
+        visitQueueNumber: visitQueueDraft ? Number(visitQueueDraft) : undefined,
+      })
+      setSaveMsg('Đã xác nhận Check-in thành công cho bệnh nhân!')
+      setFlashOk('Đã xác nhận Check-in thành công!')
+      await loadList()
+      setDetailById((prev) => ({
+        ...prev,
+        [String(activeDetail.id)]: {
+          ...(prev[String(activeDetail.id)] || activeDetail),
+          workflowStatus: 'CHECKED_IN',
+          status: 'confirmed',
+        },
+      }))
+    } catch (e: any) {
+      setSaveErr(e?.message || 'Không thể check-in lịch hẹn này.')
+    } finally {
+      setSaving(false)
+    }
+  }, [activeDetail, token, clinicRoomDraft, visitQueueDraft, loadList])
+
+  const handlePatientProfileUpdated = useCallback((updatedPatient: any) => {
+    if (!activeDetail?.id) return
+    setSaveMsg('Đã cập nhật thông tin bệnh nhân thành công!')
+    setDetailById((prev) => {
+      const current = prev[String(activeDetail.id)] || activeDetail
+      return {
+        ...prev,
+        [String(activeDetail.id)]: {
+          ...current,
+          patient: {
+            ...current.patient,
+            ...updatedPatient,
+            name: updatedPatient.fullName || current.patient?.name,
+            fullName: updatedPatient.fullName || current.patient?.fullName,
+            phone: updatedPatient.phoneNumber || current.patient?.phone,
+            dob: updatedPatient.dateOfBirth || current.patient?.dob,
+          },
+        },
+      }
+    })
+    void loadList()
+  }, [activeDetail, loadList])
+
+  const handleQrDecode = useCallback(async (payload: string) => {
+    const raw = String(payload || '').trim()
+    setQrErr('')
+    try {
+      if (raw.startsWith('VITACARE_CHECKIN:')) {
+        const res = await staffCheckInByQr(raw)
+        setQrOpen(false)
+        setFlashOk(`✅ Check-in thành công: STT ${res.queueNumber} - Bệnh nhân ${res.patient?.fullName || ''} (Phòng ${res.room?.code || 'P.Khám'})`)
+        await loadList()
+        if (res.appointmentId) {
+          setSelectedId(res.appointmentId)
+          setIsDetailOpen(true)
+        }
+        return
+      }
+
+      // Nhận diện mã QR thẻ CCCD gắn chip (có chứa dấu pipe |) hoặc chuỗi 9-12 số
+      if (raw.includes('|') || /^\d{9,12}$/.test(raw)) {
+        const res = await staffCheckInByNationalId(raw)
+        setQrOpen(false)
+        setFlashOk(`✅ Check-in bằng thẻ CCCD thành công: STT ${res.queueNumber} - Bệnh nhân ${res.patient?.fullName || ''} (Phòng ${res.room?.code || 'P.Khám'})`)
+        await loadList()
+        if (res.appointmentId) {
+          setSelectedId(res.appointmentId)
+          setIsDetailOpen(true)
+        }
+        return
+      }
+
+      setQrErr('Mã QR không đúng định dạng lịch hẹn VitaCare hoặc thẻ CCCD.')
+    } catch (e: any) {
+      setQrErr(e?.message || 'Không thể check-in bằng mã QR này.')
+    }
+  }, [loadList])
+
+  const handleCccdCheckIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    const val = cccdInput.trim()
+    if (!val) {
+      setCccdErr('Vui lòng nhập số CCCD hoặc quét mã QR thẻ CCCD')
+      return
+    }
+    setCccdLoading(true)
+    setCccdErr('')
+    try {
+      const res = await staffCheckInByNationalId(val)
+      setIsCccdModalOpen(false)
+      setCccdInput('')
+      setFlashOk(`✅ Check-in bằng CCCD thành công: STT ${res.queueNumber} - Bệnh nhân ${res.patient?.fullName || ''} (Phòng ${res.room?.code || 'P.Khám'})`)
+      await loadList()
+      if (res.appointmentId) {
+        setSelectedId(res.appointmentId)
+        setIsDetailOpen(true)
+      }
+    } catch (err: any) {
+      setCccdErr(err?.message || 'Không tìm thấy lịch hẹn hoặc không thể check-in bằng CCCD này.')
+    } finally {
+      setCccdLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    qrDecodeHandlerRef.current = handleQrDecode
+  }, [handleQrDecode])
+
   async function handleOpenDetail(row: any) {
     if (!row) return
     const id = String(row.id)
@@ -659,7 +781,9 @@ export default function ReceptionHome() {
         const ticketMatch = String(row.ticket || '').toLowerCase().includes(q)
         const pCodeMatch = String(row.patient?.patientCode || '').toLowerCase().includes(q)
         const nameMatch = displayName(row.patient).toLowerCase().includes(q)
-        if (!ticketMatch && !pCodeMatch && !nameMatch) return false
+        const cccdMatch = String(row.patient?.nationalId || '').toLowerCase().includes(q)
+        const phoneMatch = String(row.patient?.phone || '').toLowerCase().includes(q)
+        if (!ticketMatch && !pCodeMatch && !nameMatch && !cccdMatch && !phoneMatch) return false
       }
       return true
     })
@@ -785,6 +909,11 @@ export default function ReceptionHome() {
           listLoading={listLoading}
           listErr={listErr}
           loadList={loadList}
+          onOpenCccdCheckIn={() => {
+            setCccdErr('')
+            setCccdInput('')
+            setIsCccdModalOpen(true)
+          }}
         />
       </div>
 
@@ -829,6 +958,8 @@ export default function ReceptionHome() {
         saveErr={saveErr}
         visitErr={visitErr}
         detailErr={detailErr}
+        handleManualCheckIn={handleManualCheckIn}
+        onPatientProfileUpdated={handlePatientProfileUpdated}
       />
 
       {/* Modal Quét QR */}
@@ -836,9 +967,82 @@ export default function ReceptionHome() {
         qrOpen={qrOpen}
         setQrOpen={setQrOpen}
         qrErr={qrErr}
+        setQrErr={setQrErr}
         qrImageLoading={qrImageLoading}
         handleQrFileInput={handleQrFileInput}
+        onScan={handleQrDecode}
       />
+
+      {/* Modal Check-in bằng CCCD */}
+      {isCccdModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
+          role="presentation"
+          onClick={() => setIsCccdModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-100 space-y-4"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <span>🆔 Check-in bằng CCCD / Mã QR CCCD</span>
+              </h2>
+              <button
+                type="button"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+                onClick={() => setIsCccdModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Nhập 12 số CCCD gắn chip của bệnh nhân hoặc quét chuỗi mã QR trên thẻ CCCD Bộ Công An.
+            </p>
+
+            {cccdErr ? (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
+                {cccdErr}
+              </div>
+            ) : null}
+
+            <form onSubmit={handleCccdCheckIn} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Số CCCD / Dữ liệu QR CCCD:
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={cccdInput}
+                  onChange={(e) => setCccdInput(e.target.value)}
+                  placeholder="Ví dụ: 079099012345..."
+                  className="w-full px-3.5 py-2.5 text-xs font-mono font-bold bg-white border border-slate-300 rounded-xl placeholder:text-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition shadow-xs"
+                />
+              </div>
+
+              <div className="flex items-center gap-2.5 pt-2">
+                <button
+                  type="button"
+                  className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer"
+                  onClick={() => setIsCccdModalOpen(false)}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={cccdLoading || !cccdInput.trim()}
+                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {cccdLoading ? 'Đang kiểm tra…' : 'Xác nhận Check-in'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,23 +1,59 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect } from 'react'
+import { Html5Qrcode } from 'html5-qrcode'
 import { QR_READER_ELEMENT_ID } from './receptionHelpers'
 
 interface ReceptionQrScannerModalProps {
   qrOpen: boolean
   setQrOpen: (val: boolean) => void
   qrErr: string
+  setQrErr?: (err: string) => void
   qrImageLoading: boolean
   handleQrFileInput: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onScan?: (decodedText: string) => void
 }
 
 export default function ReceptionQrScannerModal({
   qrOpen,
   setQrOpen,
   qrErr,
+  setQrErr,
   qrImageLoading,
   handleQrFileInput,
+  onScan,
 }: ReceptionQrScannerModalProps) {
+  useEffect(() => {
+    if (!qrOpen) return
+    let disposed = false
+    const scanner = new Html5Qrcode(QR_READER_ELEMENT_ID, { verbose: false })
+    scanner
+      .start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        (decodedText) => {
+          if (!disposed && onScan) {
+            onScan(decodedText)
+          }
+        },
+        () => {}
+      )
+      .catch((err) => {
+        if (!disposed && setQrErr) {
+          setQrErr(err?.message || 'Không thể mở camera. Vui lòng kiểm tra quyền camera hoặc tải ảnh mã QR.')
+        }
+      })
+
+    return () => {
+      disposed = true
+      try {
+        void scanner.stop().catch(() => {})
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [qrOpen, onScan, setQrErr])
+
   if (!qrOpen) return null
 
   return (

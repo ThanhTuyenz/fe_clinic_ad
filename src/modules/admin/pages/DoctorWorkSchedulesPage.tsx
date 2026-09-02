@@ -5,6 +5,7 @@ import { createSchedule, deleteSchedule, listSchedules, updateSchedule } from '.
 import { listUsers } from '../services/users'
 import { listCatalog } from '../services/systemCatalog'
 import { listClinicRooms } from '../services/clinicRooms'
+import DoctorLeaveModal from '../components/schedules/DoctorLeaveModal'
 
 const SLOT_DURATIONS = [15, 20, 30, 45, 60]
 
@@ -58,6 +59,7 @@ export default function DoctorWorkSchedulesPage() {
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()))
 
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
+  const [doctorLeaveOpen, setDoctorLeaveOpen] = useState(false)
   const [selected, setSelected] = useState<any>(null)
   const [form, setForm] = useState<any>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -251,9 +253,18 @@ export default function DoctorWorkSchedulesPage() {
           <h1 className="mt-1 text-2xl font-bold text-slate-950">Lịch làm việc & Ca trực Bác sĩ</h1>
           <p className="mt-1 text-sm text-slate-500">Phân ca trực theo tuần, điều phối phòng làm việc và thời lượng khám.</p>
         </div>
-        <button onClick={() => openCreate()} className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800">
-          + Xếp lịch làm việc
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setDoctorLeaveOpen(true)}
+            className="rounded-md bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer transition"
+          >
+            <span>🤖 AI Báo Bác sĩ nghỉ & Đổi lịch</span>
+          </button>
+          <button onClick={() => openCreate()} className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 cursor-pointer">
+            + Xếp lịch làm việc
+          </button>
+        </div>
       </div>
 
       {error && <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
@@ -670,6 +681,13 @@ export default function DoctorWorkSchedulesPage() {
           </form>
         </div>
       )}
+
+      <DoctorLeaveModal
+        isOpen={doctorLeaveOpen}
+        onClose={() => setDoctorLeaveOpen(false)}
+        doctors={doctors}
+        onSuccess={loadData}
+      />
     </>
   )
 }

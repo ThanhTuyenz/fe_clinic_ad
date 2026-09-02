@@ -22,6 +22,7 @@ import {
   sourceCreatorLabel,
 } from './receptionHelpers'
 import { CheckCircleIcon, CloseIcon, PrinterIcon } from './ReceptionIcons'
+import { updatePatientProfileByStaff } from '../../services/checkIn'
 
 interface ReceptionDetailModalProps {
   isOpen: boolean
@@ -60,6 +61,8 @@ interface ReceptionDetailModalProps {
   saveErr: string
   visitErr: string
   detailErr: string
+  handleManualCheckIn?: () => void
+  onPatientProfileUpdated?: (updatedPatient: any) => void
 }
 
 export default function ReceptionDetailModal({
@@ -97,7 +100,22 @@ export default function ReceptionDetailModal({
   saveErr,
   visitErr,
   detailErr,
+  handleManualCheckIn,
+  onPatientProfileUpdated,
 }: ReceptionDetailModalProps) {
+  const [isEditingPatient, setIsEditingPatient] = React.useState(false)
+  const [patientForm, setPatientForm] = React.useState({
+    fullName: '',
+    phone: '',
+    dateOfBirth: '',
+    gender: 'male',
+    nationalId: '',
+    healthInsuranceNumber: '',
+    address: '',
+  })
+  const [patientSaving, setPatientSaving] = React.useState(false)
+  const [patientSaveErr, setPatientSaveErr] = React.useState('')
+
   if (!isOpen || !activeDetail) return null
 
   const patient = activeDetail.patient
@@ -202,13 +220,28 @@ export default function ReceptionDetailModal({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
           {/* Bệnh nhân */}
           <section className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-              Thông tin bệnh nhân
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Thông tin bệnh nhân
+              </h3>
+              {patient?.id && (
+                <button
+                  type="button"
+                  onClick={handleOpenEditPatient}
+                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  ✏️ Sửa thông tin
+                </button>
+              )}
+            </div>
             <dl className="space-y-2 text-xs">
               <div className="flex justify-between py-1 border-b border-slate-200">
                 <dt className="text-slate-500 font-medium">Mã bệnh nhân</dt>
                 <dd className="font-mono font-bold text-slate-900">{patient?.patientCode || patient?.id || '—'}</dd>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200">
+                <dt className="text-slate-500 font-medium">Họ và tên</dt>
+                <dd className="font-bold text-slate-900">{patient?.fullName || patient?.name || '—'}</dd>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-200">
                 <dt className="text-slate-500 font-medium">Số điện thoại</dt>
@@ -230,6 +263,14 @@ export default function ReceptionDetailModal({
                     ? 'Nữ'
                     : '—'}
                 </dd>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200">
+                <dt className="text-slate-500 font-medium">Số CCCD</dt>
+                <dd className="font-mono font-semibold text-slate-900">{patient?.nationalId || '—'}</dd>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200">
+                <dt className="text-slate-500 font-medium">Mã BHYT</dt>
+                <dd className="font-mono font-semibold text-slate-900">{patient?.healthInsuranceNumber || '—'}</dd>
               </div>
               <div className="flex justify-between py-1">
                 <dt className="text-slate-500 font-medium">Địa chỉ</dt>
@@ -396,6 +437,23 @@ export default function ReceptionDetailModal({
 
             {/* Các nút hành động */}
             <div className="pt-2 flex items-center gap-2 flex-wrap">
+              {activeDetail?.workflowStatus === 'BOOKED' && handleManualCheckIn && (
+                <button
+                  type="button"
+                  className="py-2 px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98]"
+                  disabled={saving}
+                  onClick={handleManualCheckIn}
+                >
+                  <span>⚡ Xác nhận Check-in (Có mặt)</span>
+                </button>
+              )}
+
+              {activeDetail?.workflowStatus === 'CHECKED_IN' && (
+                <div className="py-1.5 px-3 bg-blue-50 text-blue-800 border border-blue-200 rounded-xl text-xs font-bold flex items-center gap-1">
+                  <span>✓ Đã Check-in vào phòng</span>
+                </div>
+              )}
+
               <button
                 type="button"
                 className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm border border-emerald-600 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.98]"
@@ -456,6 +514,125 @@ export default function ReceptionDetailModal({
             </div>
           </section>
         </div>
+
+        {/* Modal chỉnh sửa thông tin hành chính bệnh nhân */}
+        {isEditingPatient && (
+          <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+            <div className="bg-white rounded-2xl p-5 md:p-6 max-w-lg w-full shadow-2xl border border-slate-100 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                  <span>✏️ Chỉnh sửa thông tin bệnh nhân</span>
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPatient(false)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {patientSaveErr && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
+                  {patientSaveErr}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="col-span-2">
+                  <label className="block font-semibold text-slate-700 mb-1">Họ và tên *</label>
+                  <input
+                    type="text"
+                    value={patientForm.fullName}
+                    onChange={(e) => setPatientForm((p) => ({ ...p, fullName: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Số điện thoại</label>
+                  <input
+                    type="tel"
+                    value={patientForm.phone}
+                    onChange={(e) => setPatientForm((p) => ({ ...p, phone: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Giới tính</label>
+                  <select
+                    value={patientForm.gender}
+                    onChange={(e) => setPatientForm((p) => ({ ...p, gender: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  >
+                    <option value="male">Nam</option>
+                    <option value="female">Nữ</option>
+                    <option value="other">Khác</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Ngày sinh (YYYY-MM-DD)</label>
+                  <input
+                    type="date"
+                    value={patientForm.dateOfBirth}
+                    onChange={(e) => setPatientForm((p) => ({ ...p, dateOfBirth: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Số CCCD / Hộ chiếu</label>
+                  <input
+                    type="text"
+                    value={patientForm.nationalId}
+                    onChange={(e) => setPatientForm((p) => ({ ...p, nationalId: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block font-semibold text-slate-700 mb-1">Mã thẻ BHYT</label>
+                  <input
+                    type="text"
+                    value={patientForm.healthInsuranceNumber}
+                    onChange={(e) => setPatientForm((p) => ({ ...p, healthInsuranceNumber: e.target.value.toUpperCase() }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs uppercase font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block font-semibold text-slate-700 mb-1">Địa chỉ cư trú</label>
+                  <input
+                    type="text"
+                    value={patientForm.address}
+                    onChange={(e) => setPatientForm((p) => ({ ...p, address: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPatient(false)}
+                  className="flex-1 py-2 px-3 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSavePatient}
+                  disabled={patientSaving || !patientForm.fullName.trim()}
+                  className="flex-1 py-2 px-3 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition cursor-pointer shadow-xs"
+                >
+                  {patientSaving ? 'Đang lưu…' : 'Lưu thông tin'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
