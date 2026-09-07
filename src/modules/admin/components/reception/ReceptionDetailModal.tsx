@@ -122,6 +122,76 @@ export default function ReceptionDetailModal({
   const doctor = activeDetail.doctor
   const statusMeta = receptionStatusMeta(activeDetail)
 
+  const handleOpenEditPatient = () => {
+    if (!patient) return
+    const rawDob = patient.dateOfBirth ? String(patient.dateOfBirth).slice(0, 10) : ''
+    const rawGender = String(patient.gender || 'male').toLowerCase()
+    setPatientForm({
+      fullName: patient.fullName || patient.name || '',
+      phone: patient.phone || patient.phoneNumber || '',
+      dateOfBirth: rawDob,
+      gender: rawGender.includes('fe') || rawGender.includes('nữ') ? 'female' : rawGender.includes('other') || rawGender.includes('khác') ? 'other' : 'male',
+      nationalId: patient.nationalId || '',
+      healthInsuranceNumber: patient.healthInsuranceNumber || '',
+      address: patient.address || '',
+    })
+    setPatientSaveErr('')
+    setIsEditingPatient(true)
+  }
+
+  const handleSavePatient = async () => {
+    const patientId = patient?.id
+    if (!patientId) {
+      setPatientSaveErr('Không tìm thấy thông tin hồ sơ bệnh nhân.')
+      return
+    }
+    if (!patientForm.fullName.trim()) {
+      setPatientSaveErr('Vui lòng nhập họ và tên bệnh nhân.')
+      return
+    }
+
+    try {
+      setPatientSaving(true)
+      setPatientSaveErr('')
+      const genderUpper = patientForm.gender.toUpperCase()
+      const payload: Record<string, any> = {
+        fullName: patientForm.fullName.trim(),
+        gender: ['MALE', 'FEMALE', 'OTHER'].includes(genderUpper) ? genderUpper : undefined,
+        phoneNumber: patientForm.phone.trim() || undefined,
+        nationalId: patientForm.nationalId.trim() || undefined,
+        healthInsuranceNumber: patientForm.healthInsuranceNumber.trim() || undefined,
+        address: patientForm.address.trim() || undefined,
+      }
+      if (patientForm.dateOfBirth) {
+        payload.dateOfBirth = patientForm.dateOfBirth
+      }
+
+      const updated = await updatePatientProfileByStaff(patientId, payload)
+
+      if (activeDetail.patient) {
+        Object.assign(activeDetail.patient, {
+          fullName: patientForm.fullName.trim(),
+          name: patientForm.fullName.trim(),
+          phone: patientForm.phone.trim(),
+          phoneNumber: patientForm.phone.trim(),
+          dateOfBirth: patientForm.dateOfBirth,
+          gender: patientForm.gender,
+          nationalId: patientForm.nationalId.trim(),
+          healthInsuranceNumber: patientForm.healthInsuranceNumber.trim(),
+          address: patientForm.address.trim(),
+          ...(updated && typeof updated === 'object' ? updated : {}),
+        })
+      }
+
+      onPatientProfileUpdated?.(updated || activeDetail.patient)
+      setIsEditingPatient(false)
+    } catch (err: any) {
+      setPatientSaveErr(err?.message || 'Không thể lưu thông tin bệnh nhân.')
+    } finally {
+      setPatientSaving(false)
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
@@ -301,7 +371,7 @@ export default function ReceptionDetailModal({
               </div>
               <div className="flex justify-between py-1 border-b border-slate-200">
                 <dt className="text-slate-500 font-medium">Chuyên khoa</dt>
-                <dd className="font-semibold text-slate-700">{doctorSpecialtyDisplay(doctor)}</dd>
+                <dd className="font-semibold text-slate-700">{activeDetail.specialty?.name || activeDetail.servicePackage?.name || doctorSpecialtyDisplay(doctor)}</dd>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-200">
                 <dt className="text-slate-500 font-medium">Dịch vụ / Gói khám</dt>
@@ -436,49 +506,75 @@ export default function ReceptionDetailModal({
             </div>
 
             {/* Các nút hành động */}
-            <div className="pt-2 flex items-center gap-2 flex-wrap">
-              {activeDetail?.workflowStatus === 'BOOKED' && handleManualCheckIn && (
-                <button
-                  type="button"
-                  className="py-2 px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98]"
-                  disabled={saving}
-                  onClick={handleManualCheckIn}
-                >
-                  <span>⚡ Xác nhận Check-in (Có mặt)</span>
-                </button>
+            <div className="pt-2 flex flex-wrap items-center gap-2.5">
+              {activeDetail?.workflowStatus === 'CHECKED_IN' ? (
+                <>
+                  <div className="flex-1 py-2 px-3.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs">
+                    <span>✓ Đã Check-in vào phòng khám {visitQueueDraft ? `(STT: ${visitQueueDraft})` : ''}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="py-2 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                    onClick={openRegistrationFromActive}
+                  >
+                    Phiếu đăng ký
+                  </button>
+                </>
+              ) : activeDetail?.workflowStatus === 'BOOKED' ? (
+                <>
+                  {handleManualCheckIn && (
+                    <button
+                      type="button"
+                      className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98] whitespace-nowrap"
+                      disabled={saving}
+                      onClick={handleManualCheckIn}
+                    >
+                      <span>⚡ Xác nhận Check-in (Có mặt)</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="py-2.5 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                    onClick={openRegistrationFromActive}
+                  >
+                    Phiếu đăng ký
+                  </button>
+                  <button
+                    type="button"
+                    className="py-2.5 px-3.5 bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
+                    disabled={saving}
+                    onClick={handleCancelAppointment}
+                  >
+                    Hủy lịch
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="flex-1 min-w-[140px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm border border-emerald-600 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.98] whitespace-nowrap"
+                    disabled={!canFinishConfirm || saving}
+                    onClick={handleFinishConfirm}
+                  >
+                    {saving ? 'Đang lưu…' : 'Hoàn tất xác nhận'}
+                  </button>
+                  <button
+                    type="button"
+                    className="py-2.5 px-3.5 bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
+                    disabled={!canEditStatus || saving}
+                    onClick={handleCancelAppointment}
+                  >
+                    Từ chối / Hủy
+                  </button>
+                  <button
+                    type="button"
+                    className="py-2.5 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                    onClick={openRegistrationFromActive}
+                  >
+                    Phiếu đăng ký
+                  </button>
+                </>
               )}
-
-              {activeDetail?.workflowStatus === 'CHECKED_IN' && (
-                <div className="py-1.5 px-3 bg-blue-50 text-blue-800 border border-blue-200 rounded-xl text-xs font-bold flex items-center gap-1">
-                  <span>✓ Đã Check-in vào phòng</span>
-                </div>
-              )}
-
-              <button
-                type="button"
-                className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm border border-emerald-600 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.98]"
-                disabled={!canFinishConfirm || saving}
-                onClick={handleFinishConfirm}
-              >
-                {saving ? 'Đang lưu…' : 'Hoàn tất xác nhận'}
-              </button>
-
-              <button
-                type="button"
-                className="py-2 px-3 bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-40 shadow-xs"
-                disabled={!canEditStatus || saving}
-                onClick={handleCancelAppointment}
-              >
-                Từ chối / Hủy
-              </button>
-
-              <button
-                type="button"
-                className="py-2 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
-                onClick={openRegistrationFromActive}
-              >
-                Phiếu đăng ký
-              </button>
             </div>
 
             {/* In ấn */}

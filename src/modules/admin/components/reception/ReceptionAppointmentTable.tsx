@@ -59,6 +59,8 @@ interface ReceptionAppointmentTableProps {
   listErr: string
   loadList: () => Promise<void>
   onOpenCccdCheckIn?: () => void
+  handleQrFileInput?: (e: React.ChangeEvent<HTMLInputElement>) => void
+  qrImageLoading?: boolean
 }
 
 export default function ReceptionAppointmentTable({
@@ -93,6 +95,8 @@ export default function ReceptionAppointmentTable({
   listErr,
   loadList,
   onOpenCccdCheckIn,
+  handleQrFileInput,
+  qrImageLoading,
 }: ReceptionAppointmentTableProps) {
   return (
     <div className="bg-white border border-slate-300/80 rounded-2xl shadow-sm overflow-hidden flex flex-col">
@@ -141,6 +145,24 @@ export default function ReceptionAppointmentTable({
               >
                 <span>🆔 Check-in bằng CCCD</span>
               </button>
+            )}
+
+            {handleQrFileInput && (
+              <label
+                className={`px-3.5 py-2.5 text-xs font-bold rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98] ${
+                  qrImageLoading ? 'opacity-60 pointer-events-none' : ''
+                }`}
+                title="Tải tệp ảnh chứa mã QR lịch hẹn để check-in nhanh"
+              >
+                <span>{qrImageLoading ? 'Đang đọc…' : '📁 Tải ảnh mã QR'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={qrImageLoading}
+                  onChange={handleQrFileInput}
+                />
+              </label>
             )}
 
             <button
@@ -261,8 +283,8 @@ export default function ReceptionAppointmentTable({
               const id = String(row.id)
               const isRowLoading = detailLoadingId === id
               const patientName = patientListDisplayName(row.patient)
-              const doctorName = doctorDisplayName(row.doctor)
-              const specialty = doctorSpecialtyDisplay(row.doctor)
+              const doctorName = doctorDisplayName(row.doctor) !== '—' ? doctorDisplayName(row.doctor) : (row.doctor?.fullName || 'Bác sĩ phụ trách')
+              const specialty = row.specialty?.name || row.servicePackage?.name || row.doctor?.specialtyName || doctorSpecialtyDisplay(row.doctor) || 'Chuyên khoa tiêu chuẩn'
               const isPaid = String(row.payment?.status || '').toLowerCase() === 'paid'
               const meta = receptionStatusMeta(row)
               const pastSlot = isPendingAppointmentPastSlot(row)

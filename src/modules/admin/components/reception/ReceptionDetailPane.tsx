@@ -360,10 +360,10 @@ export default function ReceptionDetailPane({
           </div>
 
           {/* Các nút hành động */}
-          <div className="pt-2 flex items-center gap-2 flex-wrap">
+          <div className="pt-2 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-40"
+              className="flex-1 min-w-[130px] py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap"
               disabled={!canFinishConfirm || saving}
               onClick={handleFinishConfirm}
             >
@@ -372,7 +372,7 @@ export default function ReceptionDetailPane({
 
             <button
               type="button"
-              className="py-2 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl transition-all cursor-pointer disabled:opacity-40"
+              className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap"
               disabled={!canEditStatus || saving}
               onClick={handleCancelAppointment}
             >
@@ -381,10 +381,10 @@ export default function ReceptionDetailPane({
 
             <button
               type="button"
-              className="py-2 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+              className="py-2.5 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap"
               onClick={openRegistrationFromActive}
             >
-              Mở phiếu đăng ký
+              Phiếu đăng ký
             </button>
           </div>
 

@@ -1,5 +1,4 @@
-import apiClient from '@/services/apiClient'
-import { unwrapApiData, apiErrorMessage } from '@/services/apiHelpers'
+import { apiClient, apiErrorMessage, unwrapApiData } from '@/lib/api-client'
 
 export interface DoctorLeaveImpactItem {
   appointment: any

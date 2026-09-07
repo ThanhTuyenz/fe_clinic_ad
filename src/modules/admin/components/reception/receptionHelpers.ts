@@ -283,11 +283,29 @@ export function dashFilterLabelVi(key: string): string {
   return ''
 }
 
+export function isPaidAppointment(r: any): boolean {
+  if (!r) return false
+  const pStatus = String(r?.payment?.status || '').toLowerCase()
+  if (pStatus === 'paid') return true
+  if (r?.payment?.paid === true) return true
+  const invStatus = String(r?.invoice?.status || '').toUpperCase()
+  if (invStatus === 'PAID') return true
+  return false
+}
+
+export function isReceptionPending(r: any): boolean {
+  if (!r) return false
+  const wf = String(r?.workflowStatus || '').toUpperCase()
+  if (wf === 'PENDING_PAYMENT' || wf === 'BOOKED') return true
+  const st = normalizeStatus(r?.status)
+  return st === 'pending'
+}
+
 export function matchesDashFilter(row: any, dashFilter: string): boolean {
   const f = String(dashFilter || '').trim()
   if (!f) return true
-  if (normalizeStatus(row?.status) !== 'pending') return false
-  const isPaid = String(row?.payment?.status || '').toLowerCase() === 'paid'
+  if (!isReceptionPending(row)) return false
+  const isPaid = isPaidAppointment(row)
   const room = String(row?.clinicRoom || '').trim()
   const expiring = isPendingAppointmentPastSlot(row)
   if (f === 'expiring') return expiring

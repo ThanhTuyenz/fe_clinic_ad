@@ -28,6 +28,8 @@ import {
   cameraErrorMessage,
   detailMissingForSlip,
   displayName,
+  isPaidAppointment,
+  isReceptionPending,
   matchesDashFilter,
   mergePayment,
   mergeReceptionDetail,
@@ -573,36 +575,22 @@ export default function ReceptionHome() {
     const raw = String(payload || '').trim()
     setQrErr('')
     try {
-      if (raw.startsWith('VITACARE_CHECKIN:')) {
-        const res = await staffCheckInByQr(raw)
-        setQrOpen(false)
-        setFlashOk(`✅ Check-in thành công: STT ${res.queueNumber} - Bệnh nhân ${res.patient?.fullName || ''} (Phòng ${res.room?.code || 'P.Khám'})`)
-        await loadList()
-        if (res.appointmentId) {
-          setSelectedId(res.appointmentId)
-          setIsDetailOpen(true)
-        }
-        return
+      const data = await lookupAppointmentByTicket({ token, ticket: raw })
+      const norm = normalizeLookup(data)
+      if (!norm || !norm.id) {
+        throw new Error('Không tìm thấy thông tin lịch hẹn tương ứng.')
       }
 
-      // Nhận diện mã QR thẻ CCCD gắn chip (có chứa dấu pipe |) hoặc chuỗi 9-12 số
-      if (raw.includes('|') || /^\d{9,12}$/.test(raw)) {
-        const res = await staffCheckInByNationalId(raw)
-        setQrOpen(false)
-        setFlashOk(`✅ Check-in bằng thẻ CCCD thành công: STT ${res.queueNumber} - Bệnh nhân ${res.patient?.fullName || ''} (Phòng ${res.room?.code || 'P.Khám'})`)
-        await loadList()
-        if (res.appointmentId) {
-          setSelectedId(res.appointmentId)
-          setIsDetailOpen(true)
-        }
-        return
-      }
-
-      setQrErr('Mã QR không đúng định dạng lịch hẹn VitaCare hoặc thẻ CCCD.')
+      setQrOpen(false)
+      setSelectedId(String(norm.id))
+      setLookupDetail(norm)
+      setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
+      setIsDetailOpen(true)
+      setFlashOk(`🔍 Đã tìm thấy lịch hẹn [${norm.ticket || norm.bookingCode}]. Vui lòng đối chiếu thông tin và bấm Xác nhận Check-in.`)
     } catch (e: any) {
-      setQrErr(e?.message || 'Không thể check-in bằng mã QR này.')
+      setQrErr(e?.message || 'Mã QR không đúng định dạng hoặc không tìm thấy lịch hẹn.')
     }
-  }, [loadList])
+  }, [token])
 
   const handleCccdCheckIn = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
@@ -614,17 +602,21 @@ export default function ReceptionHome() {
     setCccdLoading(true)
     setCccdErr('')
     try {
-      const res = await staffCheckInByNationalId(val)
+      const data = await lookupAppointmentByTicket({ token, ticket: val })
+      const norm = normalizeLookup(data)
+      if (!norm || !norm.id) {
+        throw new Error('Không tìm thấy lịch hẹn nào khớp với số CCCD này.')
+      }
+
       setIsCccdModalOpen(false)
       setCccdInput('')
-      setFlashOk(`✅ Check-in bằng CCCD thành công: STT ${res.queueNumber} - Bệnh nhân ${res.patient?.fullName || ''} (Phòng ${res.room?.code || 'P.Khám'})`)
-      await loadList()
-      if (res.appointmentId) {
-        setSelectedId(res.appointmentId)
-        setIsDetailOpen(true)
-      }
+      setSelectedId(String(norm.id))
+      setLookupDetail(norm)
+      setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
+      setIsDetailOpen(true)
+      setFlashOk(`🔍 Đã tìm thấy lịch hẹn [${norm.ticket || norm.bookingCode}] theo CCCD. Vui lòng đối chiếu thông tin và bấm Xác nhận Check-in.`)
     } catch (err: any) {
-      setCccdErr(err?.message || 'Không tìm thấy lịch hẹn hoặc không thể check-in bằng CCCD này.')
+      setCccdErr(err?.message || 'Không tìm thấy lịch hẹn phù hợp với CCCD này.')
     } finally {
       setCccdLoading(false)
     }
@@ -803,9 +795,9 @@ export default function ReceptionHome() {
     let expiring = 0
 
     for (const r of list) {
-      if (normalizeStatus(r?.status) === 'pending') {
+      if (isReceptionPending(r)) {
         pending++
-        const paid = String(r?.payment?.status || '').toLowerCase() === 'paid'
+        const paid = isPaidAppointment(r)
         const room = String(r?.clinicRoom || '').trim()
         const isExp = isPendingAppointmentPastSlot(r)
         if (isExp) expiring++
@@ -914,6 +906,8 @@ export default function ReceptionHome() {
             setCccdInput('')
             setIsCccdModalOpen(true)
           }}
+          handleQrFileInput={handleQrFileInput}
+          qrImageLoading={qrImageLoading}
         />
       </div>
 
@@ -1043,6 +1037,8 @@ export default function ReceptionHome() {
           </div>
         </div>
       )}
+      {/* Hidden reader element for scanning image file */}
+      <div id="tcl-qr-hidden-reader" className="hidden" />
     </div>
-  )
+  );
 }

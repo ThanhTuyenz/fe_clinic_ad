@@ -1,15 +1,30 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
 import { useAuth } from '../../../common/hooks/useAuth'
 import { login as loginApi } from '../services/auth'
 
 function readLastEmail() {
+  if (typeof window !== 'undefined') {
+    try {
+      return localStorage.getItem('staff_remember_email') || ''
+    } catch {
+      return ''
+    }
+  }
   return ''
 }
 
 function readRememberPref() {
+  if (typeof window !== 'undefined') {
+    try {
+      const pref = localStorage.getItem('staff_remember_pref')
+      return pref !== null ? pref === 'true' : true
+    } catch {
+      return true
+    }
+  }
   return true
 }
 
@@ -32,19 +47,21 @@ export default function Login() {
   const location = useLocation()
   const { login } = useAuth()
 
-  const [email, setEmail] = useState(readLastEmail)
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(readRememberPref)
+  const [remember, setRemember] = useState(true)
   const [error, setError] = useState('')
   const [info, setInfo] = useState(location.state?.message || '')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const passwordRef = useRef(null)
 
   useEffect(() => {
-    if (email.trim() && passwordRef.current) {
-      passwordRef.current.focus()
+    const savedEmail = readLastEmail()
+    const savedRemember = readRememberPref()
+    if (savedEmail) {
+      setEmail(savedEmail)
     }
+    setRemember(savedRemember)
   }, [])
 
   async function handleSubmit(e) {
@@ -64,6 +81,20 @@ export default function Login() {
 
       if (!isStaffUser(data?.user)) {
         throw new Error('Chỉ nhân viên/bác sĩ mới được phép đăng nhập tại trang này.')
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          if (remember) {
+            localStorage.setItem('staff_remember_email', emailOrPhone)
+            localStorage.setItem('staff_remember_pref', 'true')
+          } else {
+            localStorage.removeItem('staff_remember_email')
+            localStorage.setItem('staff_remember_pref', 'false')
+          }
+        } catch {
+          // ignore storage errors
+        }
       }
 
       login({ token: data.token, user: data.user, remember })
@@ -96,10 +127,11 @@ export default function Login() {
             </p>
           ) : null}
 
-          <form onSubmit={handleSubmit} noValidate>
+          <form onSubmit={handleSubmit} method="post" action="#" noValidate>
             <div className="auth-field">
               <input
                 id="staff-login-email"
+                name="username"
                 type="text"
                 autoComplete="username"
                 placeholder="Nhập email nhân viên"
@@ -111,8 +143,8 @@ export default function Login() {
             <div className="auth-field">
               <div className="auth-password-wrap">
                 <input
-                  ref={passwordRef}
                   id="staff-login-password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   placeholder="Nhập mật khẩu"
