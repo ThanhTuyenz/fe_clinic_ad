@@ -34,6 +34,7 @@ import { formatMedicineLabel, rxLineMedicineName } from '../utils/medicineLabel'
 import { appointmentSourceLabel, appointmentSourceTitle, appointmentSourceValue } from '../utils/appointmentSource'
 import { getStaffSession, staffRole } from '../utils/staffSession'
 import { ticketFromQrPayload } from '../utils/ticketQr'
+import { useAppointmentsSocket } from '../hooks/useAppointmentsSocket'
 
 const DR_QR_READER_ELEMENT_ID = 'dr-ticket-qr-reader'
 
@@ -687,14 +688,18 @@ export default function DoctorHome() {
     }
   }, [loadAppointments])
 
-  // Tắt Polling tự động 15s (dùng F5 để làm mới)
-  // useEffect(() => {
-  //   if (!token || currentStaffRole !== 'doctor') return
-  //   const t = setInterval(() => {
-  //     void loadAppointments({ silent: true })
-  //   }, 15000)
-  //   return () => clearInterval(t)
-  // }, [token, currentStaffRole, loadAppointments])
+  // Lắng nghe sự kiện Realtime cập nhật danh sách khám của Bác sĩ
+  useAppointmentsSocket({
+    enabled: Boolean(token && currentStaffRole === 'doctor'),
+    onAppointmentBooked: useCallback(() => {
+      console.log('[DoctorHome] Realtime appointment:booked received, refreshing list...')
+      void loadAppointments({ silent: true })
+    }, [loadAppointments]),
+    onStatusChanged: useCallback(() => {
+      console.log('[DoctorHome] Realtime appointment:status_changed received, refreshing list...')
+      void loadAppointments({ silent: true })
+    }, [loadAppointments]),
+  })
 
   // Sau F5, React state bị mất nhưng ca khám vẫn là IN_EXAMINATION trong DB.
   // Tự mở lại ca đang khám của bác sĩ; nếu id đã chọn không còn trong dữ liệu thì

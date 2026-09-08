@@ -20,6 +20,7 @@ import { buildPaymentInvoiceView } from '../utils/paymentInvoiceView'
 import { printPaymentInvoice, printPaymentThenVisitSlip } from '../utils/printPaymentInvoice'
 import { printVisitSlip } from '../utils/printVisitSlip'
 import { staffCheckInByQr, staffCheckInByNationalId } from '../services/checkIn'
+import { useAppointmentsSocket } from '../hooks/useAppointmentsSocket'
 
 import {
   PAGE_SIZE,
@@ -175,6 +176,22 @@ export default function ReceptionHome() {
   useEffect(() => {
     void loadList()
   }, [loadList])
+
+  // Lắng nghe sự kiện Realtime khi có bệnh nhân đặt lịch hoặc đổi trạng thái
+  useAppointmentsSocket({
+    onAppointmentBooked: useCallback((event) => {
+      console.log('[Reception] Realtime appointment:booked received:', event)
+      void loadList()
+      const patient = event.patientName ? ` (${event.patientName})` : ''
+      const code = event.bookingCode ? `#${event.bookingCode}` : ''
+      setFlashOk(`🔔 Có lịch hẹn mới ${code}${patient} vừa được xác nhận!`)
+      setTimeout(() => setFlashOk(''), 6000)
+    }, [loadList]),
+    onStatusChanged: useCallback((event) => {
+      console.log('[Reception] Realtime appointment:status_changed received:', event)
+      void loadList()
+    }, [loadList]),
+  })
 
   useEffect(() => {
     if (!token) return
