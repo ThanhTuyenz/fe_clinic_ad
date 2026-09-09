@@ -5,15 +5,16 @@ import { dashFilterLabelVi } from './receptionHelpers'
 
 interface ReceptionStatsBarProps {
   stats: {
-    pending: number
+    all: number
+    pendingCheckin: number
     unpaid: number
-    noRoom: number
-    ready: number
-    expiring: number
+    checkedIn: number
+    completed: number
+    cancelled: number
   }
   dashFilter: string
   setDashFilter: (val: string) => void
-  statusFilter: string
+  statusFilter?: string
 }
 
 export default function ReceptionStatsBar({
@@ -25,49 +26,57 @@ export default function ReceptionStatsBar({
   const cards = [
     {
       id: '',
-      label: 'Đang chờ xử lý',
-      val: stats.pending,
-      hint: statusFilter === 'pending' || statusFilter === 'all' ? 'Toàn bộ pending' : 'Theo bộ lọc',
-      activeClass: 'border-slate-800 bg-slate-50 ring-2 ring-slate-800/10',
+      label: 'Tất cả lịch hẹn',
+      val: stats.all,
+      hint: 'Toàn bộ danh sách',
+      activeClass: 'border-slate-800 bg-slate-100/70 shadow-sm',
       badgeClass: 'text-slate-800',
     },
     {
+      id: 'pending_checkin',
+      label: 'Chờ tiếp đón',
+      val: stats.pendingCheckin,
+      hint: 'Chờ check-in vào phòng',
+      activeClass: 'border-indigo-600 bg-indigo-50/70 shadow-sm',
+      badgeClass: 'text-indigo-600',
+    },
+    {
       id: 'unpaid',
-      label: 'Chưa thu phí',
+      label: 'Chờ đóng phí',
       val: stats.unpaid,
       hint: 'Cần thu tiền khám',
-      activeClass: 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20',
+      activeClass: 'border-amber-600 bg-amber-50/70 shadow-sm',
       badgeClass: 'text-amber-600',
     },
     {
-      id: 'noRoom',
-      label: 'Chưa chọn phòng',
-      val: stats.noRoom,
-      hint: 'Đã đóng tiền, thiếu phòng',
-      activeClass: 'border-sky-500 bg-sky-50/50 ring-2 ring-sky-500/20',
-      badgeClass: 'text-sky-600',
-    },
-    {
-      id: 'ready',
-      label: 'Sẵn sàng xác nhận',
-      val: stats.ready,
-      hint: 'Đủ phí và phòng',
-      activeClass: 'border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/20',
+      id: 'checked_in',
+      label: 'Đã check-in',
+      val: stats.checkedIn,
+      hint: 'Đang đợi vào khám',
+      activeClass: 'border-emerald-600 bg-emerald-50/70 shadow-sm',
       badgeClass: 'text-emerald-600',
     },
     {
-      id: 'expiring',
-      label: 'Quá giờ slot',
-      val: stats.expiring,
-      hint: 'Hết khung giờ hẹn',
-      activeClass: 'border-rose-500 bg-rose-50/50 ring-2 ring-rose-500/20',
+      id: 'completed',
+      label: 'Đang / Đã khám',
+      val: stats.completed,
+      hint: 'Đang khám hoặc xong',
+      activeClass: 'border-blue-600 bg-blue-50/70 shadow-sm',
+      badgeClass: 'text-blue-600',
+    },
+    {
+      id: 'cancelled',
+      label: 'Đã hủy / Quá giờ',
+      val: stats.cancelled,
+      hint: 'Hết hạn hoặc từ chối',
+      activeClass: 'border-rose-600 bg-rose-50/70 shadow-sm',
       badgeClass: 'text-rose-600',
     },
   ]
 
   return (
     <section className="mb-6" aria-label="Tóm tắt công việc tiếp nhận">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {cards.map((c) => {
           const isSelected = dashFilter === c.id
           return (
@@ -75,7 +84,7 @@ export default function ReceptionStatsBar({
               key={c.id || 'all'}
               type="button"
               onClick={() => setDashFilter(isSelected && c.id !== '' ? '' : c.id)}
-              className={`p-3.5 rounded-xl border text-left transition-all bg-white shadow-xs hover:shadow-sm flex flex-col justify-between ${
+              className={`p-3.5 rounded-lg border text-left transition-all bg-white shadow-xs hover:shadow-sm flex flex-col justify-between ${
                 isSelected ? c.activeClass : 'border-slate-200/80 hover:border-slate-300'
               }`}
             >

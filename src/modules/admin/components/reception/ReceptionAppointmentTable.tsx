@@ -99,7 +99,7 @@ export default function ReceptionAppointmentTable({
   qrImageLoading,
 }: ReceptionAppointmentTableProps) {
   return (
-    <div className="bg-white border border-slate-300/80 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+    <div className="bg-white border border-slate-300/80 rounded-xl shadow-sm overflow-hidden flex flex-col">
       {/* Thanh công cụ tìm kiếm và lọc */}
       <div className="p-4 border-b border-slate-200 bg-slate-50/80 space-y-3">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -107,7 +107,7 @@ export default function ReceptionAppointmentTable({
             <div className="relative w-full">
               <input
                 id="reception-table-search"
-                className="w-full pl-9 pr-4 py-2.5 text-xs bg-white border border-slate-300 rounded-xl placeholder:text-slate-400 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-xs"
+                className="w-full pl-9 pr-4 py-2.5 text-xs bg-white border border-slate-300 rounded-lg placeholder:text-slate-400 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-xs"
                 type="search"
                 value={listSearch}
                 onChange={(e) => {
@@ -126,7 +126,7 @@ export default function ReceptionAppointmentTable({
           <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
             <button
               type="button"
-              className={`px-3.5 py-2.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
+              className={`px-3.5 py-2.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
                 filtersOpen
                   ? 'bg-emerald-50 border-emerald-600 text-emerald-800'
                   : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
@@ -140,7 +140,7 @@ export default function ReceptionAppointmentTable({
             {onOpenCccdCheckIn && (
               <button
                 type="button"
-                className="px-3.5 py-2.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm border border-blue-600 transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98]"
+                className="px-3.5 py-2.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm border border-blue-600 transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98]"
                 onClick={onOpenCccdCheckIn}
               >
                 <span>🆔 Check-in bằng CCCD</span>
@@ -149,7 +149,7 @@ export default function ReceptionAppointmentTable({
 
             {handleQrFileInput && (
               <label
-                className={`px-3.5 py-2.5 text-xs font-bold rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98] ${
+                className={`px-3.5 py-2.5 text-xs font-bold rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98] ${
                   qrImageLoading ? 'opacity-60 pointer-events-none' : ''
                 }`}
                 title="Tải tệp ảnh chứa mã QR lịch hẹn để check-in nhanh"
@@ -167,7 +167,7 @@ export default function ReceptionAppointmentTable({
 
             <button
               type="button"
-              className="px-4 py-2.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border border-emerald-600 transition-all cursor-pointer flex items-center gap-2 active:scale-[0.98] disabled:opacity-50"
+              className="px-4 py-2.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border border-emerald-600 transition-all cursor-pointer flex items-center gap-2 active:scale-[0.98] disabled:opacity-50"
               disabled={lookupLoading}
               onClick={() => {
                 setTicketErr('')
@@ -182,14 +182,14 @@ export default function ReceptionAppointmentTable({
         </div>
 
         {ticketErr ? (
-          <div className="px-3.5 py-2 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded-xl font-medium">
+          <div className="px-3.5 py-2 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded-lg font-medium">
             {ticketErr}
           </div>
         ) : null}
 
         {/* Khối lọc mở rộng */}
         {filtersOpen ? (
-          <div className="p-3.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-700 shadow-xs">
+          <div className="p-3.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-700 shadow-xs">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 flex-wrap">
               <div className="flex-1 min-w-[180px]">
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">Trạng thái khám</label>
@@ -360,7 +360,7 @@ export default function ReceptionAppointmentTable({
                   {/* Thanh toán */}
                   <td className="py-3.5 px-4">
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${
                         isPaid
                           ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                           : 'bg-rose-100 text-rose-800 border-rose-300'
@@ -373,7 +373,7 @@ export default function ReceptionAppointmentTable({
                   {/* Trạng thái */}
                   <td className="py-3.5 px-4">
                     <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                      className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold border ${
                         meta.tone === 'booked'
                           ? 'bg-blue-100 text-blue-800 border-blue-300'
                           : meta.tone === 'completed'

@@ -234,15 +234,14 @@ export default function ReceptionDetailModal({
               {appointmentSourceLabel(activeDetail)}
             </span>
             <span
-              className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                statusMeta.tone === 'booked'
-                  ? 'bg-blue-100 text-blue-800 border-blue-300'
-                  : statusMeta.tone === 'completed'
+              className={`px-2.5 py-1 rounded-full text-xs font-bold border ${statusMeta.tone === 'booked'
+                ? 'bg-blue-100 text-blue-800 border-blue-300'
+                : statusMeta.tone === 'completed'
                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                   : statusMeta.tone === 'cancelled'
-                  ? 'bg-slate-200 text-slate-700 border-slate-300'
-                  : 'bg-amber-100 text-amber-800 border-amber-300'
-              }`}
+                    ? 'bg-slate-200 text-slate-700 border-slate-300'
+                    : 'bg-amber-100 text-amber-800 border-amber-300'
+                }`}
             >
               {statusMeta.label}
             </span>
@@ -300,7 +299,7 @@ export default function ReceptionDetailModal({
                   onClick={handleOpenEditPatient}
                   className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  ✏️ Sửa thông tin
+                  Sửa thông tin
                 </button>
               )}
             </div>
@@ -330,8 +329,8 @@ export default function ReceptionDetailModal({
                   {patient?.gender === 'male' || patient?.gender === 'MALE'
                     ? 'Nam'
                     : patient?.gender === 'female' || patient?.gender === 'FEMALE'
-                    ? 'Nữ'
-                    : '—'}
+                      ? 'Nữ'
+                      : '—'}
                 </dd>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-200">
@@ -529,7 +528,7 @@ export default function ReceptionDetailModal({
                       disabled={saving}
                       onClick={handleManualCheckIn}
                     >
-                      <span>⚡ Xác nhận Check-in (Có mặt)</span>
+                      <span>Xác nhận</span>
                     </button>
                   )}
                   <button

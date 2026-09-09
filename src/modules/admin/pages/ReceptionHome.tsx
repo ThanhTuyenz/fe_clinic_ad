@@ -29,6 +29,7 @@ import {
   cameraErrorMessage,
   detailMissingForSlip,
   displayName,
+  getAppointmentWorkflowBucket,
   isPaidAppointment,
   isReceptionPending,
   matchesDashFilter,
@@ -805,26 +806,39 @@ export default function ReceptionHome() {
   }, [filteredList, page])
 
   const stats = useMemo(() => {
-    let pending = 0
+    let pendingCheckin = 0
     let unpaid = 0
-    let noRoom = 0
-    let ready = 0
-    let expiring = 0
+    let checkedIn = 0
+    let completed = 0
+    let cancelled = 0
 
     for (const r of list) {
-      if (isReceptionPending(r)) {
-        pending++
-        const paid = isPaidAppointment(r)
-        const room = String(r?.clinicRoom || '').trim()
-        const isExp = isPendingAppointmentPastSlot(r)
-        if (isExp) expiring++
-        else if (!paid) unpaid++
-        else if (!room) noRoom++
-        else ready++
-      }
+      const bucket = getAppointmentWorkflowBucket(r)
+      if (bucket === 'pending_checkin') pendingCheckin++
+      else if (bucket === 'unpaid') unpaid++
+      else if (bucket === 'checked_in') checkedIn++
+      else if (bucket === 'completed') completed++
+      else if (bucket === 'cancelled') cancelled++
     }
-    return { pending, unpaid, noRoom, ready, expiring }
+    return {
+      all: list.length,
+      pendingCheckin,
+      unpaid,
+      checkedIn,
+      completed,
+      cancelled,
+    }
   }, [list])
+
+  const handleSelectDashFilter = useCallback(
+    (val: string) => {
+      setDashFilter(val)
+      if (val && statusFilter !== 'all') {
+        setStatusFilter('all')
+      }
+    },
+    [statusFilter],
+  )
 
   const handleQrFileInput = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -870,7 +884,7 @@ export default function ReceptionHome() {
           </div>
           <button
             type="button"
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm border border-emerald-600 transition-all cursor-pointer flex items-center gap-2 active:scale-[0.98]"
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm border border-emerald-600 transition-all cursor-pointer flex items-center gap-2 active:scale-[0.98]"
             onClick={handleAdd}
           >
             <PlusIcon className="w-4 h-4 text-white" />
@@ -882,7 +896,7 @@ export default function ReceptionHome() {
         <ReceptionStatsBar
           stats={stats}
           dashFilter={dashFilter}
-          setDashFilter={setDashFilter}
+          setDashFilter={handleSelectDashFilter}
           statusFilter={statusFilter}
         />
 

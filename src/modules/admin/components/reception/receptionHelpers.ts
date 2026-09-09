@@ -27,8 +27,19 @@ export function displayName(user: any): string {
 }
 
 export function sourceCreatorLabel(appointment: any): string {
-  if (appointmentSourceValue(appointment) !== 'clinic') return '—'
-  return appointmentCreatorName(appointment) || 'Nhân viên phòng khám'
+  if (!appointment) return '—'
+  const src = appointmentSourceValue(appointment)
+  if (src === 'online') {
+    return 'Bệnh nhân (Đặt online)'
+  }
+  const creator = appointmentCreatorName(appointment)
+  if (creator) {
+    return `${creator} (Tại quầy)`
+  }
+  if (src === 'clinic') {
+    return 'Lễ tân (Tại quầy)'
+  }
+  return 'Bệnh nhân (Đặt online)'
 }
 
 export function pad2(n: number | string): string {
@@ -276,10 +287,14 @@ export function readReceptionNavState(location: any) {
 }
 
 export function dashFilterLabelVi(key: string): string {
-  if (key === 'unpaid') return 'Chưa thu phí'
+  if (key === 'pending_checkin') return 'Chờ tiếp đón (Check-in)'
+  if (key === 'unpaid') return 'Chờ đóng phí'
+  if (key === 'checked_in') return 'Đã check-in (Chờ khám)'
+  if (key === 'completed') return 'Đang / Đã khám'
+  if (key === 'cancelled') return 'Đã hủy / Quá giờ'
+  if (key === 'expiring') return 'Quá giờ hẹn'
   if (key === 'noRoom') return 'Chưa chọn phòng'
   if (key === 'ready') return 'Sẵn sàng xác nhận'
-  if (key === 'expiring') return 'Quá giờ — sắp tự hủy'
   return ''
 }
 
@@ -301,19 +316,60 @@ export function isReceptionPending(r: any): boolean {
   return st === 'pending'
 }
 
+export function getAppointmentWorkflowBucket(r: any): 'cancelled' | 'completed' | 'checked_in' | 'unpaid' | 'pending_checkin' {
+  if (!r) return 'pending_checkin'
+  const wf = String(r?.workflowStatus || '').toUpperCase()
+  const st = normalizeStatus(r?.status)
+  const paid = isPaidAppointment(r)
+  const isExp = isPendingAppointmentPastSlot(r)
+
+  // 1. Đã hủy / Hết hạn / Quá giờ slot
+  if (wf === 'CANCELLED' || wf === 'EXPIRED' || st === 'cancelled' || (isReceptionPending(r) && isExp)) {
+    return 'cancelled'
+  }
+
+  // 2. Đang khám hoặc Đã khám xong
+  if (wf === 'IN_EXAMINATION' || wf === 'COMPLETED' || st === 'examined') {
+    return 'completed'
+  }
+
+  // 3. Đã check-in vào phòng (Đang chờ bác sĩ gọi khám)
+  if (wf === 'CHECKED_IN' || (st === 'confirmed' && wf !== 'BOOKED')) {
+    return 'checked_in'
+  }
+
+  // 4. Chờ đóng phí khám
+  if (wf === 'PENDING_PAYMENT' || !paid) {
+    return 'unpaid'
+  }
+
+  // 5. Chờ tiếp đón / check-in
+  return 'pending_checkin'
+}
+
 export function matchesDashFilter(row: any, dashFilter: string): boolean {
   const f = String(dashFilter || '').trim()
-  if (!f) return true
-  if (!isReceptionPending(row)) return false
-  const isPaid = isPaidAppointment(row)
-  const room = String(row?.clinicRoom || '').trim()
-  const expiring = isPendingAppointmentPastSlot(row)
-  if (f === 'expiring') return expiring
-  if (expiring) return false
-  if (f === 'unpaid') return !isPaid
-  if (f === 'noRoom') return isPaid && !room
-  if (f === 'ready') return isPaid && Boolean(room)
-  return true
+  if (!f || f === 'all') return true
+
+  // Tương thích ngược với link từ Dashboard
+  if (f === 'noRoom') {
+    const paid = isPaidAppointment(row)
+    const room = String(row?.clinicRoom || '').trim()
+    const isExp = isPendingAppointmentPastSlot(row)
+    return isReceptionPending(row) && paid && !room && !isExp
+  }
+  if (f === 'ready') {
+    const paid = isPaidAppointment(row)
+    const room = String(row?.clinicRoom || '').trim()
+    const isExp = isPendingAppointmentPastSlot(row)
+    return isReceptionPending(row) && paid && Boolean(room) && !isExp
+  }
+  if (f === 'expiring') {
+    return isPendingAppointmentPastSlot(row)
+  }
+
+  const bucket = getAppointmentWorkflowBucket(row)
+  return bucket === f
 }
 
 export function normalizeLookup(raw: any) {
