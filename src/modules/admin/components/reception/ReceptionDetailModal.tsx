@@ -62,6 +62,7 @@ interface ReceptionDetailModalProps {
   visitErr: string
   detailErr: string
   handleManualCheckIn?: () => void
+  onMarkCompleted?: () => void
   onPatientProfileUpdated?: (updatedPatient: any) => void
 }
 
@@ -101,6 +102,7 @@ export default function ReceptionDetailModal({
   visitErr,
   detailErr,
   handleManualCheckIn,
+  onMarkCompleted,
   onPatientProfileUpdated,
 }: ReceptionDetailModalProps) {
   const [isEditingPatient, setIsEditingPatient] = React.useState(false)
@@ -509,8 +511,19 @@ export default function ReceptionDetailModal({
               {activeDetail?.workflowStatus === 'CHECKED_IN' ? (
                 <>
                   <div className="flex-1 py-2 px-3.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs">
-                    <span>✓ Đã Check-in vào phòng khám {visitQueueDraft ? `(STT: ${visitQueueDraft})` : ''}</span>
+                    <span>✓ Đã Check-in {visitQueueDraft ? `(STT: ${visitQueueDraft})` : ''}</span>
                   </div>
+                  {onMarkCompleted && (
+                    <button
+                      type="button"
+                      className="py-2 px-3.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap flex items-center gap-1.5 active:scale-[0.97] disabled:opacity-40"
+                      disabled={saving}
+                      onClick={onMarkCompleted}
+                    >
+                      <span>🩺</span>
+                      Khám xong
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="py-2 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap"

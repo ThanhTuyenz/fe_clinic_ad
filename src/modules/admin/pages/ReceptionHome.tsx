@@ -185,8 +185,11 @@ export default function ReceptionHome() {
       void loadList()
       const patient = event.patientName ? ` (${event.patientName})` : ''
       const code = event.bookingCode ? `#${event.bookingCode}` : ''
-      setFlashOk(`🔔 Có lịch hẹn mới ${code}${patient} vừa được xác nhận!`)
-      setTimeout(() => setFlashOk(''), 6000)
+      const service = event.servicePackageName || event.packageName || event.specialtyName || (event.doctorName ? `BS. ${event.doctorName}` : '')
+      const serviceInfo = service ? ` · ${service}` : ''
+      const dateInfo = event.appointmentDate ? ` [Ngày: ${event.appointmentDate}]` : ''
+      setFlashOk(`🔔 Có lịch hẹn mới ${code}${patient}${serviceInfo}${dateInfo} vừa được xác nhận!`)
+      setTimeout(() => setFlashOk(''), 8000)
     }, [loadList]),
     onStatusChanged: useCallback((event) => {
       console.log('[Reception] Realtime appointment:status_changed received:', event)
@@ -589,6 +592,34 @@ export default function ReceptionHome() {
     void loadList()
   }, [activeDetail, loadList])
 
+  const handleMarkCompleted = useCallback(async () => {
+    if (!activeDetail?.id || !token) return
+    setSaveErr('')
+    setSaveMsg('')
+    setSaving(true)
+    try {
+      await updateAppointmentStatus({
+        appointmentId: activeDetail.id,
+        status: 'completed',
+      })
+      setSaveMsg('Đã cập nhật trạng thái Khám xong!')
+      setFlashOk('✅ Đã đánh dấu khám xong cho bệnh nhân!')
+      setDetailById((prev) => ({
+        ...prev,
+        [String(activeDetail.id)]: {
+          ...(prev[String(activeDetail.id)] || activeDetail),
+          workflowStatus: 'COMPLETED',
+          status: 'completed',
+        },
+      }))
+      await loadList()
+    } catch (e: any) {
+      setSaveErr(e?.message || 'Không thể cập nhật trạng thái khám xong.')
+    } finally {
+      setSaving(false)
+    }
+  }, [activeDetail, token, loadList])
+
   const handleQrDecode = useCallback(async (payload: string) => {
     const raw = String(payload || '').trim()
     setQrErr('')
@@ -984,6 +1015,7 @@ export default function ReceptionHome() {
         visitErr={visitErr}
         detailErr={detailErr}
         handleManualCheckIn={handleManualCheckIn}
+        onMarkCompleted={handleMarkCompleted}
         onPatientProfileUpdated={handlePatientProfileUpdated}
       />
 

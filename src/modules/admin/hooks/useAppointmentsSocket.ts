@@ -9,9 +9,14 @@ export interface AppointmentBookedEvent {
   queueNumber?: number | string
   patientName?: string
   patientPhone?: string
+  doctorId?: string
   doctorName?: string
   specialtyName?: string
+  servicePackageName?: string
+  packageName?: string
+  bookingType?: 'DOCTOR' | 'SERVICE_PACKAGE' | 'HEALTH_PACKAGE'
   branchId?: string
+  branchName?: string
   appointmentDate?: string
   startTime?: string
   endTime?: string
