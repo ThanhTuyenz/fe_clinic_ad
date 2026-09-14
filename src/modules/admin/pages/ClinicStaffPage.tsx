@@ -8,10 +8,8 @@ import { listClinicRooms } from '../services/clinicRooms'
 const ROLES = [
   ['all', 'Tất cả'],
   ['doctor', 'Bác sĩ'],
-  ['pharmacist', 'Dược sĩ'],
   ['receptionist', 'Lễ tân'],
   ['branch_manager', 'Quản lý chi nhánh'],
-  ['cashier', 'Kế toán / Thu ngân'],
 ]
 const ROLE_LABEL = Object.fromEntries(ROLES)
 const ACADEMIC_RANKS = ['BS. CKI', 'BS. CKII', 'Thạc sĩ, BS', 'Tiến sĩ, BS', 'PGS. TS. BS', 'GS. TS. BS', 'Bác sĩ Đa khoa']
