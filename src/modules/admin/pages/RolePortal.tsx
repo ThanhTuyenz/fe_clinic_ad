@@ -50,7 +50,8 @@ const NAV = {
   ],
   receptionist: [
     ['dashboard', 'Tổng quan', '/dashboard'],
-    ['appointments', 'Tiếp đón & Lịch hẹn', '/appointments'],
+    ['appointments', 'Tiếp đón & Lịch hẹn', '/reception'],
+    ['patients', 'Bệnh nhân', '/reception/patients'],
     ['billing', 'Thanh toán', '/billing'],
   ],
   doctor: [

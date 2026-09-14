@@ -138,11 +138,22 @@ function mapGenderToDraft(g: any) {
 
 function readDisplayNameFromPatient(pat: any) {
   if (!pat) return ''
-  const dn = String(pat.displayName || '').trim()
+  const dn = String(pat.displayName || pat.fullName || pat.name || '').trim()
   if (dn) return dn
   const last = String(pat.lastName || '').trim()
   const first = String(pat.firstName || '').trim()
   return `${last} ${first}`.trim() || `${first} ${last}`.trim() || ''
+}
+
+function patientDobFromRow(pat: any) {
+  return pat?.dob || pat?.dateOfBirth || ''
+}
+
+function genderLabelFromRow(g: any) {
+  const mapped = mapGenderToDraft(g)
+  if (mapped === 'male') return 'Nam'
+  if (mapped === 'female') return 'Nữ'
+  return g ? String(g) : '—'
 }
 
 function formatDateTimeVi(value: any) {
@@ -312,19 +323,20 @@ export default function RegistrationHome() {
 
   const patientDisplay = useMemo(() => {
     if (p) {
+      const dob = patientDobFromRow(p)
       return {
         id: p.id || '',
-        patientCode: p.patientCode || '—',
-        displayName: p.displayName || [p.lastName, p.firstName].filter(Boolean).join(' ').trim() || '—',
-        dobLabel: p.dob ? formatDateVi(p.dob) : '—',
+        patientCode: p.patientCode || p.nationalId || '—',
+        displayName: readDisplayNameFromPatient(p) || '—',
+        dobLabel: dob ? formatDateVi(dob) : '—',
         age:
           p.age != null && p.age !== ''
             ? String(p.age)
-            : p.dob
-            ? ageFromIsoDate(isoDateFromApi(p.dob)) || '—'
+            : dob
+            ? ageFromIsoDate(isoDateFromApi(dob)) || '—'
             : '—',
-        phone: p.phone || '—',
-        gender: p.gender || '—',
+        phone: p.phone || p.phoneNumber || '—',
+        gender: genderLabelFromRow(p.gender),
         address: p.address || '—',
         email: p.email || '',
       }
@@ -864,10 +876,10 @@ export default function RegistrationHome() {
   function applySelectedPatient(patient: any) {
     if (!patient) return
     setDraftPatientId(String(patient.id || patient._id || ''))
-    setDraftPatientCode(String(patient.patientCode || '').trim())
+    setDraftPatientCode(String(patient.patientCode || patient.nationalId || '').trim())
     setDraftName(readDisplayNameFromPatient(patient))
-    setDraftDob(patient.dob ? isoDateFromApi(patient.dob) : '')
-    setDraftPhone(String(patient.phone || '').trim())
+    setDraftDob(patientDobFromRow(patient) ? isoDateFromApi(patientDobFromRow(patient)) : '')
+    setDraftPhone(String(patient.phone || patient.phoneNumber || '').trim())
     setDraftGender(mapGenderToDraft(patient.gender))
     setDraftAddress(String(patient.address || '').trim())
     setLookupErr('')
@@ -1661,11 +1673,11 @@ export default function RegistrationHome() {
                           className="w-4 h-4 text-emerald-600 border-slate-300 focus:ring-emerald-500"
                         />
                       </td>
-                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">{r.patientCode || '—'}</td>
-                      <td className="py-2.5 px-3 font-bold text-slate-900">{r.displayName || '—'}</td>
-                      <td className="py-2.5 px-3 font-medium text-slate-700">{r.phone || '—'}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{r.dob ? formatDateVi(r.dob) : '—'}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{r.gender || '—'}</td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">{r.patientCode || r.nationalId || '—'}</td>
+                      <td className="py-2.5 px-3 font-bold text-slate-900">{readDisplayNameFromPatient(r) || '—'}</td>
+                      <td className="py-2.5 px-3 font-medium text-slate-700">{r.phone || r.phoneNumber || '—'}</td>
+                      <td className="py-2.5 px-3 text-slate-600">{patientDobFromRow(r) ? formatDateVi(patientDobFromRow(r)) : '—'}</td>
+                      <td className="py-2.5 px-3 text-slate-600">{genderLabelFromRow(r.gender)}</td>
                       <td className="py-2.5 px-3 text-slate-500">{r.email || r.citizenId || '—'}</td>
                     </tr>
                   ))}

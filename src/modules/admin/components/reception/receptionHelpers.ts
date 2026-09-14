@@ -218,6 +218,38 @@ export function patientListDisplayName(p: any): string {
   return en || '—'
 }
 
+export function genderLabelVi(value: unknown): string {
+  const raw = String(value || '').trim().toUpperCase()
+  if (raw === 'MALE' || raw === 'NAM' || raw === 'M') return 'Nam'
+  if (raw === 'FEMALE' || raw === 'NỮ' || raw === 'NU' || raw === 'F') return 'Nữ'
+  return value ? String(value) : '—'
+}
+
+export function patientDobValue(p: any) {
+  return p?.dob || p?.dateOfBirth || ''
+}
+
+export function toRegistrationPatient(row: any) {
+  if (!row) return null
+  const dob = patientDobValue(row)
+  const phone = String(row.phone || row.phoneNumber || row.account?.phoneNumber || '').trim()
+  return {
+    ...row,
+    id: row.id || row._id,
+    patientCode: row.patientCode || row.nationalId || row.id,
+    displayName: patientListDisplayName(row),
+    fullName: row.fullName || patientListDisplayName(row),
+    dob,
+    dateOfBirth: dob,
+    phone,
+    phoneNumber: phone,
+    gender: row.gender,
+    address: row.address || '',
+    email: row.email || row.account?.email || '',
+    nationalId: row.nationalId || '',
+  }
+}
+
 export function ageFromDobField(dob: any): string {
   if (dob == null || dob === '') return ''
   const d = dob instanceof Date ? dob : new Date(dob)

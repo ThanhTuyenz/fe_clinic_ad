@@ -676,6 +676,9 @@ export default function Dashboard() {
                     <button type="button" className="tcl-btn" onClick={() => navigate('/reception')}>
                       Lịch hẹn
                     </button>
+                    <button type="button" className="tcl-btn" onClick={() => navigate('/reception/patients')}>
+                      Bệnh nhân
+                    </button>
                   </>
                 ) : null}
                 {role === 'registration' ? (
@@ -686,6 +689,9 @@ export default function Dashboard() {
                       onClick={() => navigate('/registration', { state: { createNew: true } })}
                     >
                       Đăng ký
+                    </button>
+                    <button type="button" className="tcl-btn" onClick={() => navigate('/reception/patients')}>
+                      Bệnh nhân
                     </button>
                     <button type="button" className="tcl-btn tcl-btn--pri" onClick={() => navigate('/reception')}>
                       Lịch hẹn
