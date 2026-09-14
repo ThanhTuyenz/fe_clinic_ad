@@ -24,6 +24,22 @@ const CONFIG: Record<string, Config> = {
       ['phoneNumber', 'Hotline'],
     ],
   },
+  rooms: {
+    title: 'Phòng khám',
+    singular: 'phòng khám',
+    fields: [
+      ['branchId', 'Chi nhánh', 'select', 'branches'],
+      ['code', 'Mã phòng', 'text'],
+      ['name', 'Tên phòng', 'text'],
+    ],
+    columns: [
+      ['code', 'Mã'],
+      ['name', 'Tên phòng'],
+      ['branch.name', 'Chi nhánh'],
+      ['specialties', 'Chuyên khoa'],
+      ['isActive', 'Trạng thái'],
+    ],
+  },
   specialties: {
     title: 'Quản lý chuyên khoa',
     singular: 'chuyên khoa',
@@ -133,6 +149,7 @@ const generateCode = (resource: string) => {
     'service-packages': 'PKG',
     services: 'SVC',
     branches: 'BRC',
+    rooms: 'PK',
     medicines: 'MED',
   }
   const prefix = prefixMap[resource] || 'CAT'
@@ -146,6 +163,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   const [rows, setRows] = useState<any[]>([])
   const [options, setOptions] = useState<Record<string, any[]>>({})
   const [q, setQ] = useState('')
+  const [branchFilter, setBranchFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
@@ -170,6 +188,11 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   }, [load])
 
   useEffect(() => {
+    setBranchFilter('')
+    setQ('')
+  }, [resource])
+
+  useEffect(() => {
     const resources = [
       ...new Set([
         ...cfg.fields.map((field) => field[3]).filter(Boolean),
@@ -183,17 +206,21 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
-    return term
-      ? rows.filter((row) => `${row.code || ''} ${row.name || ''}`.toLowerCase().includes(term))
-      : rows
-  }, [q, rows])
+    return rows.filter((row) => {
+      const branchId = row.branchId || row.branch?.id || ''
+      if (resource === 'rooms' && branchFilter && branchId !== branchFilter) return false
+      if (!term) return true
+      const specialtyNames = (row.specialties || []).map((item: any) => item.specialty?.name || '').join(' ')
+      return `${row.code || ''} ${row.name || ''} ${row.branch?.name || ''} ${specialtyNames}`.toLowerCase().includes(term)
+    })
+  }, [q, rows, resource, branchFilter])
 
   const openCreate = () => {
     setSelected(null)
-    const autoCode = ['service-packages', 'services', 'branches', 'medicines'].includes(resource)
+    const autoCode = ['service-packages', 'services', 'branches', 'rooms', 'medicines'].includes(resource)
       ? generateCode(resource)
       : ''
-    setForm({ ...EMPTY, code: autoCode, medicalServiceIds: [], schedules: [] })
+    setForm({ ...EMPTY, code: autoCode, medicalServiceIds: [], schedules: [], branchId: branchFilter || '' })
     setError('')
     setModal('create')
   }
@@ -203,7 +230,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
     setForm({
       ...EMPTY,
       ...row,
-      branchId: row.branchBookingMethod?.branchId || row.branchBookingMethod?.branch?.id || '',
+      branchId: row.branchBookingMethod?.branchId || row.branchBookingMethod?.branch?.id || row.branchId || row.branch?.id || '',
       branchBookingMethodId: row.branchBookingMethodId || row.branchBookingMethod?.id || '',
       schedules: (row.schedules || []).map((schedule: any) => ({
         examDate: schedule.examDate?.slice(0, 10) || '',
@@ -224,8 +251,11 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
     if (!['branch-specialties', 'room-specialties'].includes(resource) && !String(form.name || '').trim()) {
       return setError('Tên không được để trống.')
     }
+    if (resource === 'rooms' && !String(form.branchId || '').trim()) {
+      return setError('Vui lòng chọn chi nhánh.')
+    }
     const payload = { ...form }
-    if (!payload.code && ['service-packages', 'services', 'branches', 'medicines'].includes(resource)) {
+    if (!payload.code && ['service-packages', 'services', 'branches', 'rooms', 'medicines'].includes(resource)) {
       payload.code = generateCode(resource)
     }
     if (!['specialties', 'branch-specialties', 'room-specialties'].includes(resource) && !String(payload.code || '').trim()) {
@@ -268,6 +298,10 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       ? money(value)
       : key === 'durationMin'
       ? `${value || 0} phút`
+      : key === 'isActive'
+      ? value ? 'Đang dùng' : 'Ngừng dùng'
+      : key === 'specialties'
+      ? (value?.map((item: any) => item.specialty?.name).filter(Boolean).join(', ') || '—')
       : value ?? '—'
 
   const optionValue = (field: Field, option: any) => (field[3] === 'specialties' ? String(option.id) : option.id)
@@ -302,7 +336,21 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       {error && <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
       <section className="mt-5 rounded-lg border border-slate-200 bg-white">
-        <div className="flex gap-2 border-b p-4">
+        <div className="flex flex-wrap gap-2 border-b p-4">
+          {resource === 'rooms' && (
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className="w-full max-w-xs rounded-md border bg-white px-3 py-2 text-sm"
+            >
+              <option value="">Tất cả chi nhánh</option>
+              {(options.branches || []).map((branch: any) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -340,22 +388,34 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                 </tr>
               ) : (
                 filtered.map((row) => (
-                  <tr key={row.id} className="border-t">
+                  <tr key={row.id} className={`border-t ${row.isActive === false ? 'bg-slate-50 text-slate-400' : ''}`}>
                     {cfg.columns.map(([key]) => (
                       <td
                         key={key}
                         className={key === 'name' ? 'max-w-xs px-5 py-3 font-bold text-slate-900' : 'max-w-xs px-5 py-3 text-slate-600'}
                       >
-                        {display(key, at(row, key))}
+                        {key === 'isActive' ? (
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                              row.isActive === false ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
+                            }`}
+                          >
+                            {display(key, at(row, key))}
+                          </span>
+                        ) : (
+                          display(key, at(row, key))
+                        )}
                       </td>
                     ))}
                     <td className="whitespace-nowrap px-5 py-3 text-right">
                       <button onClick={() => openEdit(row)} className="mr-2 rounded border px-3 py-1.5 text-xs">
                         Sửa
                       </button>
-                      <button onClick={() => void remove(row)} className="rounded border border-rose-200 px-3 py-1.5 text-xs text-rose-700">
-                        Ngừng dùng
-                      </button>
+                      {row.isActive !== false && (
+                        <button onClick={() => void remove(row)} className="rounded border border-rose-200 px-3 py-1.5 text-xs text-rose-700">
+                          Ngừng dùng
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -465,6 +525,17 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                   </label>
                 )
               })}
+
+              {resource === 'rooms' && (
+                <label className="flex items-center gap-2 text-sm font-normal text-slate-700 sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={form.isActive !== false}
+                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                  />
+                  Đang sử dụng
+                </label>
+              )}
 
               {resource === 'service-packages' && (
                 <section className="sm:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50/30 p-4">
