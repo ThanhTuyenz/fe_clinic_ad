@@ -151,28 +151,28 @@ export default function ReceptionDetailPane({
 
       {/* Thông báo */}
       {saveMsg ? (
-        <div className="mb-4 px-4 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center justify-between">
+        <div className="mb-4 px-4 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded flex items-center justify-between">
           <span>{saveMsg}</span>
         </div>
       ) : null}
       {saveErr ? (
-        <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl">
+        <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded">
           {saveErr}
         </div>
       ) : null}
       {visitErr ? (
-        <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl">
+        <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded">
           {visitErr}
         </div>
       ) : null}
       {detailErr ? (
-        <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl">
+        <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded">
           {detailErr}
         </div>
       ) : null}
 
       {pastSlotDetail ? (
-        <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-xl">
+        <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded">
           Khung giờ hẹn đã kết thúc. Bạn có thể bấm <strong>Từ chối / Hủy</strong> nếu bệnh nhân không đến.
         </div>
       ) : null}
@@ -180,7 +180,7 @@ export default function ReceptionDetailPane({
       {/* 2 Cột: Thông tin bệnh nhân & Thông tin khám */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Bệnh nhân */}
-        <section className="bg-slate-50/70 border border-slate-100 rounded-xl p-4">
+        <section className="bg-slate-50/70 border border-slate-100 rounded p-4">
           <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">Thông tin bệnh nhân</h3>
           <dl className="space-y-2 text-xs">
             <div className="flex justify-between py-1 border-b border-slate-200/50">
@@ -216,7 +216,7 @@ export default function ReceptionDetailPane({
         </section>
 
         {/* Thông tin khám */}
-        <section className="bg-slate-50/70 border border-slate-100 rounded-xl p-4">
+        <section className="bg-slate-50/70 border border-slate-100 rounded p-4">
           <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">Thông tin khám bệnh</h3>
           <dl className="space-y-2 text-xs">
             <div className="flex justify-between py-1 border-b border-slate-200/50">
@@ -258,16 +258,16 @@ export default function ReceptionDetailPane({
       {/* 2 Khối Thao tác: Thu phí khám & Điều phối phòng khám */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Khối Thu Phí */}
-        <section className="bg-slate-50/70 border border-slate-100 rounded-xl p-4 flex flex-col justify-between">
+        <section className="bg-slate-50/70 border border-slate-100 rounded p-4 flex flex-col justify-between">
           <div>
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">Phí khám ban đầu</h3>
-            <div className="flex items-baseline justify-between p-3 bg-white border border-slate-200/70 rounded-xl mb-3">
+            <div className="flex items-baseline justify-between p-3 bg-white border border-slate-200/70 rounded mb-3">
               <span className="text-xs font-semibold text-slate-500">Số tiền:</span>
               <strong className="text-lg font-extrabold text-emerald-700">{formatVnd(consultationFee)}</strong>
             </div>
 
             {isPaid ? (
-              <div className="p-3 bg-emerald-50/80 border border-emerald-200/60 rounded-xl space-y-1 text-xs text-emerald-900">
+              <div className="p-3 bg-emerald-50/80 border border-emerald-200/60 rounded space-y-1 text-xs text-emerald-900">
                 <div className="font-bold flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
                   Đã thu phí thành công
@@ -287,7 +287,7 @@ export default function ReceptionDetailPane({
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">Phương thức thu:</label>
                   <select
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs font-medium focus:outline-none focus:border-emerald-500"
                     value={paymentMethod}
                     disabled={!canEditStatus || paymentSaving}
                     onChange={(e) => setPaymentMethod(e.target.value)}
@@ -300,14 +300,14 @@ export default function ReceptionDetailPane({
                 </div>
 
                 {paymentErr ? (
-                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg">
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
                     {paymentErr}
                   </div>
                 ) : null}
 
                 <button
                   type="button"
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
                   disabled={!canEditStatus || !hasClinicRoom || paymentSaving}
                   onClick={handleRecordPayment}
                 >
@@ -323,7 +323,7 @@ export default function ReceptionDetailPane({
         </section>
 
         {/* Khối Điều Phối Phòng & Xác Nhận */}
-        <section className="bg-slate-50/70 border border-slate-100 rounded-xl p-4 space-y-3">
+        <section className="bg-slate-50/70 border border-slate-100 rounded p-4 space-y-3">
           <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">Điều phối & Xác nhận</h3>
 
           <div>
@@ -331,7 +331,7 @@ export default function ReceptionDetailPane({
               Phòng khám <span className="text-rose-500">*</span>
             </label>
             <select
-              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs font-medium focus:outline-none focus:border-emerald-500"
               value={clinicRoomDraft}
               disabled={!canEditStatus}
               onChange={(e) => handleClinicRoomChange(e.target.value)}
@@ -351,7 +351,7 @@ export default function ReceptionDetailPane({
             <input
               type="number"
               min="1"
-              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs font-medium focus:outline-none focus:border-emerald-500"
               placeholder="Tự động cấp khi chọn phòng"
               value={visitQueueDraft}
               disabled={!canEditStatus}
@@ -363,7 +363,7 @@ export default function ReceptionDetailPane({
           <div className="pt-2 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="flex-1 min-w-[130px] py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap"
+              className="flex-1 min-w-[130px] py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded shadow-xs transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap"
               disabled={!canFinishConfirm || saving}
               onClick={handleFinishConfirm}
             >
@@ -372,7 +372,7 @@ export default function ReceptionDetailPane({
 
             <button
               type="button"
-              className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap"
+              className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold rounded transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap"
               disabled={!canEditStatus || saving}
               onClick={handleCancelAppointment}
             >
@@ -381,7 +381,7 @@ export default function ReceptionDetailPane({
 
             <button
               type="button"
-              className="py-2.5 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap"
+              className="py-2.5 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded transition-all cursor-pointer whitespace-nowrap"
               onClick={openRegistrationFromActive}
             >
               Phiếu đăng ký
@@ -394,7 +394,7 @@ export default function ReceptionDetailPane({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="flex-1 py-1.5 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 transition-all cursor-pointer disabled:opacity-40"
+                className="flex-1 py-1.5 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-700 transition-all cursor-pointer disabled:opacity-40"
                 disabled={printBothDisabled}
                 onClick={printBothFromDetail}
               >
@@ -402,7 +402,7 @@ export default function ReceptionDetailPane({
               </button>
               <button
                 type="button"
-                className="py-1.5 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 transition-all cursor-pointer disabled:opacity-40"
+                className="py-1.5 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-700 transition-all cursor-pointer disabled:opacity-40"
                 disabled={printSlipDisabled}
                 onClick={printSlipOnly}
               >
@@ -410,7 +410,7 @@ export default function ReceptionDetailPane({
               </button>
               <button
                 type="button"
-                className="py-1.5 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 transition-all cursor-pointer disabled:opacity-40"
+                className="py-1.5 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-700 transition-all cursor-pointer disabled:opacity-40"
                 disabled={printInvoiceDisabled}
                 onClick={printInvoiceOnly}
               >

@@ -227,6 +227,8 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   const [saving, setSaving] = useState(false)
   const [syncingVectors, setSyncingVectors] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
+  const [sortKey, setSortKey] = useState<string>('id')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => {
     setQ('')
@@ -235,7 +237,9 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
     setFilterSessionType('')
     setDetailItem(null)
     setSyncMsg('')
-  }, [resource])
+    setSortKey(cfg.columns.some(([k]) => k === 'id') ? 'id' : cfg.columns[0]?.[0] || 'name')
+    setSortDir('asc')
+  }, [resource, cfg])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -294,8 +298,28 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         list = list.filter((row) => (row.sessionType || 'ALL_DAY') === filterSessionType)
       }
     }
+    if (sortKey) {
+      list = [...list].sort((a, b) => {
+        const valA = at(a, sortKey)
+        const valB = at(b, sortKey)
+        if (valA === undefined || valA === null) return 1
+        if (valB === undefined || valB === null) return -1
+        const numA = Number(valA)
+        const numB = Number(valB)
+        const isNum =
+          !isNaN(numA) &&
+          !isNaN(numB) &&
+          typeof valA !== 'boolean' &&
+          typeof valB !== 'boolean' &&
+          String(valA).trim() !== '' &&
+          String(valB).trim() !== ''
+
+        const cmp = isNum ? numA - numB : String(valA).localeCompare(String(valB), 'vi')
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+    }
     return list
-  }, [q, rows, resource, filterBranchId, filterMethodCode, filterSessionType])
+  }, [q, rows, resource, filterBranchId, filterMethodCode, filterSessionType, sortKey, sortDir])
 
   const bookingMethodOptions = useMemo(() => {
     const raw = options['booking-methods'] || []
@@ -733,13 +757,37 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
             </table>
           ) : (
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
                 <tr>
-                  {cfg.columns.map(([key, label]) => (
-                    <th key={key} className="px-5 py-3">
-                      {label}
-                    </th>
-                  ))}
+                  {cfg.columns.map(([key, label]) => {
+                    const isSorted = sortKey === key
+                    return (
+                      <th
+                        key={key}
+                        onClick={() => {
+                          if (sortKey === key) {
+                            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+                          } else {
+                            setSortKey(key)
+                            setSortDir('asc')
+                          }
+                        }}
+                        className="px-5 py-3 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                        title={`Bấm để sắp xếp theo ${label}`}
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>{label}</span>
+                          <span
+                            className={`text-[10px] ${
+                              isSorted ? 'text-emerald-700 font-bold' : 'text-slate-300'
+                            }`}
+                          >
+                            {isSorted ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                          </span>
+                        </div>
+                      </th>
+                    )
+                  })}
                   <th className="px-5 py-3 text-right">Thao tác</th>
                 </tr>
               </thead>

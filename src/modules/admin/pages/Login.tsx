@@ -109,52 +109,62 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-page">
-      <main className="auth-panel">
-        <div className="auth-card">
-          <h2>Đăng nhập</h2>
-          <p className="auth-card-sub">Nhập thông tin tài khoản nhân viên.</p>
+    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-slate-50">
+      <main className="w-full max-w-md">
+        <div className="w-full bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-sm">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Đăng nhập</h1>
+            <p className="mt-1 text-xs sm:text-sm text-slate-500">Nhập thông tin tài khoản nhân viên phòng khám.</p>
+          </div>
 
           {info ? (
-            <p className="auth-info" role="status">
+            <p className="mb-4 p-3 rounded bg-blue-50 border border-blue-200 text-xs text-blue-800" role="status">
               {info}
             </p>
           ) : null}
 
           {error ? (
-            <p className="auth-error" role="alert">
+            <p className="mb-4 p-3 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium" role="alert">
               {error}
             </p>
           ) : null}
 
-          <form onSubmit={handleSubmit} method="post" action="#" noValidate>
-            <div className="auth-field">
+          <form onSubmit={handleSubmit} method="post" action="#" noValidate className="space-y-4">
+            <div>
+              <label htmlFor="staff-login-email" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Email hoặc Tên tài khoản
+              </label>
               <input
                 id="staff-login-email"
                 name="username"
                 type="text"
                 autoComplete="username"
                 placeholder="Nhập email nhân viên"
+                className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded placeholder:text-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-xs disabled:bg-slate-100 disabled:cursor-not-allowed"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
               />
             </div>
-            <div className="auth-field">
-              <div className="auth-password-wrap">
+            <div>
+              <label htmlFor="staff-login-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Mật khẩu
+              </label>
+              <div className="relative block">
                 <input
                   id="staff-login-password"
                   name="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   placeholder="Nhập mật khẩu"
+                  className="w-full pl-3.5 pr-14 py-2.5 text-sm bg-white border border-slate-300 rounded placeholder:text-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-xs disabled:bg-slate-100 disabled:cursor-not-allowed"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
                 />
                 <button
                   type="button"
-                  className="auth-password-toggle"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded transition-colors disabled:opacity-50 cursor-pointer"
                   onClick={() => setShowPassword((v) => !v)}
                   disabled={loading}
                   aria-pressed={showPassword}
@@ -166,29 +176,32 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="auth-row">
-              <div className="auth-remember-col">
-                <label className="auth-checkbox">
+            <div className="flex items-center justify-between gap-3 pt-1 flex-wrap text-xs">
+              <div>
+                <label className="flex items-center gap-2 text-slate-600 cursor-pointer select-none font-medium">
                   <input
                     type="checkbox"
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 accent-emerald-600"
                     checked={remember}
                     onChange={(e) => setRemember(e.target.checked)}
                     disabled={loading}
                   />
                   Ghi nhớ đăng nhập
                 </label>
-      
               </div>
-              <button type="button" className="auth-link" disabled>
+              <button type="button" className="text-slate-400 cursor-not-allowed font-medium" disabled>
                 Quên mật khẩu?
               </button>
             </div>
 
-            <button type="submit" className="auth-submit" disabled={loading}>
+            <button
+              type="submit"
+              className="w-full py-2.5 px-4 text-sm font-bold text-white bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 rounded shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              disabled={loading}
+            >
               {loading ? 'Đang xử lý…' : 'Đăng nhập'}
             </button>
           </form>
-
         </div>
       </main>
     </div>

@@ -257,22 +257,22 @@ export default function DoctorWorkSchedulesPage() {
           <button
             type="button"
             onClick={() => setDoctorLeaveOpen(true)}
-            className="rounded-md bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer transition"
+            className="rounded bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer transition"
           >
             <span>🤖 AI Báo Bác sĩ nghỉ & Đổi lịch</span>
           </button>
-          <button onClick={() => openCreate()} className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 cursor-pointer">
+          <button onClick={() => openCreate()} className="rounded bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 cursor-pointer">
             + Xếp lịch làm việc
           </button>
         </div>
       </div>
 
-      {error && <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+      {error && <div className="mt-4 rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-2.5 rounded border border-slate-200 bg-white p-3.5 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           {viewMode === 'grid' && (
-            <div className="flex items-center gap-0.5 rounded-md border border-slate-200 bg-slate-50 p-0.5">
+            <div className="flex items-center gap-0.5 rounded border border-slate-200 bg-slate-50 p-0.5">
               <button onClick={prevWeek} className="rounded px-2 py-1 text-xs font-bold text-slate-600 hover:bg-white hover:shadow-xs">
                 ‹
               </button>
@@ -294,7 +294,7 @@ export default function DoctorWorkSchedulesPage() {
               placeholder="Tìm tên Bác sĩ..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-36 sm:w-44 rounded-md border border-slate-200 bg-white py-1.5 pl-7 pr-6 text-xs outline-none focus:border-emerald-600"
+              className="w-36 sm:w-44 rounded border border-slate-200 bg-white py-1.5 pl-7 pr-6 text-xs outline-none focus:border-emerald-600"
             />
             {searchTerm && (
               <button
@@ -309,7 +309,7 @@ export default function DoctorWorkSchedulesPage() {
           <select
             value={filterBranch}
             onChange={(e) => setFilterBranch(e.target.value)}
-            className="max-w-[150px] truncate rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-emerald-600"
+            className="max-w-[150px] truncate rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-emerald-600"
           >
             <option value="">Tất cả Chi nhánh</option>
             {branches.map((b) => (
@@ -322,7 +322,7 @@ export default function DoctorWorkSchedulesPage() {
           <select
             value={filterDoctor}
             onChange={(e) => setFilterDoctor(e.target.value)}
-            className="max-w-[150px] truncate rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-emerald-600"
+            className="max-w-[150px] truncate rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-emerald-600"
           >
             <option value="">Tất cả Bác sĩ</option>
             {doctors.map((d) => (
@@ -334,7 +334,7 @@ export default function DoctorWorkSchedulesPage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <div className="flex rounded-md border border-slate-200 p-0.5 bg-slate-50">
+          <div className="flex rounded border border-slate-200 p-0.5 bg-slate-50">
             <button
               onClick={() => setViewMode('grid')}
               className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-bold transition ${
@@ -358,7 +358,7 @@ export default function DoctorWorkSchedulesPage() {
               Danh Sách
             </button>
           </div>
-          <button onClick={() => void loadData()} className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">
+          <button onClick={() => void loadData()} className="rounded border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">
             Làm mới
           </button>
         </div>
@@ -536,7 +536,7 @@ export default function DoctorWorkSchedulesPage() {
 
       {modal && (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-900/35 p-4">
-          <form onSubmit={submit} className="my-8 w-full max-w-lg rounded-xl bg-white shadow-2xl">
+          <form onSubmit={submit} className="my-8 w-full max-w-lg rounded bg-white shadow-2xl">
             <header className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
               <b className="text-base text-slate-900">{modal === 'create' ? 'Xếp ca làm việc mới' : 'Cập nhật ca làm việc'}</b>
               <button type="button" onClick={() => setModal(null)} className="text-xl font-bold text-slate-400 hover:text-slate-600">
@@ -551,7 +551,7 @@ export default function DoctorWorkSchedulesPage() {
                   required
                   value={form.doctorId}
                   onChange={(e) => setForm({ ...form, doctorId: e.target.value })}
-                  className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                  className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                 >
                   <option value="">-- Chọn bác sĩ --</option>
                   {doctors.map((d) => (
@@ -569,7 +569,7 @@ export default function DoctorWorkSchedulesPage() {
                     required
                     value={form.branchId}
                     onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                    className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   >
                     <option value="">-- Chọn chi nhánh --</option>
                     {branches.map((b) => (
@@ -585,7 +585,7 @@ export default function DoctorWorkSchedulesPage() {
                   <select
                     value={form.roomId}
                     onChange={(e) => setForm({ ...form, roomId: e.target.value })}
-                    className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   >
                     <option value="">-- Chọn phòng khám --</option>
                     {availableRooms.map((r) => (
@@ -605,7 +605,7 @@ export default function DoctorWorkSchedulesPage() {
                     required
                     value={form.workDate}
                     onChange={(e) => setForm({ ...form, workDate: e.target.value })}
-                    className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   />
                 </label>
 
@@ -616,7 +616,7 @@ export default function DoctorWorkSchedulesPage() {
                     required
                     value={form.startTime}
                     onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-                    className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   />
                 </label>
 
@@ -627,7 +627,7 @@ export default function DoctorWorkSchedulesPage() {
                     required
                     value={form.endTime}
                     onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-                    className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   />
                 </label>
               </div>
@@ -638,7 +638,7 @@ export default function DoctorWorkSchedulesPage() {
                   <select
                     value={form.slotDurationMin}
                     onChange={(e) => setForm({ ...form, slotDurationMin: e.target.value })}
-                    className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   >
                     {SLOT_DURATIONS.map((dur) => (
                       <option key={dur} value={dur}>
@@ -653,7 +653,7 @@ export default function DoctorWorkSchedulesPage() {
                   <select
                     value={form.status}
                     onChange={(e) => setForm({ ...form, status: e.target.value })}
-                    className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   >
                     <option value="OPEN">Mở cho đặt hẹn (OPEN)</option>
                     <option value="CLOSED">Đóng ca (CLOSED)</option>
@@ -666,14 +666,14 @@ export default function DoctorWorkSchedulesPage() {
               <button
                 type="button"
                 onClick={() => setModal(null)}
-                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                className="rounded border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
               >
                 Hủy
               </button>
               <button
                 disabled={saving}
                 type="submit"
-                className="rounded-md bg-emerald-700 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50"
+                className="rounded bg-emerald-700 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50"
               >
                 {saving ? 'Đang lưu…' : 'Lưu ca làm việc'}
               </button>

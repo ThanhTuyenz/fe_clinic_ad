@@ -23,6 +23,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   FilterIcon,
+  IdentificationIcon,
+  PhotoIcon,
   QrCodeIcon,
   SearchIcon,
 } from './ReceptionIcons'
@@ -99,7 +101,7 @@ export default function ReceptionAppointmentTable({
   qrImageLoading,
 }: ReceptionAppointmentTableProps) {
   return (
-    <div className="bg-white border border-slate-300/80 rounded-xl shadow-sm overflow-hidden flex flex-col">
+    <div className="bg-white border border-slate-300/80 rounded shadow-sm overflow-hidden flex flex-col">
       {/* Thanh công cụ tìm kiếm và lọc */}
       <div className="p-4 border-b border-slate-200 bg-slate-50/80 space-y-3">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -107,7 +109,7 @@ export default function ReceptionAppointmentTable({
             <div className="relative w-full">
               <input
                 id="reception-table-search"
-                className="w-full pl-9 pr-4 py-2.5 text-xs bg-white border border-slate-300 rounded-lg placeholder:text-slate-400 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-xs"
+                className="w-full pl-9 pr-4 py-2.5 text-xs bg-white border border-slate-300 rounded placeholder:text-slate-400 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-xs"
                 type="search"
                 value={listSearch}
                 onChange={(e) => {
@@ -126,7 +128,7 @@ export default function ReceptionAppointmentTable({
           <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
             <button
               type="button"
-              className={`px-3.5 py-2.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
+              className={`px-3.5 py-2.5 text-xs font-semibold rounded border transition-all cursor-pointer flex items-center gap-2 shadow-xs whitespace-nowrap shrink-0 ${
                 filtersOpen
                   ? 'bg-emerald-50 border-emerald-600 text-emerald-800'
                   : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
@@ -140,21 +142,23 @@ export default function ReceptionAppointmentTable({
             {onOpenCccdCheckIn && (
               <button
                 type="button"
-                className="px-3.5 py-2.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm border border-blue-600 transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98]"
+                className="px-3.5 py-2.5 text-xs font-bold rounded bg-blue-600 hover:bg-blue-700 text-white shadow-sm border border-blue-600 transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98] whitespace-nowrap shrink-0"
                 onClick={onOpenCccdCheckIn}
               >
-                <span>🆔 Check-in bằng CCCD</span>
+                <IdentificationIcon className="w-4 h-4 text-white shrink-0" />
+                <span>Check-in bằng CCCD</span>
               </button>
             )}
 
             {handleQrFileInput && (
               <label
-                className={`px-3.5 py-2.5 text-xs font-bold rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98] ${
+                className={`px-3.5 py-2.5 text-xs font-bold rounded border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-[0.98] whitespace-nowrap shrink-0 ${
                   qrImageLoading ? 'opacity-60 pointer-events-none' : ''
                 }`}
                 title="Tải tệp ảnh chứa mã QR lịch hẹn để check-in nhanh"
               >
-                <span>{qrImageLoading ? 'Đang đọc…' : '📁 Tải ảnh mã QR'}</span>
+                <PhotoIcon className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>{qrImageLoading ? 'Đang đọc…' : 'Tải ảnh mã QR'}</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -167,7 +171,7 @@ export default function ReceptionAppointmentTable({
 
             <button
               type="button"
-              className="px-4 py-2.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border border-emerald-600 transition-all cursor-pointer flex items-center gap-2 active:scale-[0.98] disabled:opacity-50"
+              className="px-4 py-2.5 text-xs font-bold rounded bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border border-emerald-600 transition-all cursor-pointer flex items-center gap-2 active:scale-[0.98] disabled:opacity-50 whitespace-nowrap shrink-0"
               disabled={lookupLoading}
               onClick={() => {
                 setTicketErr('')
@@ -182,19 +186,19 @@ export default function ReceptionAppointmentTable({
         </div>
 
         {ticketErr ? (
-          <div className="px-3.5 py-2 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded-lg font-medium">
+          <div className="px-3.5 py-2 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded font-medium">
             {ticketErr}
           </div>
         ) : null}
 
         {/* Khối lọc mở rộng */}
         {filtersOpen ? (
-          <div className="p-3.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-700 shadow-xs">
+          <div className="p-3.5 bg-white border border-slate-300 rounded text-xs text-slate-700 shadow-xs">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 flex-wrap">
               <div className="flex-1 min-w-[180px]">
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">Trạng thái khám</label>
                 <select
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-600"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-600"
                   value={statusFilter}
                   onChange={(e) => {
                     setStatusFilter(e.target.value)
@@ -213,7 +217,7 @@ export default function ReceptionAppointmentTable({
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">Từ ngày</label>
                 <input
                   type="date"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-800"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded text-xs font-medium text-slate-800"
                   value={fromDate}
                   onChange={(e) => setFromDate(e.target.value)}
                 />
@@ -223,7 +227,7 @@ export default function ReceptionAppointmentTable({
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">Đến ngày</label>
                 <input
                   type="date"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-800"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded text-xs font-medium text-slate-800"
                   value={toDate}
                   onChange={(e) => setToDate(e.target.value)}
                 />
@@ -232,7 +236,7 @@ export default function ReceptionAppointmentTable({
               <div className="shrink-0">
                 <button
                   type="button"
-                  className="w-auto py-2 px-3.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-all cursor-pointer whitespace-nowrap shadow-xs"
+                  className="w-auto py-2 px-3.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded transition-all cursor-pointer whitespace-nowrap shadow-xs"
                   onClick={() => {
                     setFromDate('')
                     setToDate('')
@@ -264,16 +268,16 @@ export default function ReceptionAppointmentTable({
 
       {/* Bảng dữ liệu chính */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full text-left border-collapse min-w-[1100px]">
           <thead>
-            <tr className="bg-slate-100/90 border-b border-slate-300 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+            <tr className="bg-slate-100/90 border-b border-slate-300 text-[11px] font-bold text-slate-600 uppercase tracking-wider whitespace-nowrap">
               <th className="py-3 px-4">Mã lịch hẹn</th>
-              <th className="py-3 px-4">Bệnh nhân</th>
+              <th className="py-3 px-4 min-w-[160px]">Bệnh nhân</th>
               <th className="py-3 px-4">Thời gian khám</th>
-              <th className="py-3 px-4">Bác sĩ & Chuyên khoa</th>
+              <th className="py-3 px-4 min-w-[170px]">Bác sĩ & Chuyên khoa</th>
               <th className="py-3 px-4">Phòng khám / STT</th>
-              <th className="py-3 px-4">Thanh toán</th>
-              <th className="py-3 px-4">Trạng thái</th>
+              <th className="py-3 px-4 text-center">Thanh toán</th>
+              <th className="py-3 px-4 text-center">Trạng thái</th>
               <th className="py-3 px-4 text-right">Thao tác</th>
             </tr>
           </thead>
@@ -298,28 +302,28 @@ export default function ReceptionAppointmentTable({
                   }`}
                 >
                   {/* Mã lịch hẹn & Nguồn */}
-                  <td className="py-3.5 px-4 font-medium">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md text-[12px] border border-emerald-300/80">
+                  <td className="py-3.5 px-4 font-medium whitespace-nowrap">
+                    <div className="flex items-center gap-1.5 flex-nowrap">
+                      <span className="font-mono font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md text-[12px] border border-emerald-300/80 whitespace-nowrap shrink-0">
                         {row.ticket || '—'}
                       </span>
                       {pastSlot ? (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 whitespace-nowrap shrink-0">
                           Quá giờ
                         </span>
                       ) : null}
                     </div>
-                    <div className="text-[10px] text-slate-500 mt-1 font-medium">
+                    <div className="text-[10px] text-slate-500 mt-1 font-medium whitespace-nowrap">
                       {appointmentSourceLabel(row)} · {formatDateTimeVi(row.createdAt)}
                     </div>
                   </td>
 
                   {/* Bệnh nhân */}
-                  <td className="py-3.5 px-4">
-                    <div className="font-bold text-slate-900 text-[13px]">{patientName}</div>
-                    <div className="text-[11px] text-slate-500 mt-0.5">
+                  <td className="py-3.5 px-4 min-w-[160px] whitespace-nowrap">
+                    <div className="font-bold text-slate-900 text-[13px] whitespace-nowrap">{patientName}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1 whitespace-nowrap">
                       {row.patient?.patientCode ? (
-                        <span className="font-mono bg-slate-200 px-1 py-0.5 rounded text-[10px] text-slate-700 font-semibold mr-1.5">
+                        <span className="font-mono bg-slate-200 px-1 py-0.5 rounded text-[10px] text-slate-700 font-semibold shrink-0">
                           {row.patient.patientCode}
                         </span>
                       ) : null}
@@ -328,21 +332,21 @@ export default function ReceptionAppointmentTable({
                   </td>
 
                   {/* Thời gian khám */}
-                  <td className="py-3.5 px-4">
+                  <td className="py-3.5 px-4 whitespace-nowrap">
                     <div className="font-semibold text-slate-800">{formatDateVi(row.appointmentDate)}</div>
-                    <div className="text-[11px] font-bold text-emerald-700 mt-0.5">
+                    <div className="text-[11px] font-bold text-emerald-700 mt-0.5 whitespace-nowrap">
                       {formatExamTimeLine(row.startTime, row.endTime)}
                     </div>
                   </td>
 
                   {/* Bác sĩ & Chuyên khoa */}
-                  <td className="py-3.5 px-4">
-                    <div className="font-semibold text-slate-800">{doctorName}</div>
-                    <div className="text-[11px] text-slate-500 truncate max-w-[150px]">{specialty}</div>
+                  <td className="py-3.5 px-4 min-w-[170px] whitespace-nowrap">
+                    <div className="font-semibold text-slate-800 whitespace-nowrap">{doctorName}</div>
+                    <div className="text-[11px] text-slate-500 whitespace-nowrap">{specialty}</div>
                   </td>
 
                   {/* Phòng & STT */}
-                  <td className="py-3.5 px-4">
+                  <td className="py-3.5 px-4 whitespace-nowrap">
                     {row.clinicRoomName || row.clinicRoom ? (
                       <div className="font-semibold text-slate-800">
                         {row.clinicRoomName || row.clinicRoom}
@@ -358,9 +362,9 @@ export default function ReceptionAppointmentTable({
                   </td>
 
                   {/* Thanh toán */}
-                  <td className="py-3.5 px-4">
+                  <td className="py-3.5 px-4 text-center whitespace-nowrap">
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold border whitespace-nowrap shrink-0 ${
                         isPaid
                           ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                           : 'bg-rose-100 text-rose-800 border-rose-300'
@@ -371,9 +375,9 @@ export default function ReceptionAppointmentTable({
                   </td>
 
                   {/* Trạng thái */}
-                  <td className="py-3.5 px-4">
+                  <td className="py-3.5 px-4 text-center whitespace-nowrap">
                     <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold border ${
+                      className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold border whitespace-nowrap shrink-0 ${
                         meta.tone === 'booked'
                           ? 'bg-blue-100 text-blue-800 border-blue-300'
                           : meta.tone === 'completed'
@@ -388,17 +392,17 @@ export default function ReceptionAppointmentTable({
                   </td>
 
                   {/* Nút thao tác */}
-                  <td className="py-3.5 px-4 text-right">
+                  <td className="py-3.5 px-4 text-right whitespace-nowrap">
                     <button
                       type="button"
-                      className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 hover:border-emerald-600 font-bold rounded-lg text-xs transition-all shadow-xs flex items-center gap-1.5 ml-auto cursor-pointer"
+                      className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 hover:border-emerald-600 font-bold rounded text-xs transition-all shadow-xs inline-flex items-center gap-1.5 ml-auto cursor-pointer whitespace-nowrap shrink-0"
                       onClick={(e) => {
                         e.stopPropagation()
                         onOpenDetail(row)
                       }}
                     >
                       <span>{isRowLoading ? 'Đang mở…' : 'Chi tiết'}</span>
-                      <ArrowRightIcon className="w-3.5 h-3.5" />
+                      <ArrowRightIcon className="w-3.5 h-3.5 shrink-0" />
                     </button>
                   </td>
                 </tr>
@@ -423,7 +427,7 @@ export default function ReceptionAppointmentTable({
         <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-700">
           <button
             type="button"
-            className="px-3.5 py-1.5 rounded-lg bg-white border border-slate-300 font-semibold hover:bg-slate-100 text-slate-700 disabled:opacity-40 cursor-pointer shadow-xs flex items-center gap-1.5"
+            className="px-3.5 py-1.5 rounded bg-white border border-slate-300 font-semibold hover:bg-slate-100 text-slate-700 disabled:opacity-40 cursor-pointer shadow-xs flex items-center gap-1.5"
             disabled={page <= 0}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
           >
@@ -436,7 +440,7 @@ export default function ReceptionAppointmentTable({
           </span>
           <button
             type="button"
-            className="px-3.5 py-1.5 rounded-lg bg-white border border-slate-300 font-semibold hover:bg-slate-100 text-slate-700 disabled:opacity-40 cursor-pointer shadow-xs flex items-center gap-1.5"
+            className="px-3.5 py-1.5 rounded bg-white border border-slate-300 font-semibold hover:bg-slate-100 text-slate-700 disabled:opacity-40 cursor-pointer shadow-xs flex items-center gap-1.5"
             disabled={page >= totalPages - 1}
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
           >

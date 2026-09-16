@@ -91,7 +91,7 @@ export default function ReceptionAppointmentList({
           <div className="relative flex-1">
             <input
               id="reception-list-search"
-              className="w-full pl-3 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg placeholder:text-slate-400 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+              className="w-full pl-3 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded placeholder:text-slate-400 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
               type="search"
               value={listSearch}
               onChange={(e) => {
@@ -104,7 +104,7 @@ export default function ReceptionAppointmentList({
           </div>
           <button
             type="button"
-            className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+            className={`px-2.5 py-1.5 text-xs font-semibold rounded border transition-all cursor-pointer ${
               filtersOpen
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -115,7 +115,7 @@ export default function ReceptionAppointmentList({
           </button>
           <button
             type="button"
-            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer disabled:opacity-50"
+            className="px-2.5 py-1.5 text-xs font-semibold rounded bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer disabled:opacity-50"
             disabled={lookupLoading}
             onClick={() => {
               setTicketErr('')
@@ -128,18 +128,18 @@ export default function ReceptionAppointmentList({
         </div>
 
         {ticketErr ? (
-          <div className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg">
+          <div className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
             {ticketErr}
           </div>
         ) : null}
 
         {filtersOpen ? (
-          <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 text-xs text-slate-600 shadow-xs">
+          <div className="p-3 bg-white border border-slate-200 rounded space-y-2 text-xs text-slate-600 shadow-xs">
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[11px] font-medium text-slate-500 mb-1">Trạng thái</label>
                 <select
-                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-xs focus:outline-none focus:border-emerald-500"
+                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs focus:outline-none focus:border-emerald-500"
                   value={statusFilter}
                   onChange={(e) => {
                     setStatusFilter(e.target.value)
@@ -156,7 +156,7 @@ export default function ReceptionAppointmentList({
               <div className="flex items-end">
                 <button
                   type="button"
-                  className="w-full py-1 text-center font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md border border-slate-200 transition-all cursor-pointer"
+                  className="w-full py-1 text-center font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded border border-slate-200 transition-all cursor-pointer"
                   onClick={() => {
                     setFromDate('')
                     setToDate('')
@@ -174,7 +174,7 @@ export default function ReceptionAppointmentList({
                 <label className="block text-[11px] font-medium text-slate-500 mb-1">Từ ngày</label>
                 <input
                   type="date"
-                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-xs"
+                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs"
                   value={fromDate}
                   onChange={(e) => setFromDate(e.target.value)}
                 />
@@ -183,7 +183,7 @@ export default function ReceptionAppointmentList({
                 <label className="block text-[11px] font-medium text-slate-500 mb-1">Đến ngày</label>
                 <input
                   type="date"
-                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-xs"
+                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs"
                   value={toDate}
                   onChange={(e) => setToDate(e.target.value)}
                 />
@@ -222,7 +222,7 @@ export default function ReceptionAppointmentList({
             <div
               key={id}
               onClick={() => selectRow(row)}
-              className={`p-3 rounded-xl border transition-all cursor-pointer relative text-xs ${
+              className={`p-3 rounded border transition-all cursor-pointer relative text-xs ${
                 isSel
                   ? 'border-emerald-500 bg-emerald-50/40 ring-1 ring-emerald-500/20 shadow-xs'
                   : pastSlot
@@ -234,15 +234,15 @@ export default function ReceptionAppointmentList({
                 <span className="font-bold text-slate-900 tracking-tight text-[13px]">{row.ticket || '—'}</span>
                 <div className="flex items-center gap-1 flex-wrap justify-end">
                   {pastSlot ? (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 whitespace-nowrap shrink-0">
                       Quá giờ
                     </span>
                   ) : null}
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 whitespace-nowrap shrink-0">
                     {appointmentSourceLabel(row)}
                   </span>
                   <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap shrink-0 ${
                       meta.tone === 'booked'
                         ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
                         : meta.tone === 'completed'
@@ -290,7 +290,7 @@ export default function ReceptionAppointmentList({
               </div>
 
               {isRowLoading ? (
-                <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center rounded-xl text-xs font-semibold text-emerald-700">
+                <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center rounded text-xs font-semibold text-emerald-700">
                   Đang tải…
                 </div>
               ) : null}

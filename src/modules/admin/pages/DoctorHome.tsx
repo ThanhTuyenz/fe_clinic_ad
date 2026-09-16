@@ -1483,55 +1483,55 @@ export default function DoctorHome() {
   if (!token || !user) return null
 
   return (
-    <div className="dr-desk">
+    <div className="min-h-screen bg-slate-50 relative">
       {examSaveOk ? <div className="fixed right-5 top-5 z-[100] max-w-md border border-emerald-300 bg-emerald-50 px-5 py-4 font-bold text-emerald-800 shadow-lg" role="status">✓ {examSaveOk}</div> : null}
       {examSaveErr ? <div className="fixed right-5 top-5 z-[100] max-w-md border border-red-300 bg-red-50 px-5 py-4 font-bold text-red-700 shadow-lg" role="alert">{examSaveErr}</div> : null}
       <DoctorAppHeader activeTab="exam" user={user} onLogout={logout} />
 
-      <main className="dr-view dr-view--exam" role="main">
-        <div className="dr-clinic-heading">
+      <main className="p-4 sm:p-6 max-w-[1680px] mx-auto w-full space-y-6" role="main">
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
           <div>
             <h1>Quản lý khám bệnh</h1>
             <p>{selectedAppt ? `Bệnh nhân hiện tại: ${patientLabel(selectedAppt)}` : 'Chọn bệnh nhân trong lịch khám để bắt đầu.'}</p>
           </div>
-          <div className="dr-clinic-heading-actions">
-            <button type="button" className="dr-btn dr-btn--ghost" onClick={() => navigate('/dashboard')}>Lịch sử khám</button>
-            <button type="button" className="dr-btn dr-btn--solid" disabled={!selectedAppt || examLocked || examSaving} title={finishDisabledTitle} onClick={() => requestFinishExam()}>{examSaving ? 'Đang hoàn thành…' : '✓ Hoàn thành khám'}</button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => navigate('/dashboard')}>Lịch sử khám</button>
+            <button type="button" className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer" disabled={!selectedAppt || examLocked || examSaving} title={finishDisabledTitle} onClick={() => requestFinishExam()}>{examSaving ? 'Đang hoàn thành…' : '✓ Hoàn thành khám'}</button>
           </div>
         </div>
-        {finishAttempted && selectedAppt && !examLocked && !canFinishExam ? <div className="dr-banner dr-banner--warning dr-banner--flush" role="status"><b>Chưa thể hoàn thành khám:</b> {finishExamCheck.reasons.join(' ')}</div> : null}
+        {finishAttempted && selectedAppt && !examLocked && !canFinishExam ? <div className="p-4 rounded border border-amber-300 bg-amber-50 text-amber-900 text-xs shadow-2xs font-medium" role="status"><b>Chưa thể hoàn thành khám:</b> {finishExamCheck.reasons.join(' ')}</div> : null}
         {error ? (
-          <div className="dr-banner dr-banner--error dr-banner--flush" role="alert">
+          <div className="p-4 rounded border border-rose-200 bg-rose-50 text-rose-700 text-xs shadow-2xs font-medium" role="alert">
             {error}
           </div>
         ) : null}
-        <div className={`dr-stitch-workspace${contextCollapsed ? ' is-context-collapsed' : ''}`}>
-          <aside className="dr-stitch-context">
-            <button type="button" className="dr-stitch-context-toggle" onClick={() => setContextCollapsed((value) => !value)} aria-expanded={!contextCollapsed} aria-label={contextCollapsed ? 'Mở thông tin bệnh nhân' : 'Thu gọn thông tin bệnh nhân'} title={contextCollapsed ? 'Mở thông tin bệnh nhân' : 'Thu gọn cột bên trái'}>{contextCollapsed ? '›' : '‹'}</button>
+        <div className={`grid grid-cols-1 ${contextCollapsed ? 'lg:grid-cols-1' : 'lg:grid-cols-[340px_1fr]'} gap-6 items-start transition-all`}>
+          <aside className="space-y-4">
+            <button type="button" className="px-3 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-600 mb-2 cursor-pointer inline-block" onClick={() => setContextCollapsed((value) => !value)} aria-expanded={!contextCollapsed} aria-label={contextCollapsed ? 'Mở thông tin bệnh nhân' : 'Thu gọn thông tin bệnh nhân'} title={contextCollapsed ? 'Mở thông tin bệnh nhân' : 'Thu gọn cột bên trái'}>{contextCollapsed ? '›' : '‹'}</button>
             {!contextCollapsed ? <>
-            <section className="dr-stitch-card dr-stitch-patient">
+            <section className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">
               {selectedAppt ? (
                 <>
-                  <div className="dr-stitch-patient-head">
-                    <span className="dr-patient-avatar">
+                  <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                    <span className="w-12 h-12 rounded bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm shrink-0">
                       {patientLabel(selectedAppt).split(/\s+/).slice(-2).map((word) => word[0]).join('').toUpperCase()}
                     </span>
                     <div><h2>{patientLabel(selectedAppt)}</h2><p>{patientDemographicLine(selectedAppt)}</p></div>
                   </div>
-                  <dl className="dr-stitch-patient-meta">
+                  <dl className="mt-3 space-y-1.5 text-xs text-slate-600 divide-y divide-slate-100">
                     <div><dt>Mã BN:</dt><dd>{selectedAppt?.patient?.patientCode || '—'}</dd></div>
                     <div><dt>Lý do khám:</dt><dd>{selectedAppt?.reason || selectedAppt?.symptoms || 'Khám theo lịch hẹn'}</dd></div>
                     <div><dt>Sinh hiệu:</dt><dd>{vitals.bp ? `HA: ${vitals.bp}` : 'Chưa cập nhật'}</dd></div>
                   </dl>
-                  <div className="dr-stitch-patient-actions">
+                  <div className="mt-3 flex gap-2 pt-2 border-t border-slate-100">
                     <button type="button" disabled>▣ Chat</button><button type="button" disabled>▣ Video</button>
                   </div>
                 </>
-              ) : <div className="dr-patient-summary-empty"><span>✚</span><b>Chưa chọn bệnh nhân</b><p>Chọn một lịch khám bên dưới.</p></div>}
+              ) : <div className="py-8 text-center text-slate-400 text-xs space-y-1"><span>✚</span><b>Chưa chọn bệnh nhân</b><p>Chọn một lịch khám bên dưới.</p></div>}
             </section>
 
-            <section className="dr-stitch-card dr-stitch-ai">
-              <div className="dr-stitch-card-title"><span>✦</span> AI Tóm tắt bệnh án</div>
+            <section className="bg-emerald-50/50 rounded-2xl border border-emerald-200/60 p-4 text-xs space-y-2 text-emerald-900">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2"><span>✦</span> AI Tóm tắt bệnh án</div>
               {selectedAppt ? <>
                 <p>– {vitals.symptoms ? `Triệu chứng: ${vitals.symptoms}` : 'Chưa ghi nhận triệu chứng lâm sàng.'}</p>
                 <p>– {vitals.diagnosis ? `Chẩn đoán: ${vitals.diagnosis}` : 'Chưa có chẩn đoán ICD-10.'}</p>
@@ -1539,112 +1539,112 @@ export default function DoctorHome() {
               </> : <p>Thông tin tóm tắt xuất hiện sau khi chọn bệnh nhân.</p>}
             </section>
 
-            <section className="dr-stitch-card dr-stitch-schedule">
+            <section className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
               <header><b>Hồ sơ đang khám</b><span>{inExaminationQueue.length} bệnh nhân</span></header>
-              <div className="dr-stitch-schedule-list">
+              <div className="space-y-2">
                 {inExaminationQueue.map((appointment) => (
-                  <div key={appointment.id || appointment._id} className={`dr-stitch-waiting-row${String(appointment.id || appointment._id) === String(selectedApptId) ? ' is-active' : ''}`}>
-                    <button type="button" className="dr-stitch-waiting-info" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>
+                  <div key={appointment.id || appointment._id} className={`p-2.5 rounded border flex items-center justify-between gap-2 text-xs transition-colors ${String(appointment.id || appointment._id) === String(selectedApptId) ? 'border-emerald-500 bg-emerald-50/70' : 'border-slate-200 bg-slate-50 hover:bg-slate-100/80'}`}>
+                    <button type="button" className="text-left flex-1 min-w-0" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>
                       <span><b>{appointment?.startTime || '—'}</b> · {patientLabel(appointment)}</span>
                       <small>STT {appointment?.visitQueueNumber || '—'} · Đang khám / đã lưu nháp</small>
                     </button>
-                    <button type="button" className="dr-stitch-start dr-stitch-reopen" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>{String(appointment.id || appointment._id) === String(selectedApptId) ? 'Đang mở' : 'Mở lại'}</button>
+                    <button type="button" className="px-2.5 py-1 text-xs font-bold rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shrink-0 cursor-pointer" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>{String(appointment.id || appointment._id) === String(selectedApptId) ? 'Đang mở' : 'Mở lại'}</button>
                   </div>
                 ))}
-                {!inExaminationQueue.length ? <div className="dr-stitch-empty"><b>Không có hồ sơ đang khám</b></div> : null}
+                {!inExaminationQueue.length ? <div className="py-6 text-center text-xs text-slate-400"><b>Không có hồ sơ đang khám</b></div> : null}
               </div>
             </section>
 
-            <section className="dr-stitch-card dr-stitch-schedule">
+            <section className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
               <header><b>Bệnh nhân đang đợi</b><span>{waitingQueue.length} bệnh nhân</span></header>
-              <div className="dr-stitch-schedule-list">
+              <div className="space-y-2">
                 {waitingQueue.slice(0, 5).map((appointment) => (
-                  <div key={appointment.id || appointment._id} className={`dr-stitch-waiting-row${String(appointment.id || appointment._id) === String(selectedApptId) ? ' is-active' : ''}`}>
-                    <button type="button" className="dr-stitch-waiting-info" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>
+                  <div key={appointment.id || appointment._id} className={`p-2.5 rounded border flex items-center justify-between gap-2 text-xs transition-colors ${String(appointment.id || appointment._id) === String(selectedApptId) ? 'border-emerald-500 bg-emerald-50/70' : 'border-slate-200 bg-slate-50 hover:bg-slate-100/80'}`}>
+                    <button type="button" className="text-left flex-1 min-w-0" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>
                       <span><b>{appointment?.startTime || '—'}</b> · {patientLabel(appointment)}</span>
                       <small>STT {appointment?.visitQueueNumber || '—'} · {appointment?.symptoms || 'Khám theo lịch hẹn'}</small>
                     </button>
-                    <button type="button" className="dr-stitch-start" disabled={Boolean(startingAppointmentId)} onClick={() => void startMedicalVisit(appointment)}>{startingAppointmentId === String(appointment.id || appointment._id) ? 'Đang mở…' : 'Bắt đầu khám'}</button>
+                    <button type="button" className="px-3 py-1.5 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white transition-colors cursor-pointer shrink-0 disabled:opacity-50" disabled={Boolean(startingAppointmentId)} onClick={() => void startMedicalVisit(appointment)}>{startingAppointmentId === String(appointment.id || appointment._id) ? 'Đang mở…' : 'Bắt đầu khám'}</button>
                   </div>
                 ))}
-                {!waitingQueue.length ? <div className="dr-stitch-empty"><b>Chưa có bệnh nhân đang đợi</b><p>Danh sách sẽ cập nhật khi lễ tân check-in.</p></div> : null}
+                {!waitingQueue.length ? <div className="py-6 text-center text-xs text-slate-400"><b>Chưa có bệnh nhân đang đợi</b><p>Danh sách sẽ cập nhật khi lễ tân check-in.</p></div> : null}
               </div>
             </section>
             </> : null}
           </aside>
 
-          <section className="dr-stitch-clinical">
-            <article className="dr-stitch-card dr-stitch-exam-card">
-              <div className="dr-stitch-card-title"><span>≡</span> Khám bệnh và Ghi hồ sơ</div>
-              <label className="dr-stitch-field dr-stitch-field--full">
+          <section className="space-y-6">
+            <article className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2"><span>≡</span> Khám bệnh và Ghi hồ sơ</div>
+              <label className="block space-y-1.5 text-xs font-bold text-slate-700">
                 <span>Lâm sàng / Triệu chứng</span>
                 <textarea rows={4} placeholder="Nhập ghi chú lâm sàng..." value={vitals.symptoms} onChange={(e) => setVitals((state) => ({ ...state, symptoms: e.target.value }))} disabled={examLocked || !selectedAppt} />
               </label>
-              <div className="dr-stitch-diagnosis-row">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
                 <IcdDiagnosisField token={token} value={diagnosisIcd} onChange={(pick) => { setDiagnosisIcd(pick); setDiagnosisError(''); setVitals((state) => ({ ...state, diagnosis: pick ? formatIcdLabel(pick.code, pick.name) : '' })) }} disabled={examLocked || !selectedAppt} error={diagnosisError} />
-                <label className="dr-stitch-field"><span>Chỉ định cận lâm sàng</span><button type="button" className="dr-stitch-dashed" disabled={!selectedAppt || Boolean(startingAppointmentId) || isAppointmentExamined(selectedAppt?.status)} onClick={() => void openClinicalOrdering()}>{startingAppointmentId ? 'Đang bắt đầu khám…' : '⊕ Thêm chỉ định'}</button></label>
+                <label className="block space-y-1.5 text-xs font-bold text-slate-700"><span>Chỉ định cận lâm sàng</span><button type="button" className="w-full py-2.5 px-3 border border-dashed border-emerald-400 bg-emerald-50/50 hover:bg-emerald-100/50 rounded text-xs font-bold text-emerald-800 transition-colors cursor-pointer disabled:opacity-50" disabled={!selectedAppt || Boolean(startingAppointmentId) || isAppointmentExamined(selectedAppt?.status)} onClick={() => void openClinicalOrdering()}>{startingAppointmentId ? 'Đang bắt đầu khám…' : '⊕ Thêm chỉ định'}</button></label>
               </div>
-              <details className="dr-stitch-details" open={vitalsOpen} onToggle={(e) => setVitalsOpen(e.currentTarget.open)}>
+              <details className="border border-slate-200 rounded p-4 bg-slate-50/40 text-xs space-y-3" open={vitalsOpen} onToggle={(e) => setVitalsOpen(e.currentTarget.open)}>
                 <summary>Sinh hiệu và ghi chú điều trị</summary>
-                {!examLocked ? <label className="dr-stitch-vitals-skip"><input type="checkbox" checked={vitalsSkipConfirmed} onChange={(e) => { const checked = e.target.checked; setVitalsSkipConfirmed(checked); if (checked) { setVitalsErrors({}); setVitalsFormError('') } }}/><span>Bỏ qua sinh hiệu (không đo lần này)</span></label> : null}
+                {!examLocked ? <label className="flex items-center gap-2 text-xs font-medium text-slate-600 mb-3 cursor-pointer"><input type="checkbox" checked={vitalsSkipConfirmed} onChange={(e) => { const checked = e.target.checked; setVitalsSkipConfirmed(checked); if (checked) { setVitalsErrors({}); setVitalsFormError('') } }}/><span>Bỏ qua sinh hiệu (không đo lần này)</span></label> : null}
                 {vitalsFormError ? <div className="dr-vitals-form-error" role="alert">{vitalsFormError}</div> : null}
-                <div className="dr-stitch-vitals">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {VITAL_FIELD_UI.map(({ key, label, inputMode, placeholder }) => { const err = vitalsSkipConfirmed ? '' : vitalsErrors[key]; return <label key={key}><span>{label}</span><input className={err ? 'dr-input--invalid' : ''} type="text" inputMode={inputMode || 'text'} placeholder={placeholder || VITAL_PLACEHOLDER} value={vitals[key]} onChange={(e) => setVitalField(key, e.target.value)} onBlur={() => blurVitalField(key)} disabled={examLocked || !selectedAppt || vitalsSkipConfirmed} />{err ? <small className="dr-field-error" role="alert">{err}</small> : null}</label> })}
                 </div>
-                <label className="dr-stitch-field dr-stitch-field--full"><span>Hướng điều trị</span><textarea rows={2} value={vitals.treatment} onChange={(e) => setVitals((state) => ({ ...state, treatment: e.target.value }))} disabled={examLocked || !selectedAppt} /></label>
+                <label className="block space-y-1.5 text-xs font-bold text-slate-700"><span>Hướng điều trị</span><textarea rows={2} value={vitals.treatment} onChange={(e) => setVitals((state) => ({ ...state, treatment: e.target.value }))} disabled={examLocked || !selectedAppt} /></label>
               </details>
             </article>
 
-            {examSubTab === 'clinical' ? <article className="dr-stitch-card dr-stitch-clinical-card">
-              <header className="dr-stitch-clinical-head"><div className="dr-stitch-card-title"><span>✚</span> Chỉ định cận lâm sàng</div><button type="button" className="dr-btn dr-btn--ghost" onClick={() => setExamSubTab('info')}>Đóng</button></header>
-              {examSaveOk ? <div className="dr-clinical-message dr-clinical-message--ok" role="status">{examSaveOk}</div> : null}
-              {examSaveErr ? <div className="dr-clinical-message dr-clinical-message--error" role="alert">{examSaveErr}</div> : null}
-              {!examLocked ? <div className="dr-clinical-add"><select className="dr-input" defaultValue="" onChange={(e) => { addClinicalOrder(e.target.value); e.target.value = '' }}><option value="">+ Chọn xét nghiệm hoặc chẩn đoán hình ảnh</option>{clinicalServices.map((service) => <option key={service.id} value={service.id}>{service.category === 'LAB_TEST' ? 'Xét nghiệm' : 'Hình ảnh'} — {service.name}</option>)}</select></div> : null}
-              {clinicalOrders.length === 0 ? <div className="dr-placeholder">Chưa có chỉ định cận lâm sàng.</div> : <div className="dr-clinical-list">{clinicalOrders.map((order) => <section className="dr-clinical-card" key={order.id || order.serviceId}>
-                <header><div><strong>{order.serviceName}</strong><small>{order.category === 'IMAGING' ? 'Chẩn đoán hình ảnh' : 'Xét nghiệm'} · {order.status === 'COMPLETED' ? 'Đã có kết quả' : order.status === 'IN_PROGRESS' ? `Đang chờ · STT ${order.queueNumber || '—'}` : 'Đã chỉ định'}</small></div><div>{!examLocked && order.status === 'ORDERED' ? <button type="button" className="dr-clinical-remove" aria-label="Xóa chỉ định" onClick={() => setClinicalOrders((items) => items.filter((item) => item !== order))}>×</button> : null}</div></header>
-                <div className="dr-clinical-room"><label className="dr-stitch-field"><span>Phòng thực hiện</span><select value={order.assignedRoomId || ''} disabled={examLocked || order.status !== 'ORDERED' || clinicalRoomsForSelectedBranch.length === 0} onChange={(e) => setClinicalOrders((items) => items.map((item) => item === order ? { ...item, assignedRoomId: e.target.value } : item))}><option value="">{clinicalRoomsForSelectedBranch.length ? 'Chọn phòng cận lâm sàng' : 'Chi nhánh chưa cấu hình phòng'}</option>{clinicalRoomsForSelectedBranch.map((room) => <option key={room.id} value={room.id}>{room.code} · {room.name}</option>)}</select></label>{clinicalRoomsForSelectedBranch.length === 0 ? <p className="dr-clinical-room-warning">Chi nhánh của lịch khám chưa có phòng hoạt động.</p> : null}</div>
-                {order.result?.observations ? <div className="dr-table-wrap"><table className="dr-table"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Tham chiếu</th><th>Đánh giá</th></tr></thead><tbody>{order.result.observations.map((obs) => <tr key={obs.code}><td>{obs.name}</td><td><strong>{obs.value}</strong> {obs.unit}</td><td>{obs.referenceRange}</td><td className={obs.flag === 'HIGH' ? 'dr-result-high' : 'dr-result-normal'}>{obs.flag === 'HIGH' ? 'Cao' : 'Bình thường'}</td></tr>)}</tbody></table><p className="dr-result-conclusion">Kết luận: {order.result.conclusion}</p></div> : null}
-                {order.result?.imageUrl ? <div className="dr-pacs-result"><img src={order.result.imageUrl} alt="Ảnh X-quang ngực mô phỏng"/><div><p><b>StudyInstanceUID</b><br/><code>{order.result.studyInstanceUid}</code></p><label className="dr-stitch-field"><span>Kết luận hình ảnh</span><textarea rows={3} value={order.result.conclusion || ''} readOnly placeholder="Chưa có kết luận" /></label></div></div> : null}
+            {examSubTab === 'clinical' ? <article className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+              <header className="flex items-center justify-between pb-3 border-b border-slate-100"><div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2"><span>✚</span> Chỉ định cận lâm sàng</div><button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => setExamSubTab('info')}>Đóng</button></header>
+              {examSaveOk ? <div className="p-3 rounded bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium" role="status">{examSaveOk}</div> : null}
+              {examSaveErr ? <div className="p-3 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium" role="alert">{examSaveErr}</div> : null}
+              {!examLocked ? <div className="dr-clinical-add"><select className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs" defaultValue="" onChange={(e) => { addClinicalOrder(e.target.value); e.target.value = '' }}><option value="">+ Chọn xét nghiệm hoặc chẩn đoán hình ảnh</option>{clinicalServices.map((service) => <option key={service.id} value={service.id}>{service.category === 'LAB_TEST' ? 'Xét nghiệm' : 'Hình ảnh'} — {service.name}</option>)}</select></div> : null}
+              {clinicalOrders.length === 0 ? <div className="py-8 text-center text-xs text-slate-400">Chưa có chỉ định cận lâm sàng.</div> : <div className="space-y-4">{clinicalOrders.map((order) => <section className="border border-slate-200 rounded p-4 bg-slate-50/50 space-y-3" key={order.id || order.serviceId}>
+                <header><div><strong>{order.serviceName}</strong><small>{order.category === 'IMAGING' ? 'Chẩn đoán hình ảnh' : 'Xét nghiệm'} · {order.status === 'COMPLETED' ? 'Đã có kết quả' : order.status === 'IN_PROGRESS' ? `Đang chờ · STT ${order.queueNumber || '—'}` : 'Đã chỉ định'}</small></div><div>{!examLocked && order.status === 'ORDERED' ? <button type="button" className="w-6 h-6 rounded bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 flex items-center justify-center text-sm font-bold transition-colors cursor-pointer" aria-label="Xóa chỉ định" onClick={() => setClinicalOrders((items) => items.filter((item) => item !== order))}>×</button> : null}</div></header>
+                <div className="dr-clinical-room"><label className="block space-y-1.5 text-xs font-bold text-slate-700"><span>Phòng thực hiện</span><select value={order.assignedRoomId || ''} disabled={examLocked || order.status !== 'ORDERED' || clinicalRoomsForSelectedBranch.length === 0} onChange={(e) => setClinicalOrders((items) => items.map((item) => item === order ? { ...item, assignedRoomId: e.target.value } : item))}><option value="">{clinicalRoomsForSelectedBranch.length ? 'Chọn phòng cận lâm sàng' : 'Chi nhánh chưa cấu hình phòng'}</option>{clinicalRoomsForSelectedBranch.map((room) => <option key={room.id} value={room.id}>{room.code} · {room.name}</option>)}</select></label>{clinicalRoomsForSelectedBranch.length === 0 ? <p className="dr-clinical-room-warning">Chi nhánh của lịch khám chưa có phòng hoạt động.</p> : null}</div>
+                {order.result?.observations ? <div className="overflow-x-auto rounded border border-slate-200 bg-white"><table className="w-full text-left text-xs divide-y divide-slate-200"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Tham chiếu</th><th>Đánh giá</th></tr></thead><tbody>{order.result.observations.map((obs) => <tr key={obs.code}><td>{obs.name}</td><td><strong>{obs.value}</strong> {obs.unit}</td><td>{obs.referenceRange}</td><td className={obs.flag === 'HIGH' ? 'dr-result-high' : 'dr-result-normal'}>{obs.flag === 'HIGH' ? 'Cao' : 'Bình thường'}</td></tr>)}</tbody></table><p className="dr-result-conclusion">Kết luận: {order.result.conclusion}</p></div> : null}
+                {order.result?.imageUrl ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded bg-slate-900 text-white"><img src={order.result.imageUrl} alt="Ảnh X-quang ngực mô phỏng"/><div><p><b>StudyInstanceUID</b><br/><code>{order.result.studyInstanceUid}</code></p><label className="block space-y-1.5 text-xs font-bold text-slate-700"><span>Kết luận hình ảnh</span><textarea rows={3} value={order.result.conclusion || ''} readOnly placeholder="Chưa có kết luận" /></label></div></div> : null}
               </section>)}</div>}
-              {clinicalPass?.qrImageDataUrl ? <div className="dr-clinical-pass"><img src={clinicalPass.qrImageDataUrl} alt="QR phiếu chỉ định cận lâm sàng"/><div><strong>Phiếu chỉ định cận lâm sàng</strong><p>Đưa QR cho bệnh nhân mang đến phòng thực hiện để tiếp nhận và cấp số thứ tự.</p><button type="button" className="dr-btn dr-btn--ghost" onClick={() => window.print()}>In phiếu</button></div></div> : null}
-              {!examLocked ? <footer className="dr-stitch-clinical-actions"><p>Chọn phòng cho từng dịch vụ rồi lưu để phát hành QR.</p><button type="button" className="dr-btn dr-btn--primary" disabled={!selectedAppt || examSaving} onClick={() => void handleSaveMedicalVisit({ clinicalOnly: true })}>{examSaving ? 'Đang lưu…' : 'Lưu & tạo QR'}</button></footer> : null}
+              {clinicalPass?.qrImageDataUrl ? <div className="flex items-center gap-4 p-4 rounded border border-emerald-200 bg-emerald-50/60 text-xs"><img src={clinicalPass.qrImageDataUrl} alt="QR phiếu chỉ định cận lâm sàng"/><div><strong>Phiếu chỉ định cận lâm sàng</strong><p>Đưa QR cho bệnh nhân mang đến phòng thực hiện để tiếp nhận và cấp số thứ tự.</p><button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => window.print()}>In phiếu</button></div></div> : null}
+              {!examLocked ? <footer className="flex items-center justify-between gap-4 pt-3 border-t border-slate-100 flex-wrap text-xs"><p>Chọn phòng cho từng dịch vụ rồi lưu để phát hành QR.</p><button type="button" className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer" disabled={!selectedAppt || examSaving} onClick={() => void handleSaveMedicalVisit({ clinicalOnly: true })}>{examSaving ? 'Đang lưu…' : 'Lưu & tạo QR'}</button></footer> : null}
             </article> : null}
 
-            <article className="dr-stitch-card dr-stitch-rx-card">
-              <header className="dr-stitch-rx-header"><div className="dr-stitch-card-title"><span>▤</span> Kê thuốc</div><button type="button" className="dr-stitch-voice" disabled>♩ Kê thuốc bằng giọng nói</button></header>
-              <div className="dr-stitch-rx-table">
-                <div className="dr-stitch-rx-row dr-stitch-rx-head"><span>Tên thuốc</span><span>Số lượng (SL)</span><span>Cách dùng</span><span /></div>
-                {prescriptionLines.map((line, idx) => <div className="dr-stitch-rx-row" key={idx}>
-                  <button type="button" className="dr-stitch-medicine-pick" onClick={() => openMedicinePicker(idx)} disabled={examLocked || !selectedAppt}>{line.medicineDisplayName || line.medicineName || 'Tìm và chọn thuốc...'}</button>
+            <article className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+              <header className="flex items-center justify-between pb-3 border-b border-slate-100"><div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2"><span>▤</span> Kê thuốc</div><button type="button" className="dr-stitch-voice" disabled>♩ Kê thuốc bằng giọng nói</button></header>
+              <div className="space-y-2">
+                <div className="grid grid-cols-[1fr_120px_160px_32px] gap-3 text-xs font-bold text-slate-500 px-2"><span>Tên thuốc</span><span>Số lượng (SL)</span><span>Cách dùng</span><span /></div>
+                {prescriptionLines.map((line, idx) => <div className="grid grid-cols-[1fr_120px_160px_32px] gap-3 items-center text-xs" key={idx}>
+                  <button type="button" className="w-full text-left px-3 py-2 bg-white border border-slate-300 rounded text-slate-700 hover:border-emerald-500 transition-colors truncate" onClick={() => openMedicinePicker(idx)} disabled={examLocked || !selectedAppt}>{line.medicineDisplayName || line.medicineName || 'Tìm và chọn thuốc...'}</button>
                   <input type="text" inputMode="decimal" value={line.quantity} onChange={(e) => updateRxLine(idx, { quantity: sanitizeQuantityInput(e.target.value), quantityManual: true })} placeholder="Nhập số lượng" aria-label="Số lượng thuốc" disabled={examLocked || !selectedAppt} />
                   <select value={line.frequencyPerDay} onChange={(e) => updateRxLine(idx, { frequencyPerDay: e.target.value })} disabled={examLocked || !selectedAppt}><option value="">Chọn cách dùng</option>{RX_FREQUENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-                  <button type="button" className="dr-stitch-remove" onClick={() => removeRxLine(idx)} disabled={examLocked || prescriptionLines.length < 2}>×</button>
+                  <button type="button" className="w-8 h-8 rounded border border-slate-200 hover:bg-rose-50 text-slate-400 hover:text-rose-600 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer" onClick={() => removeRxLine(idx)} disabled={examLocked || prescriptionLines.length < 2}>×</button>
                 </div>)}
-                {!examLocked ? <button type="button" className="dr-stitch-add-rx" onClick={addRxLine} disabled={!selectedAppt}>＋ Thêm thuốc</button> : null}
+                {!examLocked ? <button type="button" className="mt-2 px-3.5 py-2 text-xs font-bold text-emerald-700 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded transition-colors cursor-pointer" onClick={addRxLine} disabled={!selectedAppt}>＋ Thêm thuốc</button> : null}
               </div>
-              <footer className="dr-stitch-rx-footer"><button type="button" className="dr-btn dr-btn--ghost" onClick={() => void handleSaveMedicalVisit({ draftOnly: true })} disabled={!selectedAppt || examLocked || examSaving}>Lưu nháp</button><button type="button" className="dr-btn dr-btn--solid" onClick={() => requestFinishExam()} disabled={!selectedAppt || examLocked || examSaving}>{examSaving ? 'Đang hoàn thành…' : '✓ Hoàn thành khám'}</button></footer>
+              <footer className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100"><button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => void handleSaveMedicalVisit({ draftOnly: true })} disabled={!selectedAppt || examLocked || examSaving}>Lưu nháp</button><button type="button" className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer" onClick={() => requestFinishExam()} disabled={!selectedAppt || examLocked || examSaving}>{examSaving ? 'Đang hoàn thành…' : '✓ Hoàn thành khám'}</button></footer>
             </article>
           </section>
         </div>
-        <div className="dr-split">
-            <aside className="dr-side" aria-label="Danh sách đăng ký">
-              <section className="dr-patient-summary" aria-label="Bệnh nhân hiện tại">
+        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 items-start pt-6 border-t border-slate-200">
+            <aside className="space-y-4" aria-label="Danh sách đăng ký">
+              <section className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3" aria-label="Bệnh nhân hiện tại">
                 {selectedAppt ? <>
-                  <div className="dr-patient-summary-head">
-                    <span className="dr-patient-avatar">{patientLabel(selectedAppt).split(/\s+/).slice(-2).map((word) => word[0]).join('').toUpperCase()}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="w-12 h-12 rounded bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm shrink-0">{patientLabel(selectedAppt).split(/\s+/).slice(-2).map((word) => word[0]).join('').toUpperCase()}</span>
                     <div><h2>{patientLabel(selectedAppt)}</h2><p>{patientDemographicLine(selectedAppt)}</p></div>
                   </div>
-                  <div className="dr-patient-summary-grid">
+                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
                     <span>Mã BN <b>{selectedAppt?.patient?.patientCode || '—'}</b></span>
                     <span>Mã lịch <b>{selectedAppt?.ticket || '—'}</b></span>
                     <span>Điện thoại <b>{selectedAppt?.patient?.phone || '—'}</b></span>
                     <span>Huyết áp <b>{vitals.bp || '—'}</b></span>
                   </div>
-                </> : <div className="dr-patient-summary-empty"><span>✚</span><b>Chưa chọn bệnh nhân</b><p>Chọn một lịch trong danh sách bên dưới.</p></div>}
+                </> : <div className="py-8 text-center text-slate-400 text-xs space-y-1"><span>✚</span><b>Chưa chọn bệnh nhân</b><p>Chọn một lịch trong danh sách bên dưới.</p></div>}
               </section>
 
-              <section className="dr-record-summary" aria-label="Tóm tắt hồ sơ">
-                <div className="dr-record-summary-title"><span>✦</span> Tóm tắt hồ sơ</div>
+              <section className="bg-emerald-50/50 rounded-2xl border border-emerald-100 p-4 text-xs text-emerald-900 space-y-1.5" aria-label="Tóm tắt hồ sơ">
+                <div className="font-bold text-emerald-800 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5"><span>✦</span> Tóm tắt hồ sơ</div>
                 {selectedAppt ? <ul>
                   <li>{vitals.symptoms ? `Triệu chứng: ${vitals.symptoms}` : 'Chưa ghi nhận triệu chứng lâm sàng.'}</li>
                   <li>{vitals.diagnosis ? `Chẩn đoán: ${vitals.diagnosis}` : 'Chưa có chẩn đoán ICD-10.'}</li>
@@ -1652,12 +1652,12 @@ export default function DoctorHome() {
                 </ul> : <p>Thông tin tóm tắt sẽ xuất hiện sau khi chọn bệnh nhân.</p>}
               </section>
 
-              <div className="dr-filters">
-                <div className="dr-search-filter-row">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
                   <input
                     ref={listSearchRef}
                     id="doctor-list-search"
-                    className="dr-list-search-input"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded placeholder:text-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs"
                     type="search"
                     value={listSearch}
                     onChange={(e) => {
@@ -1680,7 +1680,7 @@ export default function DoctorHome() {
                   </button>
                   <button
                     type="button"
-                    className="dr-btn"
+                    className="px-3 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
                     title="Mở camera để quét mã QR lịch hẹn"
                     onClick={() => {
                       setQrErr('')
@@ -1693,15 +1693,15 @@ export default function DoctorHome() {
                 {filtersOpen ? (
                   <div
                     id="doctor-advanced-filters"
-                    className="dr-filters-advanced"
+                    className="p-3.5 bg-slate-50 border border-slate-200 rounded space-y-2.5 text-xs"
                     role="region"
                     aria-label="Lọc theo trạng thái và khoảng ngày"
                   >
                     <p className="dr-filters-advanced-hint">
                       Trạng thái và khoảng ngày lọc trong dữ liệu đã tải; ô phía trên tìm nhanh theo mã, mã BN hoặc tên.
                     </p>
-                    <div className="dr-filters-body dr-filters-body--advanced">
-                      <div className="dr-filter-field">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1">
                         <label htmlFor="doctor-status-filter">Trạng thái</label>
                         <select
                           id="doctor-status-filter"
@@ -1713,7 +1713,7 @@ export default function DoctorHome() {
                           <option value="examined">Đã khám</option>
                         </select>
                       </div>
-                      <div className="dr-filter-field">
+                      <div className="space-y-1">
                         <label htmlFor="doctor-from-date">Từ ngày</label>
                         <input
                           id="doctor-from-date"
@@ -1722,7 +1722,7 @@ export default function DoctorHome() {
                           onChange={(e) => setFilterFrom(e.target.value)}
                         />
                       </div>
-                      <div className="dr-filter-field">
+                      <div className="space-y-1">
                         <label htmlFor="doctor-to-date">Đến ngày</label>
                         <input
                           id="doctor-to-date"
@@ -1736,11 +1736,11 @@ export default function DoctorHome() {
                 ) : null}
               </div>
 
-              <div className="dr-list-panel">
-              <div className="dr-list-head">
+              <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-slate-100">
                 <div>
-                  <h3 className="dr-list-title">Danh sách đăng ký</h3>
-                  <p className="dr-list-meta">
+                  <h3 className="text-sm font-bold text-slate-900">Danh sách đăng ký</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
                     {loading
                       ? 'Đang tải…'
                       : `${totalFiltered} lịch${listSearch.trim() ? ' · tìm kiếm' : ''}${refreshing ? ' · đang làm mới' : ''}`}
@@ -1763,13 +1763,13 @@ export default function DoctorHome() {
                 </div>
               </div>
 
-              <div className="dr-queue-wrap" role="region" aria-label="Danh sách bệnh nhân">
+              <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto" role="region" aria-label="Danh sách bệnh nhân">
                 {loading ? (
                   <p className="dr-queue-empty">Đang tải…</p>
                 ) : pagedRows.length === 0 ? (
                   <p className="dr-queue-empty">Không có bản ghi phù hợp.</p>
                 ) : (
-                  <ul className="dr-queue-list">
+                  <ul className="divide-y divide-slate-100">
                     {pagedRows.map((a, i) => {
                       const id = String(a?.id || a?._id || '')
                       const st = String(a?.status || '').toLowerCase()
@@ -1838,14 +1838,14 @@ export default function DoctorHome() {
                 )}
               </div>
 
-              <div className="dr-pager">
+              <div className="flex items-center justify-between p-3 border-t border-slate-100 text-xs text-slate-500">
                 <span className="dr-pager-summary">
                   {totalFiltered} lịch — trang {safePage}/{pageCount}
                 </span>
                 <div className="dr-pager-actions">
                   <button
                     type="button"
-                    className="dr-btn"
+                    className="px-3 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
                     disabled={safePage <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     aria-label="Trang trước"
@@ -1854,7 +1854,7 @@ export default function DoctorHome() {
                   </button>
                   <button
                     type="button"
-                    className="dr-btn"
+                    className="px-3 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
                     disabled={safePage >= pageCount}
                     onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
                     aria-label="Trang sau"
@@ -1866,9 +1866,9 @@ export default function DoctorHome() {
               </div>
             </aside>
 
-            <section className="dr-panel" aria-label="Khám bệnh">
-              <div className="dr-panel-top">
-                <div className="dr-subtabs" role="tablist">
+            <section className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden" aria-label="Khám bệnh">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 pt-3 bg-slate-50/50 flex-wrap gap-3">
+                <div className="flex items-center gap-1" role="tablist">
                   {[
                     { id: 'info', label: 'Thông tin khám bệnh' },
                     { id: 'clinical', label: 'Cận lâm sàng' },
@@ -1887,10 +1887,10 @@ export default function DoctorHome() {
                     </button>
                   ))}
                 </div>
-                <div className="dr-panel-actions">
+                <div className="flex items-center gap-2 pb-2">
                   <button
                     type="button"
-                    className="dr-btn dr-btn--primary"
+                    className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                     disabled={examLocked || examSaving}
                     onClick={() => void handleSaveMedicalVisit()}
                   >
@@ -1899,7 +1899,7 @@ export default function DoctorHome() {
                   {!examLocked ? (
                     <button
                       type="button"
-                      className="dr-btn dr-btn--solid"
+                      className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                       disabled={examSaving}
                       title={
                         canFinishExam
@@ -1913,7 +1913,7 @@ export default function DoctorHome() {
                   ) : selectedAppt && isAppointmentExamined(selectedAppt.status) ? (
                     <button
                       type="button"
-                      className="dr-btn dr-btn--solid"
+                      className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                       disabled={examSaving}
                       title="In lại đơn thuốc (2 bản)"
                       onClick={() => openPrescriptionPrint()}
@@ -1932,12 +1932,12 @@ export default function DoctorHome() {
               </div>
 
               {examSaveOk ? (
-                <div className="dr-panel-flash dr-panel-flash--ok" role="status">
+                <div className="m-4 p-3 rounded bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium" role="status">
                   {examSaveOk}
                 </div>
               ) : null}
               {examSaveErr ? (
-                <div className="dr-panel-flash dr-panel-flash--err" role="alert">
+                <div className="m-4 p-3 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium" role="alert">
                   {examSaveErr}
                 </div>
               ) : null}
@@ -1962,11 +1962,11 @@ export default function DoctorHome() {
               </div>
 
               {examSubTab === 'prescription' ? (
-                <div className="dr-section">
-                  <div className="dr-section-title">Đơn thuốc</div>
+                <div className="p-5 space-y-4">
+                  <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Đơn thuốc</div>
                   {!showRxEmptyReadonly ? (
                     <div className="dr-rx-toolbar">
-                      <button type="button" className="dr-btn dr-btn--ghost" disabled={examLocked} onClick={addRxLine}>
+                      <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" disabled={examLocked} onClick={addRxLine}>
                         + Thêm dòng
                       </button>
                     </div>
@@ -1977,7 +1977,7 @@ export default function DoctorHome() {
                       <p className="dr-rx-empty-hint">Ca khám này chỉ có chẩn đoán — không có đơn thuốc.</p>
                     </div>
                   ) : (
-                  <div className="dr-table-wrap">
+                  <div className="overflow-x-auto rounded border border-slate-200 bg-white">
                     <table className={`dr-table dr-table--rx${examLocked ? ' dr-table--rx-readonly' : ''}`}>
                       <thead>
                         <tr>
@@ -2011,7 +2011,7 @@ export default function DoctorHome() {
                                   />
                                   <button
                                     type="button"
-                                    className="dr-btn dr-btn--ghost"
+                                    className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
                                     style={{ flexShrink: 0, padding: '0.25rem 0.45rem', fontSize: '0.72rem' }}
                                     onClick={() => openMedicinePicker(idx)}
                                   >
@@ -2150,30 +2150,30 @@ export default function DoctorHome() {
                   ) : null}
                 </div>
               ) : examSubTab === 'clinical' ? (
-                <div className="dr-section">
-                  <div className="dr-section-title">Chỉ định và kết quả LIS/PACS mô phỏng</div>
-                  {!examLocked ? <div className="dr-clinical-add"><select className="dr-input" defaultValue="" onChange={(e) => { addClinicalOrder(e.target.value); e.target.value = '' }}><option value="">+ Chọn dịch vụ để chỉ định</option>{clinicalServices.map((service) => <option key={service.id} value={service.id}>{service.category === 'LAB_TEST' ? 'Xét nghiệm' : 'Hình ảnh'} — {service.name}</option>)}</select></div> : null}
-                  {clinicalOrders.length === 0 ? <div className="dr-placeholder">Chưa có chỉ định cận lâm sàng.</div> : <div className="dr-clinical-list">{clinicalOrders.map((order) => <article className="dr-clinical-card" key={order.id || order.serviceId}>
-                    <header><div><strong>{order.serviceName}</strong><small>{order.category === 'IMAGING' ? 'PACS mô phỏng' : 'LIS mô phỏng'} · {order.status === 'COMPLETED' ? 'Đã có kết quả' : 'Đã chỉ định'}</small></div><div>{!examLocked && order.status !== 'COMPLETED' ? <><button type="button" className="dr-btn dr-btn--ghost" disabled={!order.id || clinicalBusy === order.id} onClick={() => void simulateClinicalResult(order)}>{clinicalBusy === order.id ? 'Đang tạo…' : 'Mô phỏng có kết quả'}</button><button type="button" className="dr-clinical-remove" onClick={() => setClinicalOrders((items) => items.filter((item) => item !== order))}>×</button></> : null}</div></header>
-                    {order.result?.observations ? <div className="dr-table-wrap"><table className="dr-table"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Tham chiếu</th><th>Đánh giá</th></tr></thead><tbody>{order.result.observations.map((obs) => <tr key={obs.code}><td>{obs.name}</td><td><strong>{obs.value}</strong> {obs.unit}</td><td>{obs.referenceRange}</td><td className={obs.flag === 'HIGH' ? 'dr-result-high' : 'dr-result-normal'}>{obs.flag === 'HIGH' ? 'Cao' : 'Bình thường'}</td></tr>)}</tbody></table><p className="dr-result-conclusion">Kết luận: {order.result.conclusion}</p></div> : null}
-                    {order.result?.imageUrl ? <div className="dr-pacs-result"><img src={order.result.imageUrl} alt="Ảnh X-quang ngực mô phỏng"/><div><p><b>StudyInstanceUID</b><br/><code>{order.result.studyInstanceUid}</code></p><label className="dr-field"><span className="dr-field-label">Kết luận hình ảnh</span><textarea className="dr-textarea" rows={3} placeholder="Nhập kết luận chẩn đoán hình ảnh…" value={order.result.conclusion || ''} readOnly /></label></div></div> : null}
+                <div className="p-5 space-y-4">
+                  <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Chỉ định và kết quả LIS/PACS mô phỏng</div>
+                  {!examLocked ? <div className="dr-clinical-add"><select className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs" defaultValue="" onChange={(e) => { addClinicalOrder(e.target.value); e.target.value = '' }}><option value="">+ Chọn dịch vụ để chỉ định</option>{clinicalServices.map((service) => <option key={service.id} value={service.id}>{service.category === 'LAB_TEST' ? 'Xét nghiệm' : 'Hình ảnh'} — {service.name}</option>)}</select></div> : null}
+                  {clinicalOrders.length === 0 ? <div className="py-8 text-center text-xs text-slate-400">Chưa có chỉ định cận lâm sàng.</div> : <div className="space-y-4">{clinicalOrders.map((order) => <article className="border border-slate-200 rounded p-4 bg-slate-50/50 space-y-3" key={order.id || order.serviceId}>
+                    <header><div><strong>{order.serviceName}</strong><small>{order.category === 'IMAGING' ? 'PACS mô phỏng' : 'LIS mô phỏng'} · {order.status === 'COMPLETED' ? 'Đã có kết quả' : 'Đã chỉ định'}</small></div><div>{!examLocked && order.status !== 'COMPLETED' ? <><button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" disabled={!order.id || clinicalBusy === order.id} onClick={() => void simulateClinicalResult(order)}>{clinicalBusy === order.id ? 'Đang tạo…' : 'Mô phỏng có kết quả'}</button><button type="button" className="w-6 h-6 rounded bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 flex items-center justify-center text-sm font-bold transition-colors cursor-pointer" onClick={() => setClinicalOrders((items) => items.filter((item) => item !== order))}>×</button></> : null}</div></header>
+                    {order.result?.observations ? <div className="overflow-x-auto rounded border border-slate-200 bg-white"><table className="w-full text-left text-xs divide-y divide-slate-200"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Tham chiếu</th><th>Đánh giá</th></tr></thead><tbody>{order.result.observations.map((obs) => <tr key={obs.code}><td>{obs.name}</td><td><strong>{obs.value}</strong> {obs.unit}</td><td>{obs.referenceRange}</td><td className={obs.flag === 'HIGH' ? 'dr-result-high' : 'dr-result-normal'}>{obs.flag === 'HIGH' ? 'Cao' : 'Bình thường'}</td></tr>)}</tbody></table><p className="dr-result-conclusion">Kết luận: {order.result.conclusion}</p></div> : null}
+                    {order.result?.imageUrl ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded bg-slate-900 text-white"><img src={order.result.imageUrl} alt="Ảnh X-quang ngực mô phỏng"/><div><p><b>StudyInstanceUID</b><br/><code>{order.result.studyInstanceUid}</code></p><label className="dr-field"><span className="dr-field-label">Kết luận hình ảnh</span><textarea className="w-full p-3 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs" rows={3} placeholder="Nhập kết luận chẩn đoán hình ảnh…" value={order.result.conclusion || ''} readOnly /></label></div></div> : null}
                   </article>)}</div>}
                   {!examLocked ? <p className="dr-modal-hint">Lưu hồ sơ để tạo mã chỉ định, sau đó bấm “Mô phỏng có kết quả”. Dữ liệu chỉ dùng cho demo.</p> : null}
                 </div>
               ) : examSubTab === 'history' ? (
-                <div className="dr-section">
-                  <div className="dr-section-title">Lịch sử khám</div>
-                  {historyLoading ? <div className="dr-placeholder">Đang tải…</div> : null}
+                <div className="p-5 space-y-4">
+                  <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Lịch sử khám</div>
+                  {historyLoading ? <div className="py-8 text-center text-xs text-slate-400">Đang tải…</div> : null}
                   {historyErr ? (
-                    <div className="dr-panel-flash dr-panel-flash--err" role="alert">
+                    <div className="m-4 p-3 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium" role="alert">
                       {historyErr}
                     </div>
                   ) : null}
                   {!historyLoading && !historyErr && historyTimeline.length === 0 ? (
-                    <div className="dr-placeholder">Chưa có lịch sử khám đã hoàn thành.</div>
+                    <div className="py-8 text-center text-xs text-slate-400">Chưa có lịch sử khám đã hoàn thành.</div>
                   ) : null}
                   {!historyLoading && historyTimeline.length > 0 ? (
-                    <div className="dr-history-timeline" role="list">
+                    <div className="space-y-3" role="list">
                       {historyTimeline.map((h) => {
                         const ex = h?.medicalVisit
                         const diagnosis = historyDiagnosisLabel(ex)
@@ -2185,7 +2185,7 @@ export default function DoctorHome() {
                         return (
                           <article
                             key={String(h.id || h._id)}
-                            className="dr-history-card"
+                            className="p-4 rounded border border-slate-200 bg-slate-50/60 space-y-2 text-xs"
                             role="listitem"
                           >
                             <header className="dr-history-card-head">
@@ -2232,32 +2232,32 @@ export default function DoctorHome() {
                 </div>
               ) : (
                 <>
-                  <div className="dr-section">
-                    <div className="dr-section-title">Thông tin người đăng ký</div>
-                    <div className="dr-info-grid">
-                      <div className="dr-kv">
-                        <span className="dr-k">Mã lịch hẹn</span>
-                        <span className="dr-v">{selectedAppt?.ticket || '—'}</span>
+                  <div className="p-5 space-y-4">
+                    <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Thông tin người đăng ký</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Mã lịch hẹn</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt?.ticket || '—'}</span>
                       </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Mã bệnh nhân</span>
-                        <span className="dr-v">{selectedAppt?.patient?.patientCode || '—'}</span>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Mã bệnh nhân</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt?.patient?.patientCode || '—'}</span>
                       </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Họ tên</span>
-                        <span className="dr-v">{selectedAppt ? patientLabel(selectedAppt) : '—'}</span>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Họ tên</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt ? patientLabel(selectedAppt) : '—'}</span>
                       </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Điện thoại</span>
-                        <span className="dr-v">{selectedAppt?.patient?.phone || '—'}</span>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Điện thoại</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt?.patient?.phone || '—'}</span>
                       </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Ngày sinh</span>
-                        <span className="dr-v">{selectedAppt?.patient?.dob ? formatDobVi(selectedAppt.patient.dob) : '—'}</span>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Ngày sinh</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt?.patient?.dob ? formatDobVi(selectedAppt.patient.dob) : '—'}</span>
                       </div>
-                      <div className="dr-kv">
-                        <span className="dr-k">Giới tính</span>
-                        <span className="dr-v">
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Giới tính</span>
+                        <span className="font-semibold text-slate-800 block text-xs">
                           {(() => {
                             const g = String(selectedAppt?.patient?.gender || '').trim()
                             if (!g) return '—'
@@ -2267,36 +2267,36 @@ export default function DoctorHome() {
                           })()}
                         </span>
                       </div>
-                      <div className="dr-kv dr-kv--full">
-                        <span className="dr-k">Địa chỉ</span>
-                        <span className="dr-v">{selectedAppt?.patient?.address || '—'}</span>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5 col-span-full">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Địa chỉ</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt?.patient?.address || '—'}</span>
                       </div>
                     </div>
                   </div>
 
                   {selectedAppt && String(selectedAppt.status || '').toLowerCase() === 'cancelled' ? (
                     <div className="dr-section dr-section--cancelled">
-                      <div className="dr-section-title">Thông tin hủy lịch</div>
-                      <div className="dr-info-grid">
-                        <div className="dr-kv">
-                          <span className="dr-k">Hủy bởi</span>
-                          <span className="dr-v">{formatCancelledByLine(selectedAppt.cancelledBy)}</span>
+                      <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Thông tin hủy lịch</div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                        <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Hủy bởi</span>
+                          <span className="font-semibold text-slate-800 block text-xs">{formatCancelledByLine(selectedAppt.cancelledBy)}</span>
                         </div>
-                        <div className="dr-kv">
-                          <span className="dr-k">Thời điểm hủy</span>
-                          <span className="dr-v">{formatDateTimeVi(selectedAppt.cancelledAt)}</span>
+                        <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Thời điểm hủy</span>
+                          <span className="font-semibold text-slate-800 block text-xs">{formatDateTimeVi(selectedAppt.cancelledAt)}</span>
                         </div>
                       </div>
                     </div>
                   ) : null}
 
-                  <div className="dr-section">
-                    <div className="dr-section-title">Khám lâm sàng</div>
-                    <div className="dr-info-grid dr-info-grid--tight">
+                  <div className="p-5 space-y-4">
+                    <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Khám lâm sàng</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                       <label className="dr-field">
                         <span className="dr-field-label">Ngày khám</span>
                         <input
-                          className="dr-input"
+                          className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs"
                           value={vitals.examAt}
                           onChange={(e) => setVitals((s) => ({ ...s, examAt: e.target.value }))}
                           disabled={examLocked}
@@ -2304,7 +2304,7 @@ export default function DoctorHome() {
                       </label>
                       <label className="dr-field">
                         <span className="dr-field-label">Bác sĩ</span>
-                        <select className="dr-input" disabled={examLocked}>
+                        <select className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs" disabled={examLocked}>
                           <option>{displayName(user)}</option>
                         </select>
                       </label>
@@ -2385,7 +2385,7 @@ export default function DoctorHome() {
                     <label className="dr-field dr-field--block">
                       <span className="dr-field-label">Triệu chứng</span>
                       <textarea
-                        className="dr-textarea"
+                        className="w-full p-3 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs"
                         rows={2}
                         value={vitals.symptoms}
                         onChange={(e) => setVitals((s) => ({ ...s, symptoms: e.target.value }))}
@@ -2409,7 +2409,7 @@ export default function DoctorHome() {
                     <label className="dr-field dr-field--block">
                       <span className="dr-field-label">Hướng điều trị</span>
                       <textarea
-                        className="dr-textarea"
+                        className="w-full p-3 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs"
                         rows={2}
                         value={vitals.treatment}
                         onChange={(e) => setVitals((s) => ({ ...s, treatment: e.target.value }))}
@@ -2420,7 +2420,7 @@ export default function DoctorHome() {
                     <label className="dr-field dr-field--block">
                       <span className="dr-field-label">Ghi chú</span>
                       <textarea
-                        className="dr-textarea"
+                        className="w-full p-3 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs"
                         rows={2}
                         value={vitals.notes}
                         onChange={(e) => setVitals((s) => ({ ...s, notes: e.target.value }))}
@@ -2436,30 +2436,30 @@ export default function DoctorHome() {
 
       {rxPickOpen ? (
         <div
-          className="dr-modal-backdrop"
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
           role="presentation"
           onClick={(e) => {
             if (e.target === e.currentTarget) setRxPickOpen(false)
           }}
         >
-          <div className="dr-modal" role="dialog" aria-modal="true" aria-labelledby="dr-rx-pick-title">
-            <div className="dr-modal-head">
-              <h2 id="dr-rx-pick-title" className="dr-modal-title">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-xl w-full p-6 space-y-4" role="dialog" aria-modal="true" aria-labelledby="dr-rx-pick-title">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 id="dr-rx-pick-title" className="text-base font-bold text-slate-900">
                 Chọn thuốc
               </h2>
-              <button type="button" className="dr-btn dr-btn--ghost" onClick={() => setRxPickOpen(false)}>
+              <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => setRxPickOpen(false)}>
                 Đóng
               </button>
             </div>
             <input
-              className="dr-input"
+              className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs"
               value={medicineQuery}
               onChange={(e) => setMedicineQuery(e.target.value)}
               placeholder="Tìm theo tên hoặc mã thuốc…"
               autoFocus
             />
             {medicineSearchErr ? <div className="dr-modal-err">{medicineSearchErr}</div> : null}
-            <div className="dr-modal-list">
+            <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded p-1">
               {medicineSearchLoading ? <div className="dr-modal-empty">Đang tìm…</div> : null}
               {!medicineSearchLoading && medicineResults.length === 0 ? (
                 <div className="dr-modal-empty">
@@ -2473,7 +2473,7 @@ export default function DoctorHome() {
                     <button
                       key={String(m.id)}
                       type="button"
-                      className="dr-modal-row"
+                      className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-50 flex items-center justify-between text-xs transition-colors cursor-pointer"
                       onClick={() => applyMedicineToRow(m)}
                     >
                       <span className="dr-modal-code">{m.code || '—'}</span>
@@ -2491,33 +2491,33 @@ export default function DoctorHome() {
 
       {emptyRxConfirmOpen ? (
         <div
-          className="dr-modal-backdrop"
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
           role="presentation"
           onClick={(e) => {
             if (e.target === e.currentTarget) setEmptyRxConfirmOpen(false)
           }}
         >
           <div
-            className="dr-modal dr-modal--confirm"
+            className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4"
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="dr-empty-rx-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="dr-empty-rx-title" className="dr-modal-title">
+            <h2 id="dr-empty-rx-title" className="text-base font-bold text-slate-900">
               Đơn thuốc đang trống
             </h2>
             <p className="dr-modal-confirm-text">
               Bạn có chắc chắn kết thúc ca khám này mà không kê đơn thuốc? Hệ thống sẽ in{' '}
               <strong>phiếu khám bệnh</strong> (không có danh sách thuốc).
             </p>
-            <div className="dr-modal-confirm-actions">
-              <button type="button" className="dr-btn dr-btn--ghost" onClick={() => setEmptyRxConfirmOpen(false)}>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => setEmptyRxConfirmOpen(false)}>
                 Hủy
               </button>
               <button
                 type="button"
-                className="dr-btn dr-btn--solid"
+                className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 onClick={() => {
                   setEmptyRxConfirmOpen(false)
                   void handleFinishExam({ withPrint: false, skipEmptyRxConfirm: true })
@@ -2532,27 +2532,27 @@ export default function DoctorHome() {
 
       {qrOpen ? (
         <div
-          className="dr-qr-modal-backdrop"
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
           role="presentation"
           onClick={(e) => {
             if (e.target === e.currentTarget) setQrOpen(false)
           }}
         >
           <div
-            className="dr-qr-modal"
+            className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="dr-qr-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="dr-qr-title" className="dr-qr-modal-title">
+            <h2 id="dr-qr-title" className="text-base font-bold text-slate-900">
               Quét phiếu khám
             </h2>
             <p className="dr-qr-modal-hint">Quét mã QR trên phiếu — hệ thống tìm lịch theo mã vé (YMA…).</p>
             <div id={DR_QR_READER_ELEMENT_ID} className="dr-qr-reader-wrap" />
-            {qrErr ? <div className="dr-banner dr-banner--error" style={{ marginTop: 8 }}>{qrErr}</div> : null}
-            <div className="dr-qr-modal-actions">
-              <button type="button" className="dr-btn dr-btn--ghost" onClick={() => setQrOpen(false)}>
+            {qrErr ? <div className="p-3 rounded border border-rose-200 bg-rose-50 text-rose-700 text-xs font-medium" style={{ marginTop: 8 }}>{qrErr}</div> : null}
+            <div className="flex justify-end pt-3 border-t border-slate-100">
+              <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => setQrOpen(false)}>
                 Đóng
               </button>
             </div>

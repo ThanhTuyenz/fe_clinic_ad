@@ -4,6 +4,8 @@ import React, { useEffect } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { QR_READER_ELEMENT_ID } from './receptionHelpers'
 
+import { PhotoIcon } from './ReceptionIcons'
+
 interface ReceptionQrScannerModalProps {
   qrOpen: boolean
   setQrOpen: (val: boolean) => void
@@ -75,7 +77,7 @@ export default function ReceptionQrScannerModal({
           </h2>
           <button
             type="button"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+            className="w-8 h-8 rounded flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
             aria-label="Đóng"
             onClick={() => setQrOpen(false)}
           >
@@ -88,22 +90,23 @@ export default function ReceptionQrScannerModal({
         </p>
 
         {qrErr ? (
-          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
             {qrErr}
           </div>
         ) : null}
 
-        <div className="w-full bg-slate-900 rounded-xl overflow-hidden min-h-[260px] flex items-center justify-center">
+        <div className="w-full bg-slate-900 rounded overflow-hidden min-h-[260px] flex items-center justify-center">
           <div id={QR_READER_ELEMENT_ID} className="w-full" />
         </div>
 
         <div className="flex items-center gap-3 pt-2">
           <label
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold text-center border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer shadow-xs transition-all ${
+            className={`flex-1 py-2.5 px-4 rounded text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer shadow-xs transition-all ${
               qrImageLoading ? 'opacity-60 pointer-events-none' : ''
             }`}
           >
-            <span>{qrImageLoading ? 'Đang đọc ảnh…' : '📁 Tải ảnh mã QR'}</span>
+            <PhotoIcon className="w-4 h-4 text-slate-500 shrink-0" />
+            <span>{qrImageLoading ? 'Đang đọc ảnh…' : 'Tải ảnh mã QR'}</span>
             <input
               type="file"
               accept="image/*"
@@ -114,7 +117,7 @@ export default function ReceptionQrScannerModal({
           </label>
           <button
             type="button"
-            className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all cursor-pointer"
+            className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded text-xs transition-all cursor-pointer"
             onClick={() => setQrOpen(false)}
           >
             Đóng

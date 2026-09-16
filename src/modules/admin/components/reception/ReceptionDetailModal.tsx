@@ -250,7 +250,7 @@ export default function ReceptionDetailModal({
 
             <button
               type="button"
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all ml-2 cursor-pointer border border-slate-200"
+              className="w-8 h-8 rounded flex items-center justify-center text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all ml-2 cursor-pointer border border-slate-200"
               onClick={onClose}
               aria-label="Đóng"
             >
@@ -261,28 +261,28 @@ export default function ReceptionDetailModal({
 
         {/* Thông báo kết quả / lỗi */}
         {saveMsg ? (
-          <div className="mb-4 px-4 py-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs rounded-xl font-medium">
+          <div className="mb-4 px-4 py-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs rounded font-medium">
             {saveMsg}
           </div>
         ) : null}
         {saveErr ? (
-          <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded-xl font-medium">
+          <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded font-medium">
             {saveErr}
           </div>
         ) : null}
         {visitErr ? (
-          <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded-xl font-medium">
+          <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded font-medium">
             {visitErr}
           </div>
         ) : null}
         {detailErr ? (
-          <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded-xl font-medium">
+          <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded font-medium">
             {detailErr}
           </div>
         ) : null}
 
         {pastSlotDetail ? (
-          <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-300 text-amber-900 text-xs rounded-xl font-medium">
+          <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-300 text-amber-900 text-xs rounded font-medium">
             Khung giờ hẹn đã kết thúc. Bạn có thể bấm <strong>Từ chối / Hủy</strong> nếu bệnh nhân không đến.
           </div>
         ) : null}
@@ -290,7 +290,7 @@ export default function ReceptionDetailModal({
         {/* 2 Cột: Thông tin bệnh nhân & Thông tin khám */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
           {/* Bệnh nhân */}
-          <section className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <section className="bg-slate-50 border border-slate-200 rounded p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
                 Thông tin bệnh nhân
@@ -351,7 +351,7 @@ export default function ReceptionDetailModal({
           </section>
 
           {/* Thông tin khám */}
-          <section className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <section className="bg-slate-50 border border-slate-200 rounded p-4">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
               Thông tin khám bệnh
             </h3>
@@ -395,18 +395,18 @@ export default function ReceptionDetailModal({
         {/* 2 Khối: Thu phí khám & Điều phối phòng */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Thu Phí */}
-          <section className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
+          <section className="bg-slate-50 border border-slate-200 rounded p-4 flex flex-col justify-between">
             <div>
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
                 Thu phí khám ban đầu
               </h3>
-              <div className="flex items-baseline justify-between p-3 bg-white border border-slate-300 rounded-xl mb-3">
+              <div className="flex items-baseline justify-between p-3 bg-white border border-slate-300 rounded mb-3">
                 <span className="text-xs font-semibold text-slate-600">Số tiền phí khám:</span>
                 <strong className="text-xl font-extrabold text-emerald-700">{formatVnd(consultationFee)}</strong>
               </div>
 
               {isPaid ? (
-                <div className="p-3 bg-emerald-100 border border-emerald-300 rounded-xl space-y-1.5 text-xs text-emerald-950 font-medium">
+                <div className="p-3 bg-emerald-100 border border-emerald-300 rounded space-y-1.5 text-xs text-emerald-950 font-medium">
                   <div className="font-bold flex items-center gap-1.5 text-emerald-900">
                     <CheckCircleIcon className="w-4 h-4 text-emerald-700" />
                     <span>Đã thu phí thành công</span>
@@ -428,7 +428,7 @@ export default function ReceptionDetailModal({
                       Phương thức thu tiền:
                     </label>
                     <select
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
                       value={paymentMethod}
                       disabled={!canEditStatus || paymentSaving}
                       onChange={(e) => setPaymentMethod(e.target.value)}
@@ -441,14 +441,14 @@ export default function ReceptionDetailModal({
                   </div>
 
                   {paymentErr ? (
-                    <div className="p-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded-lg font-semibold">
+                    <div className="p-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded font-semibold">
                       {paymentErr}
                     </div>
                   ) : null}
 
                   <button
                     type="button"
-                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-sm border border-emerald-600 transition-all cursor-pointer disabled:opacity-50 active:scale-[0.98]"
+                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs shadow-sm border border-emerald-600 transition-all cursor-pointer disabled:opacity-50 active:scale-[0.98]"
                     disabled={!canEditStatus || !hasClinicRoom || paymentSaving}
                     onClick={handleRecordPayment}
                   >
@@ -466,7 +466,7 @@ export default function ReceptionDetailModal({
           </section>
 
           {/* Điều Phối & Xác Nhận */}
-          <section className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+          <section className="bg-slate-50 border border-slate-200 rounded p-4 space-y-3">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
               Điều phối phòng & Xác nhận
             </h3>
@@ -476,7 +476,7 @@ export default function ReceptionDetailModal({
                 Phòng khám <span className="text-rose-600">*</span>
               </label>
               <select
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
                 value={clinicRoomDraft}
                 disabled={!canEditStatus}
                 onChange={(e) => handleClinicRoomChange(e.target.value)}
@@ -498,7 +498,7 @@ export default function ReceptionDetailModal({
               <input
                 type="number"
                 min="1"
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
                 placeholder="Tự động cấp khi chọn phòng"
                 value={visitQueueDraft}
                 disabled={!canEditStatus}
@@ -510,13 +510,13 @@ export default function ReceptionDetailModal({
             <div className="pt-2 flex flex-wrap items-center gap-2.5">
               {activeDetail?.workflowStatus === 'CHECKED_IN' ? (
                 <>
-                  <div className="flex-1 py-2 px-3.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs">
+                  <div className="flex-1 py-2 px-3.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs">
                     <span>✓ Đã Check-in {visitQueueDraft ? `(STT: ${visitQueueDraft})` : ''}</span>
                   </div>
                   {onMarkCompleted && (
                     <button
                       type="button"
-                      className="py-2 px-3.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap flex items-center gap-1.5 active:scale-[0.97] disabled:opacity-40"
+                      className="py-2 px-3.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded transition-all cursor-pointer shadow-xs whitespace-nowrap flex items-center gap-1.5 active:scale-[0.97] disabled:opacity-40"
                       disabled={saving}
                       onClick={onMarkCompleted}
                     >
@@ -526,7 +526,7 @@ export default function ReceptionDetailModal({
                   )}
                   <button
                     type="button"
-                    className="py-2 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                    className="py-2 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded transition-all cursor-pointer shadow-xs whitespace-nowrap"
                     onClick={openRegistrationFromActive}
                   >
                     Phiếu đăng ký
@@ -537,7 +537,7 @@ export default function ReceptionDetailModal({
                   {handleManualCheckIn && (
                     <button
                       type="button"
-                      className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98] whitespace-nowrap"
+                      className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98] whitespace-nowrap"
                       disabled={saving}
                       onClick={handleManualCheckIn}
                     >
@@ -546,14 +546,14 @@ export default function ReceptionDetailModal({
                   )}
                   <button
                     type="button"
-                    className="py-2.5 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                    className="py-2.5 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded transition-all cursor-pointer shadow-xs whitespace-nowrap"
                     onClick={openRegistrationFromActive}
                   >
                     Phiếu đăng ký
                   </button>
                   <button
                     type="button"
-                    className="py-2.5 px-3.5 bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
+                    className="py-2.5 px-3.5 bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 text-xs font-bold rounded transition-all cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
                     disabled={saving}
                     onClick={handleCancelAppointment}
                   >
@@ -564,7 +564,7 @@ export default function ReceptionDetailModal({
                 <>
                   <button
                     type="button"
-                    className="flex-1 min-w-[140px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm border border-emerald-600 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.98] whitespace-nowrap"
+                    className="flex-1 min-w-[140px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded shadow-sm border border-emerald-600 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.98] whitespace-nowrap"
                     disabled={!canFinishConfirm || saving}
                     onClick={handleFinishConfirm}
                   >
@@ -572,7 +572,7 @@ export default function ReceptionDetailModal({
                   </button>
                   <button
                     type="button"
-                    className="py-2.5 px-3.5 bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
+                    className="py-2.5 px-3.5 bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 text-xs font-bold rounded transition-all cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
                     disabled={!canEditStatus || saving}
                     onClick={handleCancelAppointment}
                   >
@@ -580,7 +580,7 @@ export default function ReceptionDetailModal({
                   </button>
                   <button
                     type="button"
-                    className="py-2.5 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                    className="py-2.5 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded transition-all cursor-pointer shadow-xs whitespace-nowrap"
                     onClick={openRegistrationFromActive}
                   >
                     Phiếu đăng ký
@@ -595,7 +595,7 @@ export default function ReceptionDetailModal({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="flex-1 py-2 px-2.5 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-[11px] font-bold text-slate-800 transition-all cursor-pointer disabled:opacity-40 shadow-xs flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2 px-2.5 bg-white hover:bg-slate-100 border border-slate-300 rounded text-[11px] font-bold text-slate-800 transition-all cursor-pointer disabled:opacity-40 shadow-xs flex items-center justify-center gap-1.5"
                   disabled={printBothDisabled}
                   onClick={printBothFromDetail}
                 >
@@ -604,7 +604,7 @@ export default function ReceptionDetailModal({
                 </button>
                 <button
                   type="button"
-                  className="py-2 px-2.5 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-[11px] font-bold text-slate-800 transition-all cursor-pointer disabled:opacity-40 shadow-xs"
+                  className="py-2 px-2.5 bg-white hover:bg-slate-100 border border-slate-300 rounded text-[11px] font-bold text-slate-800 transition-all cursor-pointer disabled:opacity-40 shadow-xs"
                   disabled={printSlipDisabled}
                   onClick={printSlipOnly}
                 >
@@ -612,7 +612,7 @@ export default function ReceptionDetailModal({
                 </button>
                 <button
                   type="button"
-                  className="py-2 px-2.5 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-[11px] font-bold text-slate-800 transition-all cursor-pointer disabled:opacity-40 shadow-xs"
+                  className="py-2 px-2.5 bg-white hover:bg-slate-100 border border-slate-300 rounded text-[11px] font-bold text-slate-800 transition-all cursor-pointer disabled:opacity-40 shadow-xs"
                   disabled={printInvoiceDisabled}
                   onClick={printInvoiceOnly}
                 >
@@ -634,14 +634,14 @@ export default function ReceptionDetailModal({
                 <button
                   type="button"
                   onClick={() => setIsEditingPatient(false)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                  className="w-7 h-7 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
               {patientSaveErr && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded font-medium">
                   {patientSaveErr}
                 </div>
               )}
@@ -653,7 +653,7 @@ export default function ReceptionDetailModal({
                     type="text"
                     value={patientForm.fullName}
                     onChange={(e) => setPatientForm((p) => ({ ...p, fullName: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
@@ -663,7 +663,7 @@ export default function ReceptionDetailModal({
                     type="tel"
                     value={patientForm.phone}
                     onChange={(e) => setPatientForm((p) => ({ ...p, phone: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
@@ -672,7 +672,7 @@ export default function ReceptionDetailModal({
                   <select
                     value={patientForm.gender}
                     onChange={(e) => setPatientForm((p) => ({ ...p, gender: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
                   >
                     <option value="male">Nam</option>
                     <option value="female">Nữ</option>
@@ -686,7 +686,7 @@ export default function ReceptionDetailModal({
                     type="date"
                     value={patientForm.dateOfBirth}
                     onChange={(e) => setPatientForm((p) => ({ ...p, dateOfBirth: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
@@ -696,7 +696,7 @@ export default function ReceptionDetailModal({
                     type="text"
                     value={patientForm.nationalId}
                     onChange={(e) => setPatientForm((p) => ({ ...p, nationalId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
@@ -706,7 +706,7 @@ export default function ReceptionDetailModal({
                     type="text"
                     value={patientForm.healthInsuranceNumber}
                     onChange={(e) => setPatientForm((p) => ({ ...p, healthInsuranceNumber: e.target.value.toUpperCase() }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs uppercase font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs uppercase font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
@@ -716,7 +716,7 @@ export default function ReceptionDetailModal({
                     type="text"
                     value={patientForm.address}
                     onChange={(e) => setPatientForm((p) => ({ ...p, address: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
               </div>
@@ -725,7 +725,7 @@ export default function ReceptionDetailModal({
                 <button
                   type="button"
                   onClick={() => setIsEditingPatient(false)}
-                  className="flex-1 py-2 px-3 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  className="flex-1 py-2 px-3 border border-slate-300 rounded text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Hủy bỏ
                 </button>
@@ -733,7 +733,7 @@ export default function ReceptionDetailModal({
                   type="button"
                   onClick={handleSavePatient}
                   disabled={patientSaving || !patientForm.fullName.trim()}
-                  className="flex-1 py-2 px-3 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition cursor-pointer shadow-xs"
+                  className="flex-1 py-2 px-3 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition cursor-pointer shadow-xs"
                 >
                   {patientSaving ? 'Đang lưu…' : 'Lưu thông tin'}
                 </button>

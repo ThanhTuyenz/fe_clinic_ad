@@ -67,7 +67,7 @@ type AppointmentRow = {
   }
 }
 
-const money = (val: any) => `${Number(val || 0).toLocaleString('vi-VN')} đ`
+const money = (val: any) => `${Number(val || 0).toLocaleString('vi-VN')}\u00A0đ`
 
 export default function BillingPage() {
   const { user, token } = useAuth()
@@ -226,34 +226,34 @@ export default function BillingPage() {
         </div>
         <button
           onClick={() => void loadData()}
-          className="rounded-md border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs"
+          className="rounded border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs"
         >
           Làm mới dữ liệu
         </button>
       </div>
 
       {error && (
-        <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="mt-4 rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
       )}
 
       {/* KPI Stats */}
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Doanh thu đã thu</p>
           <p className="mt-2 text-2xl font-extrabold text-emerald-700">{loading ? '—' : money(stats.totalRevenue)}</p>
           <p className="mt-1 text-xs text-slate-500">{stats.paidCount} hóa đơn đã hoàn tất</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Hóa đơn đã thu</p>
           <p className="mt-2 text-2xl font-extrabold text-slate-900">{loading ? '—' : stats.paidCount}</p>
           <p className="mt-1 text-xs text-emerald-600 font-medium">Thanh toán thành công</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600">Chờ thanh toán</p>
           <p className="mt-2 text-2xl font-extrabold text-amber-700">{loading ? '—' : stats.pendingCount}</p>
           <p className="mt-1 text-xs text-amber-700 font-medium">Cần thu tiền tại quầy / Online</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Đã hủy / Hoàn tiền</p>
           <p className="mt-2 text-2xl font-extrabold text-rose-600">{loading ? '—' : stats.cancelledCount}</p>
           <p className="mt-1 text-xs text-slate-400">Không thực hiện</p>
@@ -261,7 +261,7 @@ export default function BillingPage() {
       </div>
 
       {/* Filters Toolbar */}
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white shadow-xs">
+      <section className="mt-6 rounded border border-slate-200 bg-white shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
           <div className="flex flex-1 flex-wrap items-center gap-3">
             {/* Search Input */}
@@ -270,14 +270,14 @@ export default function BillingPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Tìm theo Mã hóa đơn, Tên bệnh nhân, SĐT..."
-              className="w-full max-w-sm rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+              className="w-full max-w-sm rounded border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
             />
 
             {/* Branch Selector Dropdown */}
             <select
               value={selectedBranchId}
               onChange={(e) => setSelectedBranchId(e.target.value)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none"
+              className="rounded border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none"
             >
               <option value="">Tất cả chi nhánh</option>
               {branches.map((b) => (
@@ -291,7 +291,7 @@ export default function BillingPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none"
+              className="rounded border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none"
             >
               <option value="all">Tất cả trạng thái</option>
               <option value="paid">Đã thanh toán</option>
@@ -303,16 +303,16 @@ export default function BillingPage() {
 
         {/* Data Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
+          <table className="w-full min-w-[1020px] text-left text-sm">
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-100">
               <tr>
-                <th className="px-5 py-3.5">Mã hóa đơn</th>
-                <th className="px-5 py-3.5">Bệnh nhân</th>
-                <th className="px-5 py-3.5">Dịch vụ</th>
-                <th className="px-5 py-3.5">Bác sĩ phụ trách</th>
-                <th className="px-5 py-3.5 text-right">Số tiền</th>
-                <th className="px-5 py-3.5 text-center">Trạng thái</th>
-                <th className="px-5 py-3.5 text-right">Thao tác</th>
+                <th className="px-5 py-3.5 whitespace-nowrap min-w-[150px]">Mã hóa đơn</th>
+                <th className="px-5 py-3.5 whitespace-nowrap min-w-[170px]">Bệnh nhân</th>
+                <th className="px-5 py-3.5 min-w-[220px]">Dịch vụ</th>
+                <th className="px-5 py-3.5 whitespace-nowrap min-w-[170px]">Bác sĩ phụ trách</th>
+                <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[130px]">Số tiền</th>
+                <th className="px-5 py-3.5 text-center whitespace-nowrap min-w-[140px]">Trạng thái</th>
+                <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[130px]">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -348,54 +348,54 @@ export default function BillingPage() {
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                      <td className="px-5 py-4 font-mono font-bold text-emerald-900">
+                      <td className="px-5 py-4 font-mono font-bold text-emerald-900 whitespace-nowrap">
                         {invCode}
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 whitespace-nowrap">
                         <p className="font-bold text-slate-900">{patientName}</p>
                         {patientPhone ? <p className="text-xs text-slate-500 font-mono">{patientPhone}</p> : null}
                       </td>
                       <td className="px-5 py-4">
                         <p className="font-medium text-slate-900">{serviceName}</p>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-[11px] text-slate-400 whitespace-nowrap">
                           {item.appointmentDate ? `${item.appointmentDate} (${item.startTime || '08:00'})` : '—'}
                         </p>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 whitespace-nowrap">
                         <p className="font-medium text-slate-800">{doctorName}</p>
                         {item.doctor?.department && (
-                          <p className="text-[11px] text-slate-400">{item.doctor.department}</p>
+                          <p className="text-[11px] text-slate-400 whitespace-nowrap">{item.doctor.department}</p>
                         )}
                       </td>
-                      <td className="px-5 py-4 text-right font-extrabold text-slate-900">
+                      <td className="px-5 py-4 text-right font-extrabold text-slate-900 whitespace-nowrap tabular-nums">
                         {money(getInvoiceAmount(item))}
                       </td>
-                      <td className="px-5 py-4 text-center">
+                      <td className="px-5 py-4 text-center whitespace-nowrap">
                         {paid ? (
-                          <span className="inline-block rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
+                          <span className="inline-block whitespace-nowrap rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
                             Đã thanh toán
                           </span>
                         ) : pending ? (
-                          <span className="inline-block rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 border border-amber-200">
+                          <span className="inline-block whitespace-nowrap rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 border border-amber-200">
                             Chờ thanh toán
                           </span>
                         ) : cancelled ? (
-                          <span className="inline-block rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500 border border-slate-200">
+                          <span className="inline-block whitespace-nowrap rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500 border border-slate-200">
                             Đã hủy
                           </span>
                         ) : (
-                          <span className="inline-block rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 border border-blue-200">
+                          <span className="inline-block whitespace-nowrap rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 border border-blue-200">
                             {item.workflowStatus}
                           </span>
                         )}
-                        <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                        <p className="mt-1 text-[10px] font-semibold text-slate-400 whitespace-nowrap">
                           {methodText}
                         </p>
                       </td>
                       <td className="px-5 py-4 text-right whitespace-nowrap">
                         <button
                           onClick={() => setSelectedItem(item)}
-                          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs"
+                          className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
                         >
                           Chi tiết
                         </button>
@@ -405,7 +405,7 @@ export default function BillingPage() {
                               setSelectedItem(item)
                               setPayMethod('cash')
                             }}
-                            className="ml-2 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-800 shadow-xs"
+                            className="ml-2 rounded bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-800 shadow-xs cursor-pointer"
                           >
                             Thu tiền
                           </button>
@@ -426,7 +426,7 @@ export default function BillingPage() {
       {/* Invoice Detail / Cashier Modal */}
       {selectedItem && (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-900/35 p-4">
-          <div className="my-6 w-full max-w-lg rounded-xl bg-white shadow-2xl overflow-hidden border border-slate-100">
+          <div className="my-6 w-full max-w-lg rounded bg-white shadow-2xl overflow-hidden border border-slate-100">
             <header className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50">
               <div>
                 <h3 className="text-base font-bold text-slate-900">Chi tiết hóa đơn thanh toán</h3>
@@ -565,7 +565,7 @@ export default function BillingPage() {
                       value={payNote}
                       onChange={(e) => setPayNote(e.target.value)}
                       placeholder="Nhập ghi chú thu tiền (không bắt buộc)..."
-                      className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2 text-xs font-normal outline-none focus:border-emerald-500"
+                      className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2 text-xs font-normal outline-none focus:border-emerald-500"
                     />
                   </div>
 
@@ -573,14 +573,14 @@ export default function BillingPage() {
                     <button
                       type="button"
                       onClick={() => setSelectedItem(null)}
-                      className="rounded-md border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                      className="rounded border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
                     >
                       Hủy
                     </button>
                     <button
                       type="submit"
                       disabled={submittingPay}
-                      className="rounded-md bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 shadow-xs"
+                      className="rounded bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 shadow-xs"
                     >
                       {submittingPay ? 'Đang ghi nhận…' : 'Xác nhận đã thu tiền'}
                     </button>
@@ -593,7 +593,7 @@ export default function BillingPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedItem(null)}
-                    className="rounded-md bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900"
+                    className="rounded bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900"
                   >
                     Đóng
                   </button>

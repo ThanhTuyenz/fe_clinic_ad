@@ -179,21 +179,21 @@ export default function ClinicStaffPage() {
           <h1 className="mt-1 text-2xl font-bold text-slate-950">Nhân sự phòng khám</h1>
           <p className="mt-1 text-sm text-slate-500">Quản lý tài khoản, phân bổ chi nhánh, chuyên khoa và phòng làm việc.</p>
         </div>
-        <button onClick={openCreate} className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800">
+        <button onClick={openCreate} className="rounded bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800">
           + Thêm nhân sự
         </button>
       </div>
 
-      {error && <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+      {error && <div className="mt-4 rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
-      <section className="mt-5 rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="mt-5 rounded border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-4">
           <div className="flex flex-wrap gap-1.5">
             {ROLES.map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setFilter(id)}
-                className={`rounded-md px-3 py-2 text-xs font-bold transition ${
+                className={`rounded px-3 py-2 text-xs font-bold transition ${
                   filter === id ? 'bg-emerald-700 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800'
                 }`}
               >
@@ -208,10 +208,10 @@ export default function ClinicStaffPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full max-w-md rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+              className="w-full max-w-md rounded border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-600"
               placeholder="Tìm theo tên, email, sđt..."
             />
-            <button onClick={() => void load()} className="rounded-md border border-slate-200 px-3 text-xs font-semibold hover:bg-slate-50">
+            <button onClick={() => void load()} className="rounded border border-slate-200 px-3 text-xs font-semibold hover:bg-slate-50">
               Làm mới
             </button>
           </div>
@@ -286,7 +286,7 @@ export default function ClinicStaffPage() {
 
       {modal && (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-900/35 p-4">
-          <form onSubmit={submit} className="my-8 w-full max-w-xl rounded-xl bg-white shadow-2xl">
+          <form onSubmit={submit} className="my-8 w-full max-w-xl rounded bg-white shadow-2xl">
             <header className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
               <b className="text-base text-slate-900">{modal === 'create' ? 'Thêm nhân sự mới' : 'Cập nhật thông tin nhân sự'}</b>
               <button type="button" onClick={() => setModal(null)} className="text-xl font-bold text-slate-400 hover:text-slate-600">
@@ -304,7 +304,7 @@ export default function ClinicStaffPage() {
                     value={form.fullName}
                     onChange={(e) => setForm({ ...form, fullName: e.target.value })}
                     placeholder="VD: BS. Nguyễn Văn An"
-                    className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   />
                 </label>
 
@@ -316,7 +316,7 @@ export default function ClinicStaffPage() {
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                     placeholder="VD: doctor.an@vitacare.local"
-                    className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   />
                 </label>
               </div>
@@ -329,7 +329,7 @@ export default function ClinicStaffPage() {
                     value={form.phoneNumber}
                     onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
                     placeholder="VD: 0912345678"
-                    className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   />
                 </label>
 
@@ -338,7 +338,7 @@ export default function ClinicStaffPage() {
                   <select
                     value={form.role}
                     onChange={(e) => setForm({ ...form, role: e.target.value })}
-                    className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   >
                     {ROLES.slice(1).map(([id, label]) => (
                       <option key={id} value={id}>
@@ -355,7 +355,7 @@ export default function ClinicStaffPage() {
                   <select
                     value={form.branchId}
                     onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                    className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   >
                     <option value="">-- Chọn chi nhánh --</option>
                     {branches.map((b) => (
@@ -373,13 +373,13 @@ export default function ClinicStaffPage() {
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     placeholder={modal === 'edit' ? '••••••••' : 'Tối thiểu 6 ký tự'}
-                    className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                   />
                 </label>
               </div>
 
               {form.role === 'doctor' && (
-                <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50/50 p-4 space-y-4">
+                <div className="mt-4 rounded border border-emerald-100 bg-emerald-50/50 p-4 space-y-4">
                   <div className="flex items-center gap-2 border-b border-emerald-100 pb-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-600" />
                     <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-800">Thông tin Bác sĩ & Chuyên môn</h3>
@@ -391,7 +391,7 @@ export default function ClinicStaffPage() {
                       <select
                         value={form.specialtyId}
                         onChange={(e) => setForm({ ...form, specialtyId: e.target.value })}
-                        className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                        className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                       >
                         <option value="">-- Chọn chuyên khoa --</option>
                         {specialties.map((s) => (
@@ -407,7 +407,7 @@ export default function ClinicStaffPage() {
                       <select
                         value={form.roomId}
                         onChange={(e) => setForm({ ...form, roomId: e.target.value })}
-                        className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                        className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                       >
                         <option value="">-- Chọn phòng khám --</option>
                         {availableRooms.map((r) => (
@@ -425,7 +425,7 @@ export default function ClinicStaffPage() {
                       <select
                         value={form.academicRank}
                         onChange={(e) => setForm({ ...form, academicRank: e.target.value })}
-                        className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                        className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                       >
                         {ACADEMIC_RANKS.map((rank) => (
                           <option key={rank} value={rank}>
@@ -442,7 +442,7 @@ export default function ClinicStaffPage() {
                         value={form.licenseNumber}
                         onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })}
                         placeholder="VD: 012345/HCM-CCHN"
-                        className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                        className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                       />
                     </label>
 
@@ -454,7 +454,7 @@ export default function ClinicStaffPage() {
                         value={form.experienceYears}
                         onChange={(e) => setForm({ ...form, experienceYears: e.target.value })}
                         placeholder="VD: 8"
-                        className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                        className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                       />
                     </label>
                   </div>
@@ -466,7 +466,7 @@ export default function ClinicStaffPage() {
                       value={form.biography}
                       onChange={(e) => setForm({ ...form, biography: e.target.value })}
                       placeholder="Mô tả quá trình học tập, công tác và thế mạnh chuyên môn của bác sĩ..."
-                      className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
+                      className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
                     />
                   </label>
                 </div>
@@ -477,14 +477,14 @@ export default function ClinicStaffPage() {
               <button
                 type="button"
                 onClick={() => setModal(null)}
-                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                className="rounded border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
               >
                 Hủy
               </button>
               <button
                 disabled={saving}
                 type="submit"
-                className="rounded-md bg-emerald-700 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50"
+                className="rounded bg-emerald-700 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50"
               >
                 {saving ? 'Đang lưu…' : 'Lưu nhân sự'}
               </button>

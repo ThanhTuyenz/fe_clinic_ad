@@ -13,7 +13,7 @@
   --surface: #ffffff;
   --page-bg: #f1f5f9;
   --error: #dc2626;
-  --radius: 8px;
+  --radius: 4px;
   --shadow: none;
   font-family: var(--font-inter), Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
   line-height: 1.5;
@@ -48,6 +48,7 @@ input,
 select,
 textarea {
   font-family: inherit;
+  border-radius: 0.25rem;
 }
 
 a {
@@ -59,4 +60,3 @@ a {
 a:hover {
   text-decoration: underline;
 }
-

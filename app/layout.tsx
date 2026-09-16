@@ -1,9 +1,4 @@
 import '../src/styles/globals.css'
-import '../src/modules/admin/styles/auth.css'
-import '../src/modules/admin/styles/doctor-home.css'
-import '../src/modules/admin/styles/reception-home.css'
-import '../src/modules/admin/styles/registration-home.css'
-import '../src/modules/admin/styles/dashboard.css'
 import Providers from './providers'
 import { Inter } from 'next/font/google'
 
@@ -14,8 +9,8 @@ const inter = Inter({
 })
 
 export const metadata = {
-  title: 'MediLink Global — Admin Portal',
-  description: 'Cổng vận hành phòng khám MediLink Global',
+  title: 'VitaCare Clinic — Admin Portal',
+  description: 'Cổng vận hành phòng khám VitaCare',
 }
 
 export default function RootLayout({ children }) {
