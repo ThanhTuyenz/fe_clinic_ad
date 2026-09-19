@@ -532,7 +532,7 @@ export default function ReceptionDetailModal({
                     Phiếu đăng ký
                   </button>
                 </>
-              ) : activeDetail?.workflowStatus === 'BOOKED' ? (
+              ) : activeDetail?.workflowStatus === 'CONFIRMED' ? (
                 <>
                   {handleManualCheckIn && (
                     <button

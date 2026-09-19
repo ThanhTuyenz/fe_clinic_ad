@@ -14,8 +14,8 @@ export async function lookupPatientByCode({ code }) {
   return appointmentRequest({ method: 'GET', url: '/appointments/patient-by-code', params: { code: String(code || '').trim() } }, 'Không tìm thấy bệnh nhân.')
 }
 
-export async function listPatientsReception({ page = 1, pageSize = 10, patientCode, name, phone, account }) {
-  return appointmentRequest({ method: 'GET', url: '/appointments/patients', params: { page, pageSize, patientCode, name, phone, account } }, 'Không lấy được danh sách bệnh nhân.')
+export async function listPatientsReception({ page = 1, pageSize = 10, patientCode, name, phone, account, q }: any = {}) {
+  return appointmentRequest({ method: 'GET', url: '/appointments/patients', params: { page, pageSize, patientCode, name, phone, account, q } }, 'Không lấy được danh sách bệnh nhân.')
 }
 
 export async function listPatientHistoryReception({ patientId }) {

@@ -2,13 +2,32 @@
 
 import { useNavigate } from '@/common/hooks/useNextNavigation'
 
-const paths = {
-  dashboard: 'M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z',
-  calendar: 'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z',
-  patient: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
+import {
+  LayoutDashboard,
+  CalendarCheck,
+  Stethoscope,
+  FileText,
+  FlaskConical,
+  FileSpreadsheet,
+  Pill,
+  DoorOpen,
+  UserPlus,
+  type LucideIcon,
+} from 'lucide-react'
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  calendar: CalendarCheck,
+  exam: Stethoscope,
+  history: FileText,
+  laboratory: FlaskConical,
+  prescription: FileSpreadsheet,
+  pharmacy: Pill,
+  reception: DoorOpen,
+  registration: UserPlus,
 }
 
-export default function RoleSidebar({ role = 'doctor', active = 'dashboard', user, onLogout, hideTopBar = false }) {
+export default function RoleSidebar({ role = 'doctor', active = 'dashboard', user, onLogout, hideTopBar = false }: any) {
   const navigate = useNavigate()
   const doctor = role === 'doctor'
   const pharmacist = role === 'pharmacist'
@@ -23,7 +42,6 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
     : pharmacist
     ? [
         ['pharmacy', 'Cấp thuốc', '/pharmacy'],
-        ['inventory', 'Kho thuốc', '/inventory'],
       ]
     : [
         ['dashboard', 'Tổng quan', '/dashboard'],
@@ -70,27 +88,24 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
 
         {/* Danh sách menu */}
         <nav className="flex-1 space-y-1 overflow-y-auto p-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          {links.map(([id, label, href]) => (
-            <button
-              key={id}
-              type="button"
-              className={`flex w-full items-center gap-3 rounded px-3 py-2.5 text-left text-[13px] transition cursor-pointer ${
-                active === id
-                  ? 'bg-emerald-50 font-bold text-emerald-800'
-                  : 'font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-              onClick={() => navigate(href)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5 shrink-0">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d={id === 'dashboard' ? paths.dashboard : id === 'registration' ? paths.patient : paths.calendar}
-                />
-              </svg>
-              <span>{label}</span>
-            </button>
-          ))}
+          {links.map(([id, label, href]) => {
+            const IconComp = ICON_MAP[id] || LayoutDashboard
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`flex w-full items-center gap-3 rounded px-3 py-2.5 text-left text-[13px] transition cursor-pointer ${
+                  active === id
+                    ? 'bg-emerald-50 font-bold text-emerald-800'
+                    : 'font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+                onClick={() => navigate(href, id === 'registration' ? { state: { createNew: true } } : undefined)}
+              >
+                <IconComp className="w-[18px] h-[18px] shrink-0" strokeWidth={1.8} aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            )
+          })}
         </nav>
 
         {/* Góc menu dưới bên trái: Thông tin phòng khám/nhân viên & nút Đăng xuất */}

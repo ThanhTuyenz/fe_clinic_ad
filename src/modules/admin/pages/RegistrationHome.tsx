@@ -9,6 +9,7 @@ import {
   getAvailability,
   listPatientHistoryReception,
   listPatientsReception,
+  lookupPatientByCode,
   updateAppointmentStatus,
 } from '../services/appointments'
 import { listSpecialties, listDoctorsBySpecialty, listSpecialtyServices } from '../services/specialties'
@@ -16,6 +17,7 @@ import { listUsers } from '../services/users'
 import { listSchedules } from '../services/schedules'
 import { getStaffSession, isReceptionStaff } from '../utils/staffSession'
 import { Html5Qrcode } from 'html5-qrcode'
+import ReceptionQrScannerModal from '../components/reception/ReceptionQrScannerModal'
 import {
   CalendarIcon,
   CheckCircleIcon,
@@ -26,7 +28,31 @@ import {
   SearchIcon,
 } from '../components/reception/ReceptionIcons'
 
-const QR_READER_ELEMENT_ID = 'reg-patient-qr-reader'
+
+function parseCccdQr(qrText: string) {
+  const text = String(qrText || '').trim()
+  if (!text.includes('|')) return null
+  const parts = text.split('|').map((p) => p.trim())
+  if (parts.length >= 5) {
+    const nationalId = parts[0]
+    if (/^\d{9,12}$/.test(nationalId)) {
+      const fullName = parts[2] || ''
+      const rawDob = parts[3] || '' // DDMMYYYY
+      let dob = ''
+      if (rawDob.length === 8 && /^\d{8}$/.test(rawDob)) {
+        const d = rawDob.slice(0, 2)
+        const m = rawDob.slice(2, 4)
+        const y = rawDob.slice(4, 8)
+        dob = `${y}-${m}-${d}`
+      }
+      const rawGender = (parts[4] || '').toLowerCase()
+      const gender = rawGender === 'nam' ? 'male' : (rawGender === 'nữ' || rawGender === 'nu' ? 'female' : '')
+      const address = parts[5] || ''
+      return { nationalId, fullName, dob, gender, address }
+    }
+  }
+  return null
+}
 
 function patientFromQrPayload(text: string) {
   const raw = String(text || '').trim()
@@ -183,6 +209,15 @@ function historySpecialtyLabel(row: any) {
   return name || '—'
 }
 
+function historyServicePackageLabel(row: any) {
+  if (row?.servicePackage?.name) return row.servicePackage.name
+  if (row?.servicePackageName) return row.servicePackageName
+  const note = String(row?.note || row?.symptoms || '')
+  const match = note.match(/Dịch vụ khám:\s*([^\n]+)/)
+  if (match && match[1]) return match[1].trim()
+  return 'Khám chuyên khoa tiêu chuẩn'
+}
+
 function historyIsExamined(row: any) {
   const s = String(row?.status || '').toLowerCase()
   return s === 'completed' || s === 'done' || s === 'examined'
@@ -194,19 +229,18 @@ export default function RegistrationHome() {
   const location = useLocation()
   const { token, user } = getStaffSession()
   const payload = location.state
-  const createNew = payload?.createNew === true
-  const hasPatientFromAppointment = Boolean(payload?.patient && payload?.ticket)
-  const fromAppointment = !createNew && Boolean(payload?.appointmentId || payload?.ticket || hasPatientFromAppointment)
+  const [isFreshNew, setIsFreshNew] = useState(false)
+  const createNew = isFreshNew || payload?.createNew === true || !payload?.appointmentId
+  const hasPatientFromAppointment = !isFreshNew && Boolean(payload?.patient && payload?.ticket)
+  const fromAppointment = !isFreshNew && !createNew && Boolean(payload?.appointmentId || payload?.ticket || hasPatientFromAppointment)
+  const p = fromAppointment ? payload?.patient : null
 
-  const [symptom, setSymptom] = useState(() => (createNew ? '' : String(location.state?.note || '').trim()))
-  const [regNote, setRegNote] = useState('')
   const [specialtyId, setSpecialtyId] = useState('')
   const [specialties, setSpecialties] = useState<any[]>([])
   const [specialtiesLoading, setSpecialtiesLoading] = useState(false)
   const [servicePackageId, setServicePackageId] = useState('')
   const [servicePackages, setServicePackages] = useState<any[]>([])
   const [servicesLoading, setServicesLoading] = useState(false)
-  const [priority, setPriority] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
   const [saving, setSaving] = useState(false)
   const [maKcb, setMaKcb] = useState('')
@@ -226,6 +260,8 @@ export default function RegistrationHome() {
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [slotsErr, setSlotsErr] = useState('')
   const [freeSlots, setFreeSlots] = useState<string[]>([])
+  const [bookingMode, setBookingMode] = useState<'new' | 're_exam'>('new')
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string>('')
 
   const [draftPatientCode, setDraftPatientCode] = useState('')
   const [draftName, setDraftName] = useState('')
@@ -234,7 +270,19 @@ export default function RegistrationHome() {
   const [draftPhone, setDraftPhone] = useState('')
   const [draftGender, setDraftGender] = useState('')
   const [draftAddress, setDraftAddress] = useState('')
+  const [draftNationalId, setDraftNationalId] = useState('')
   const [lookupErr, setLookupErr] = useState('')
+
+  // Trạng thái tra cứu tự động điền và quét QR
+  const [lookupKeyword, setLookupKeyword] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [lookupSuccessMsg, setLookupSuccessMsg] = useState('')
+  const [qrScanOpen, setQrScanOpen] = useState(false)
+  const [qrScanErr, setQrScanErr] = useState('')
+  const [qrImageLoading, setQrImageLoading] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
 
   const effectiveDraftPatientCode = useMemo(() => {
     return String(draftPatientCode || '').trim()
@@ -254,28 +302,21 @@ export default function RegistrationHome() {
     account: '',
   })
   const [pickerSelectedId, setPickerSelectedId] = useState('')
-  const [qrOpen, setQrOpen] = useState(false)
-  const [qrErr, setQrErr] = useState('')
-  const qrScanDoneRef = useRef(false)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyErr, setHistoryErr] = useState('')
   const [historyRows, setHistoryRows] = useState<any[]>([])
-
-  const p = payload?.patient
 
   const hasUnsavedChanges = useMemo(() => {
     if (lastSaved === null) return true
     if (createNew) {
       return (
-        symptom !== lastSaved.symptom ||
-        regNote !== lastSaved.regNote ||
         specialtyId !== lastSaved.specialtyId ||
-        priority !== lastSaved.priority ||
         doctorId !== lastSaved.doctorId ||
         appointmentDate !== lastSaved.appointmentDate ||
         startTime !== lastSaved.startTime ||
         draftPatientId !== lastSaved.draftPatientId ||
         draftPatientCode !== lastSaved.draftPatientCode ||
+        draftNationalId !== lastSaved.draftNationalId ||
         draftName !== lastSaved.draftName ||
         draftDob !== lastSaved.draftDob ||
         draftPhone !== lastSaved.draftPhone ||
@@ -284,10 +325,7 @@ export default function RegistrationHome() {
       )
     }
     return (
-      symptom !== lastSaved.symptom ||
-      regNote !== lastSaved.regNote ||
       specialtyId !== lastSaved.specialtyId ||
-      priority !== lastSaved.priority ||
       doctorId !== lastSaved.doctorId ||
       appointmentDate !== lastSaved.appointmentDate ||
       startTime !== lastSaved.startTime
@@ -295,14 +333,12 @@ export default function RegistrationHome() {
   }, [
     lastSaved,
     createNew,
-    symptom,
-    regNote,
     specialtyId,
-    priority,
     doctorId,
     appointmentDate,
     startTime,
     draftPatientCode,
+    draftNationalId,
     draftName,
     draftPatientId,
     draftDob,
@@ -316,6 +352,7 @@ export default function RegistrationHome() {
       return {
         id: p.id || '',
         patientCode: p.patientCode || '—',
+        nationalId: p.nationalId || '—',
         displayName: p.displayName || [p.lastName, p.firstName].filter(Boolean).join(' ').trim() || '—',
         dobLabel: p.dob ? formatDateVi(p.dob) : '—',
         age:
@@ -336,6 +373,7 @@ export default function RegistrationHome() {
       return {
         id: draftPatientId,
         patientCode: effectiveDraftPatientCode,
+        nationalId: draftNationalId,
         displayName: draftName,
         dobLabel: draftDob ? formatDateVi(`${draftDob}T12:00:00`) : '',
         age: ageStr,
@@ -350,6 +388,7 @@ export default function RegistrationHome() {
     p,
     createNew,
     effectiveDraftPatientCode,
+    draftNationalId,
     draftName,
     draftPatientId,
     draftDob,
@@ -549,12 +588,13 @@ export default function RegistrationHome() {
     listSchedules({ doctorId, startDate: todayIsoDate() })
       .then((schedules) => {
         if (!mounted) return
+        const today = todayIsoDate()
         const dates = Array.from(
           new Set(
             (schedules || [])
               .filter((s: any) => s?.status === 'OPEN' || !s?.status)
               .map((s: any) => String(s?.workDate || '').slice(0, 10))
-              .filter(Boolean),
+              .filter((dStr: string) => dStr && dStr >= today),
           ),
         ).sort()
         setAvailableWorkDates(dates)
@@ -587,10 +627,29 @@ export default function RegistrationHome() {
       .then((res: any) => {
         if (!mounted) return
         const rawSlots = Array.isArray(res?.freeSlots) ? res.freeSlots : []
-        const slots = Array.from(new Set(rawSlots.filter(Boolean))).sort()
+        let slots = Array.from(new Set(rawSlots.filter(Boolean))).sort()
+
+        // Nếu ngày khám là HÔM NAY: chỉ hiển thị các khung giờ từ thời điểm hiện tại trở về sau
+        if (appointmentDate === todayIsoDate()) {
+          const now = new Date()
+          const currentTotalMin = now.getHours() * 60 + now.getMinutes()
+          slots = slots.filter((slot: string) => {
+            const [hStr, mStr] = slot.split(':')
+            const h = parseInt(hStr, 10)
+            const m = parseInt(mStr, 10)
+            if (Number.isNaN(h) || Number.isNaN(m)) return false
+            // Mỗi slot kéo dài 30 phút. Slot hợp lệ nếu giờ kết thúc slot >= thời gian hiện tại
+            return h * 60 + m + 30 >= currentTotalMin
+          })
+        }
+
         setFreeSlots(slots)
-        if (slots.length > 0 && (!startTime || !slots.includes(startTime))) {
-          setStartTime(slots[0])
+        if (!fromAppointment) {
+          if (slots.length > 0 && (!startTime || !slots.includes(startTime))) {
+            setStartTime(slots[0])
+          } else if (slots.length === 0) {
+            setStartTime('')
+          }
         }
       })
       .catch((e: any) => {
@@ -605,7 +664,7 @@ export default function RegistrationHome() {
     return () => {
       mounted = false
     }
-  }, [doctorId, appointmentDate])
+  }, [doctorId, appointmentDate, fromAppointment])
 
   const morningSlots = useMemo(() => {
     return freeSlots.filter((slot) => {
@@ -639,7 +698,9 @@ export default function RegistrationHome() {
   }
 
   function handleAppointmentDateChange(val: string) {
-    setAppointmentDate(val)
+    const today = todayIsoDate()
+    const safeDate = val && val < today ? today : val
+    setAppointmentDate(safeDate)
     setStartTime('')
   }
 
@@ -662,6 +723,7 @@ export default function RegistrationHome() {
       return {
         id: p.id,
         patientCode: p.patientCode,
+        nationalId: p.nationalId,
         fullName: p.fullName || p.name || p.displayName,
         displayName: p.displayName || p.fullName || p.name,
         dob: p.dob || p.dateOfBirth,
@@ -675,6 +737,7 @@ export default function RegistrationHome() {
     return {
       id: draftPatientId || undefined,
       patientCode: draftPatientCode || undefined,
+      nationalId: draftNationalId.trim() || undefined,
       fullName: draftName.trim(),
       displayName: draftName.trim(),
       dob: draftDob || undefined,
@@ -692,18 +755,12 @@ export default function RegistrationHome() {
       const selectedPkg = servicePackages.find((pkg) => String(pkg.id) === String(servicePackageId))
       if (selectedPkg) parts.push(`Dịch vụ khám: ${selectedPkg.name}`)
     }
-    if (symptom.trim()) parts.push(`Triệu chứng: ${symptom.trim()}`)
-    if (regNote.trim()) parts.push(`Ghi chú: ${regNote.trim()}`)
-    if (priority) parts.push('Ưu tiên')
     return parts.join('\n')
   }
 
   function makeSavedSnapshot() {
     return {
-      symptom,
-      regNote,
       specialtyId,
-      priority,
       doctorId,
       appointmentDate,
       startTime,
@@ -867,13 +924,16 @@ export default function RegistrationHome() {
     if (!patient) return
     setDraftPatientId(String(patient.id || patient._id || ''))
     setDraftPatientCode(String(patient.patientCode || '').trim())
-    setDraftName(readDisplayNameFromPatient(patient))
-    setDraftDob(patient.dob ? isoDateFromApi(patient.dob) : '')
-    setDraftPhone(String(patient.phone || '').trim())
+    setDraftName(readDisplayNameFromPatient(patient) || patient.fullName || '')
+    const rawDob = patient.dob || patient.dateOfBirth
+    setDraftDob(rawDob ? (typeof rawDob === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDob) ? rawDob : isoDateFromApi(rawDob)) : '')
+    setDraftPhone(String(patient.phone || patient.phoneNumber || '').trim())
     setDraftGender(mapGenderToDraft(patient.gender))
     setDraftAddress(String(patient.address || '').trim())
+    setDraftNationalId(String(patient.nationalId || '').trim())
     setLookupErr('')
-    setSaveMsg('Đã chọn bệnh nhân từ danh sách.')
+    setBookingMode('new')
+    setSelectedHistoryId('')
     setLastSaved(null)
   }
 
@@ -887,22 +947,151 @@ export default function RegistrationHome() {
     setStartTime('')
     setFreeSlots([])
     setSlotsErr('')
+    setBookingMode('new')
+    setSelectedHistoryId('')
 
-    if (createNew) {
-      setDraftPatientId('')
-      setDraftPatientCode('')
-      setDraftName('')
-      setDraftDob('')
-      setDraftPhone('')
-      setDraftGender('')
-      setDraftAddress('')
+    setDraftPatientId('')
+    setDraftPatientCode('')
+    setDraftName('')
+    setDraftDob('')
+    setDraftPhone('')
+    setDraftGender('')
+    setDraftAddress('')
+    setDraftNationalId('')
+    setLookupKeyword('')
+    setLookupSuccessMsg('')
+    setLookupErr('')
+
+    setSpecialtyId('')
+  }
+
+  function handleClearPatientData() {
+    setDraftPatientId('')
+    setDraftPatientCode('')
+    setDraftName('')
+    setDraftDob('')
+    setDraftPhone('')
+    setDraftGender('')
+    setDraftAddress('')
+    setDraftNationalId('')
+    setLookupKeyword('')
+    setSearchResults([])
+    setSearchOpen(false)
+    setLookupSuccessMsg('')
+  }
+
+  // Tự động tìm kiếm gợi ý hồ sơ bệnh nhân khi người dùng gõ
+  useEffect(() => {
+    const q = lookupKeyword.trim()
+    if (!q || q.length < 2) {
+      setSearchResults([])
+      setSearchLoading(false)
+      setSearchOpen(false)
+      return
     }
 
-    setSymptom('')
-    setRegNote('')
-    setSpecialtyId('')
-    setPriority(false)
+    let active = true
+    setSearchLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await listPatientsReception({ q, pageSize: 6 })
+        if (!active) return
+        const patients = res?.patients || res?.rows || []
+        setSearchResults(patients)
+        setSearchOpen(true)
+      } catch {
+        if (!active) return
+        setSearchResults([])
+      } finally {
+        if (active) setSearchLoading(false)
+      }
+    }, 280)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [lookupKeyword])
+
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setSearchOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  function handleSelectPatient(pat: any) {
+    applySelectedPatient(pat)
+    setLookupKeyword('')
+    setSearchOpen(false)
+    setSearchResults([])
+    const name = readDisplayNameFromPatient(pat) || pat.fullName || ''
+    const code = pat.patientCode || ''
+    setLookupSuccessMsg(`Đã chọn bệnh nhân: ${name}${code ? ` (${code})` : ''}`)
   }
+
+  const handleQrDecoded = useCallback(async (decodedText: string) => {
+    setQrScanOpen(false)
+    const clean = String(decodedText || '').trim()
+    if (!clean) return
+
+    // 1. Nhận diện QR thẻ Căn cước công dân gắn chip (chứa dấu |)
+    const cccd = parseCccdQr(clean)
+    if (cccd) {
+      if (cccd.fullName) setDraftName(cccd.fullName)
+      if (cccd.dob) setDraftDob(clampIsoDateMaxToday(cccd.dob))
+      if (cccd.gender) setDraftGender(cccd.gender)
+      if (cccd.address) setDraftAddress(cccd.address)
+      if (cccd.nationalId) setDraftNationalId(cccd.nationalId)
+
+      // Kiểm tra xem CCCD này đã có hồ sơ trong DB chưa
+      try {
+        const res = await lookupPatientByCode({ code: cccd.nationalId })
+        if (res?.patient) {
+          applySelectedPatient(res.patient)
+          setLookupSuccessMsg(`Đã quét CCCD và nạp hồ sơ: ${readDisplayNameFromPatient(res.patient)} (CCCD: ${cccd.nationalId})`)
+          return
+        }
+      } catch {
+        // Chưa có hồ sơ => Bệnh nhân mới với thông tin CCCD đã điền
+        setLookupSuccessMsg(`Đã nhận diện thẻ CCCD: ${cccd.fullName}. Vui lòng nhập thêm Số điện thoại.`)
+      }
+      return
+    }
+
+    // 2. Nhận diện QR mã bệnh nhân hoặc URL
+    const pCode = patientFromQrPayload(clean) || clean
+    try {
+      const res = await lookupPatientByCode({ code: pCode })
+      if (res?.patient) {
+        handleSelectPatient(res.patient)
+        return
+      }
+    } catch {
+      setLookupSuccessMsg(`Đã quét mã: "${pCode}". Vui lòng kiểm tra thông tin.`)
+    }
+  }, [])
+
+  const handleQrFileInput = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setQrImageLoading(true)
+    setQrScanErr('')
+    try {
+      const html5QrCode = new Html5Qrcode('reg-qr-hidden-reader')
+      const decodedText = await html5QrCode.scanFile(file, true)
+      await handleQrDecoded(decodedText)
+    } catch {
+      setQrScanErr('Không thể đọc mã QR từ ảnh này. Vui lòng thử ảnh rõ nét hơn.')
+    } finally {
+      setQrImageLoading(false)
+      e.target.value = ''
+    }
+  }, [handleQrDecoded])
 
   function startReExam(row: any) {
     if (fromAppointment) {
@@ -910,66 +1099,46 @@ export default function RegistrationHome() {
       setLookupErr('Không thể tái khám khi đang xác nhận lịch hẹn có sẵn.')
       return
     }
+
+    // 1. Luôn cập nhật trạng thái chọn dòng TRƯỚC TIÊN để UI radio check và highlight tức thì
+    setSelectedHistoryId(String(row.id))
+    setBookingMode('re_exam')
+    setLookupErr('')
+
     const did = String(row?.doctorId || row?.doctor?.id || '').trim()
-    if (!did) {
-      setSaveMsg('')
-      setLookupErr('Lịch này chưa gắn bác sĩ, không tái khám được.')
-      return
+    const dName = historyDoctorLabel(row)
+    const sid = String(row?.specialtyId || row?.doctor?.specialtyId || row?.specialty?.id || '').trim()
+    const sName = historySpecialtyLabel(row)
+    const pkgId = String(row?.servicePackage?.id || row?.servicePackageId || '').trim()
+
+    // 2. Kế thừa Chuyên khoa
+    if (sid) {
+      setSpecialtyId(sid)
     }
-    const hit = doctors.find((d) => String(d?.id) === did)
-    if (!hit) {
-      setSaveMsg('')
-      setLookupErr('Không tìm thấy bác sĩ trong danh sách hiện tại.')
-      return
+
+    // 3. Kế thừa Gói khám nếu có
+    if (pkgId) {
+      setServicePackageId(pkgId)
     }
-    const sid = String(row?.specialtyId || row?.doctor?.specialtyId || hit?.specialtyID || '').trim()
-    if (sid) setSpecialtyId(sid)
-    setDoctorId(did)
+
+    // 4. Kế thừa Bác sĩ (tự động bổ sung vào mảng doctors nếu danh sách chưa tải xong)
+    if (did) {
+      setDoctors((prev) => {
+        if (prev.some((d) => String(d.id) === did)) return prev
+        return [{ id: did, fullName: dName, specialtyId: sid }, ...prev]
+      })
+      setDoctorId(did)
+    }
+
+    // 5. Khởi tạo ngày khám hôm nay và sẵn sàng chọn khung giờ
     setAppointmentDate(todayIsoDate())
     setStartTime('')
     setFreeSlots([])
     setSlotsErr('')
-    setLookupErr('')
-    setSaveMsg('Đã chọn bác sĩ từ lịch cũ. Vui lòng kiểm tra khung giờ khám hôm nay.')
+    setSaveMsg(`Đã chọn tái khám cùng ${dName} (${sName}). Vui lòng chọn khung giờ khám hôm nay.`)
     setLastSaved(null)
   }
 
-  // Camera QR Code Picker
-  useEffect(() => {
-    if (!qrOpen) return
-    qrScanDoneRef.current = false
-    const html5 = new Html5Qrcode(QR_READER_ELEMENT_ID)
-
-    html5
-      .start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          if (qrScanDoneRef.current) return
-          qrScanDoneRef.current = true
-          const pCode = patientFromQrPayload(decodedText)
-          if (pCode) {
-            setPickerFilters((s) => ({ ...s, patientCode: pCode }))
-            setPickerPage(1)
-            setQrOpen(false)
-            loadPicker({ page: 1, pageSize: pickerPageSize, filters: { ...pickerFilters, patientCode: pCode } })
-          }
-        },
-        () => { },
-      )
-      .catch((err) => {
-        setQrErr('Không mở được camera: ' + (err?.message || err))
-      })
-
-    return () => {
-      html5
-        .stop()
-        .catch(() => { })
-        .finally(() => {
-          html5.clear()
-        })
-    }
-  }, [qrOpen])
 
   if (!token || !user) return null
 
@@ -995,6 +1164,23 @@ export default function RegistrationHome() {
               {fromAppointment ? 'Cập nhật đăng ký khám bệnh' : 'Đăng ký khám bệnh trực tiếp tại quầy'}
             </h1>
           </div>
+
+          {fromAppointment && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsFreshNew(true)
+                  resetDraftForNew()
+                  setSaveMsg('Đã chuyển sang chế độ tạo đăng ký mới.')
+                }}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded border border-emerald-600 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <PlusIcon className="w-3.5 h-3.5" />
+                <span>Tạo đăng ký mới</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Thông báo */}
@@ -1011,7 +1197,7 @@ export default function RegistrationHome() {
 
         {/* Khối 1: Thông tin người đăng ký / Bệnh nhân */}
         <section className="bg-white border border-slate-300/80 rounded-2xl shadow-sm p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center">
                 1
@@ -1020,17 +1206,154 @@ export default function RegistrationHome() {
                 Thông tin người đăng ký / Bệnh nhân
               </h2>
             </div>
-            {createNew && (
-              <button
-                type="button"
-                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold rounded transition-all cursor-pointer flex items-center gap-1.5"
-                onClick={openPicker}
-              >
-                <SearchIcon className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Tìm bệnh nhân có sẵn</span>
-              </button>
-            )}
           </div>
+
+          {/* Thanh công cụ Tra cứu gợi ý nhanh & Quét QR / CCCD */}
+          {createNew && (
+            <div className="bg-slate-50/80 p-3.5 rounded border border-slate-200/80 space-y-2.5">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                {/* Input tìm kiếm bệnh nhân có live autocomplete dropdown */}
+                <div ref={searchContainerRef} className="relative flex-1">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded text-xs font-medium placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-xs"
+                      placeholder="Gõ Tên, Mã BN (VD: BN...), CCCD (12 số) hoặc SĐT để chọn hồ sơ tự động điền..."
+                      value={lookupKeyword}
+                      onChange={(e) => {
+                        setLookupKeyword(e.target.value)
+                        setSearchOpen(true)
+                      }}
+                      onFocus={() => {
+                        if (searchResults.length > 0 || lookupKeyword.trim().length >= 2) {
+                          setSearchOpen(true)
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (searchResults.length > 0) {
+                            handleSelectPatient(searchResults[0])
+                          }
+                        }
+                      }}
+                    />
+                    <SearchIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    {searchLoading && (
+                      <span className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
+                    )}
+                  </div>
+
+                  {/* Dropdown kết quả tìm kiếm dạng bảng chuyên nghiệp */}
+                  {searchOpen && lookupKeyword.trim().length >= 2 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-300 rounded shadow-lg max-h-72 overflow-y-auto overflow-x-auto">
+                      {searchLoading ? (
+                        <div className="p-3.5 text-center text-xs text-slate-500 font-medium">
+                          Đang tra cứu dữ liệu bệnh nhân...
+                        </div>
+                      ) : searchResults.length > 0 ? (
+                        <table className="w-full text-left border-collapse text-xs min-w-[680px]">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-600">
+                              <th className="py-2 px-3">Mã BN</th>
+                              <th className="py-2 px-3">Họ và tên</th>
+                              <th className="py-2 px-3">Giới tính</th>
+                              <th className="py-2 px-3">Ngày sinh</th>
+                              <th className="py-2 px-3">Số điện thoại</th>
+                              <th className="py-2 px-3">Số CCCD</th>
+                              <th className="py-2 px-3">Địa chỉ</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {searchResults.map((pat) => {
+                              const name = readDisplayNameFromPatient(pat) || pat.fullName || pat.name || '—'
+                              const code = pat.patientCode || pat.code || '—'
+                              const phone = pat.phone || pat.phoneNumber || pat.account?.phoneNumber || '—'
+                              const cccd = pat.nationalId || pat.citizenId || '—'
+                              const dob = pat.dob || pat.dateOfBirth
+                              const dobText = dob ? formatDateVi(dob) : '—'
+                              const rawGender = String(pat.gender || '').toLowerCase()
+                              const genderText = rawGender === 'male' ? 'Nam' : rawGender === 'female' ? 'Nữ' : pat.gender || '—'
+                              const address = pat.address || '—'
+
+                              return (
+                                <tr
+                                  key={pat.id}
+                                  onClick={() => handleSelectPatient(pat)}
+                                  className="hover:bg-emerald-50 cursor-pointer transition-colors"
+                                  title="Nhấp để điền thông tin bệnh nhân"
+                                >
+                                  <td className="py-2.5 px-3 font-mono font-bold text-emerald-700 whitespace-nowrap">{code}</td>
+                                  <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{name}</td>
+                                  <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{genderText}</td>
+                                  <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{dobText}</td>
+                                  <td className="py-2.5 px-3 font-medium text-slate-800 whitespace-nowrap">{phone}</td>
+                                  <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{cccd}</td>
+                                  <td className="py-2.5 px-3 text-slate-500 max-w-[240px] truncate" title={address}>{address}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="p-3 text-center text-xs text-slate-500 font-medium">
+                          Không tìm thấy bệnh nhân khớp với từ khóa "{lookupKeyword}"
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQrScanErr('')
+                      setQrScanOpen(true)
+                    }}
+                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded border border-indigo-600 shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]"
+                    title="Quét mã QR thẻ CCCD hoặc mã bệnh nhân"
+                  >
+                    <QrCodeIcon className="w-4 h-4" />
+                    <span>Quét QR / CCCD</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={resetDraftForNew}
+                    className="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold rounded shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                    title="Xóa trắng toàn bộ thông tin để làm mới form"
+                  >
+                    <span>Làm mới form</span>
+                  </button>
+
+                  {(draftPatientId || draftName || draftPhone || draftDob || draftNationalId) && (
+                    <button
+                      type="button"
+                      onClick={handleClearPatientData}
+                      className="px-3 py-2 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-300 hover:border-rose-200 text-xs font-semibold rounded shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                      title="Chỉ xóa trắng thông tin bệnh nhân"
+                    >
+                      <span>✕ Xóa thông tin BN</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {lookupSuccessMsg && (
+                <div className="text-xs text-emerald-800 bg-emerald-100/70 border border-emerald-200 px-3.5 py-2 rounded flex items-center justify-between font-medium">
+                  <span>{lookupSuccessMsg}</span>
+                  <button type="button" onClick={() => setLookupSuccessMsg('')} className="text-slate-400 hover:text-slate-700 text-xs font-bold border border-transparent rounded">✕</button>
+                </div>
+              )}
+              {lookupErr && (
+                <div className="text-xs text-rose-800 bg-rose-100/70 border border-rose-200 px-3.5 py-2 rounded flex items-center justify-between font-medium">
+                  <span>{lookupErr}</span>
+                  <button type="button" onClick={() => setLookupErr('')} className="text-slate-400 hover:text-slate-700 text-xs font-bold border border-transparent rounded">✕</button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div>
@@ -1043,7 +1366,21 @@ export default function RegistrationHome() {
               />
             </div>
 
-            <div className="md:col-span-2">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">Số CCCD / Định danh</label>
+              <input
+                readOnly={Boolean(p)}
+                className={`w-full px-3.5 py-2 rounded text-xs font-mono font-medium focus:outline-none focus:border-emerald-600 ${p
+                    ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
+                    : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
+                  }`}
+                value={p ? (patientDisplay?.nationalId || '') : draftNationalId}
+                onChange={(e) => setDraftNationalId(e.target.value)}
+                placeholder="12 chữ số CCCD (nếu có)"
+              />
+            </div>
+
+            <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
                 Họ và tên <span className="text-rose-600">*</span>
               </label>
@@ -1142,117 +1479,299 @@ export default function RegistrationHome() {
 
         {/* Khối 2: Thông tin đăng ký khám trực tiếp */}
         <section className="bg-white border border-slate-300/80 rounded-2xl shadow-sm p-5 space-y-4" id="reg-section-appointment">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center">
                 2
               </span>
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                Lựa chọn Chuyên khoa & Khung giờ khám còn trống
+                {bookingMode === 're_exam' ? 'Đăng ký Tái khám theo đợt khám cũ' : 'Lựa chọn Chuyên khoa & Bác sĩ khám'}
               </h2>
             </div>
+
+            {/* TAB CHUYỂN ĐỔI CHẾ ĐỘ: KHÁM MỚI / TÁI KHÁM */}
+            {!fromAppointment && (
+              <div className="flex items-center p-0.5 bg-slate-100 border border-slate-200 rounded text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBookingMode('new')
+                  }}
+                  className={`px-3 py-1 font-bold rounded transition-all cursor-pointer ${
+                    bookingMode === 'new'
+                      ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                      : 'text-slate-500 hover:text-slate-800 border border-transparent'
+                  }`}
+                >
+                  Khám mới
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (examinedHistoryRows.length > 0) {
+                      setBookingMode('re_exam')
+                      if (!selectedHistoryId && examinedHistoryRows[0]) {
+                        startReExam(examinedHistoryRows[0])
+                      }
+                    }
+                  }}
+                  disabled={examinedHistoryRows.length === 0}
+                  className={`px-3 py-1 font-bold rounded transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                    bookingMode === 're_exam'
+                      ? 'bg-emerald-600 text-white shadow-xs border border-emerald-600'
+                      : 'text-slate-500 hover:text-slate-800 border border-transparent'
+                  }`}
+                  title={
+                    examinedHistoryRows.length === 0
+                      ? 'Bệnh nhân chưa có lịch sử khám trước để tái khám'
+                      : `Bệnh nhân có ${examinedHistoryRows.length} đợt khám trước`
+                  }
+                >
+                  <span>Tái khám</span>
+                  {examinedHistoryRows.length > 0 && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                        bookingMode === 're_exam'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {examinedHistoryRows.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                1. Chuyên khoa khám <span className="text-rose-600">*</span>
-              </label>
-              {fromAppointment ? (
-                <input
-                  readOnly
-                  className="w-full px-3.5 py-2 bg-slate-100 border border-slate-300 rounded font-medium text-slate-800 cursor-not-allowed"
-                  value={appointmentSpecialtyDisplay || '—'}
-                />
-              ) : (
-                <select
-                  className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
-                  value={specialtyId}
-                  onChange={(e) => handleSpecialtyChange(e.target.value)}
-                  disabled={specialtiesLoading && specialtyOptions.length === 0}
-                >
-                  <option value="">
-                    {specialtiesLoading ? 'Đang tải chuyên khoa…' : '-- Chọn chuyên khoa khám --'}
-                  </option>
-                  {specialtyOptions.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+          {/* CHẾ ĐỘ TÁI KHÁM */}
+          {bookingMode === 're_exam' && !fromAppointment ? (
+            <div className="space-y-3">
+              <div className="bg-slate-50 border border-slate-200 rounded p-3 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <span className="text-xs font-bold text-slate-800">
+                    Chọn đợt khám trước cần tái khám:
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    Nhấp vào dòng để kế thừa Bác sĩ và Chuyên khoa
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs bg-white rounded border border-slate-200 min-w-[700px]">
+                    <thead>
+                      <tr className="bg-slate-100 border-b border-slate-200 text-[11px] font-semibold text-slate-600">
+                        <th className="py-2 px-3 w-10 text-center">Chọn</th>
+                        <th className="py-2 px-3">Ngày khám trước</th>
+                        <th className="py-2 px-3">Mã phiếu</th>
+                        <th className="py-2 px-3">Gói khám / Dịch vụ</th>
+                        <th className="py-2 px-3">Bác sĩ phụ trách</th>
+                        <th className="py-2 px-3">Chuyên khoa</th>
+                        <th className="py-2 px-3">Trạng thái</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {examinedHistoryRows.map((r) => {
+                        const isSelected = String(selectedHistoryId) === String(r.id)
+                        return (
+                          <tr
+                            key={r.id}
+                            onClick={() => startReExam(r)}
+                            className={`cursor-pointer transition-colors ${
+                              isSelected
+                                ? 'bg-emerald-50/80 font-semibold text-slate-900'
+                                : 'hover:bg-slate-50 text-slate-700'
+                            }`}
+                          >
+                            <td className="py-2 px-3 text-center">
+                              <input
+                                type="radio"
+                                name="reExamPick"
+                                checked={isSelected}
+                                onChange={() => startReExam(r)}
+                                className="w-3.5 h-3.5 text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-2 px-3 whitespace-nowrap">
+                              {r.createdAt ? formatDateTimeVi(r.createdAt) : '—'}
+                            </td>
+                            <td className="py-2 px-3 font-mono font-bold text-emerald-700 whitespace-nowrap">
+                              {r.ticket || '—'}
+                            </td>
+                            <td className="py-2 px-3 font-medium text-slate-900 whitespace-nowrap">
+                              {historyServicePackageLabel(r)}
+                            </td>
+                            <td className="py-2 px-3 font-semibold text-slate-900 whitespace-nowrap">
+                              {historyDoctorLabel(r)}
+                            </td>
+                            <td className="py-2 px-3 whitespace-nowrap">
+                              {historySpecialtyLabel(r)}
+                            </td>
+                            <td className="py-2 px-3 whitespace-nowrap">
+                              {statusLabelVi(r.status)}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Tóm tắt thông tin đợt tái khám & ô ngày khám */}
+              {doctorId && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs pt-1">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">1. Chuyên khoa tái khám</label>
+                    <input
+                      readOnly
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded font-semibold text-slate-800 cursor-not-allowed"
+                      value={specialties.find((s) => String(s.id) === String(specialtyId))?.name || '—'}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">2. Gói khám / Dịch vụ</label>
+                    <select
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs disabled:bg-slate-50"
+                      value={servicePackageId}
+                      onChange={(e) => setServicePackageId(e.target.value)}
+                      disabled={servicesLoading || !specialtyId}
+                    >
+                      <option value="">Khám chuyên khoa tiêu chuẩn</option>
+                      {servicePackages.map((pkg) => (
+                        <option key={pkg.id} value={pkg.id}>
+                          {pkg.name} — {Number(pkg.price || 0).toLocaleString('vi-VN')} đ
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">3. Bác sĩ phụ trách</label>
+                    <input
+                      readOnly
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded font-bold text-slate-900 cursor-not-allowed"
+                      value={doctors.find((d) => String(d.id) === String(doctorId))?.fullName || '—'}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      4. Ngày tái khám <span className="text-rose-600">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      min={todayIso}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600 shadow-xs cursor-pointer"
+                      value={appointmentDate}
+                      onChange={(e) => handleAppointmentDateChange(e.target.value)}
+                    />
+                  </div>
+                </div>
               )}
             </div>
+          ) : (
+            /* CHẾ ĐỘ KHÁM MỚI */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  1. Chuyên khoa khám <span className="text-rose-600">*</span>
+                </label>
+                {fromAppointment ? (
+                  <input
+                    readOnly
+                    className="w-full px-3.5 py-2 bg-slate-100 border border-slate-300 rounded font-medium text-slate-800 cursor-not-allowed"
+                    value={appointmentSpecialtyDisplay || '—'}
+                  />
+                ) : (
+                  <select
+                    className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
+                    value={specialtyId}
+                    onChange={(e) => handleSpecialtyChange(e.target.value)}
+                    disabled={specialtiesLoading && specialtyOptions.length === 0}
+                  >
+                    <option value="">
+                      {specialtiesLoading ? 'Đang tải chuyên khoa…' : '-- Chọn chuyên khoa khám --'}
+                    </option>
+                    {specialtyOptions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                2. Dịch vụ / Gói khám
-              </label>
-              <select
-                className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs disabled:bg-slate-50 disabled:cursor-not-allowed"
-                value={servicePackageId}
-                onChange={(e) => setServicePackageId(e.target.value)}
-                disabled={servicesLoading || !specialtyId}
-              >
-                <option value="">
-                  {servicesLoading
-                    ? 'Đang tải dịch vụ…'
-                    : !specialtyId
-                      ? '← Chọn chuyên khoa trước'
-                      : 'Khám chuyên khoa tiêu chuẩn'}
-                </option>
-                {servicePackages.map((pkg) => (
-                  <option key={pkg.id} value={pkg.id}>
-                    {pkg.name} — {Number(pkg.price || 0).toLocaleString('vi-VN')} đ
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                3. Bác sĩ phụ trách <span className="text-rose-600">*</span>
-              </label>
-              {fromAppointment ? (
-                <input
-                  readOnly
-                  className="w-full px-3.5 py-2 bg-slate-100 border border-slate-300 rounded font-medium text-slate-800 cursor-not-allowed"
-                  value={appointmentDoctorDisplay || '—'}
-                />
-              ) : (
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  2. Dịch vụ / Gói khám
+                </label>
                 <select
                   className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs disabled:bg-slate-50 disabled:cursor-not-allowed"
-                  value={doctorId}
-                  onChange={(e) => handleDoctorChange(e.target.value)}
-                  disabled={doctorsLoading || !specialtyId}
+                  value={servicePackageId}
+                  onChange={(e) => setServicePackageId(e.target.value)}
+                  disabled={servicesLoading || !specialtyId}
                 >
                   <option value="">
-                    {doctorsLoading
-                      ? 'Đang tải bác sĩ…'
+                    {servicesLoading
+                      ? 'Đang tải dịch vụ…'
                       : !specialtyId
                         ? '← Chọn chuyên khoa trước'
-                        : '-- Chọn bác sĩ --'}
+                        : 'Khám chuyên khoa tiêu chuẩn'}
                   </option>
-                  {doctorOptions.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.label}
+                  {servicePackages.map((pkg) => (
+                    <option key={pkg.id} value={pkg.id}>
+                      {pkg.name} — {Number(pkg.price || 0).toLocaleString('vi-VN')} đ
                     </option>
                   ))}
                 </select>
-              )}
-            </div>
+              </div>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                4. Ngày khám (Chọn ngày) <span className="text-rose-600">*</span>
-              </label>
-              <input
-                type="date"
-                min={todayIso}
-                className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600 shadow-xs cursor-pointer"
-                value={appointmentDate}
-                onChange={(e) => handleAppointmentDateChange(e.target.value)}
-              />
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  3. Bác sĩ phụ trách <span className="text-rose-600">*</span>
+                </label>
+                {fromAppointment ? (
+                  <input
+                    readOnly
+                    className="w-full px-3.5 py-2 bg-slate-100 border border-slate-300 rounded font-medium text-slate-800 cursor-not-allowed"
+                    value={appointmentDoctorDisplay || '—'}
+                  />
+                ) : (
+                  <select
+                    className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs disabled:bg-slate-50 disabled:cursor-not-allowed"
+                    value={doctorId}
+                    onChange={(e) => handleDoctorChange(e.target.value)}
+                    disabled={doctorsLoading || !specialtyId}
+                  >
+                    <option value="">
+                      {doctorsLoading
+                        ? 'Đang tải bác sĩ…'
+                        : !specialtyId
+                          ? '← Chọn chuyên khoa trước'
+                          : '-- Chọn bác sĩ --'}
+                    </option>
+                    {doctorOptions.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  4. Ngày khám (Chọn ngày) <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="date"
+                  min={todayIso}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600 shadow-xs cursor-pointer"
+                  value={appointmentDate}
+                  onChange={(e) => handleAppointmentDateChange(e.target.value)}
+                />
+              </div>
             </div>
+          )}
 
             {/* Ngày bác sĩ có lịch trực khả dụng */}
             {doctorId && !fromAppointment && availableWorkDates.length > 0 && (
@@ -1377,42 +1896,6 @@ export default function RegistrationHome() {
                 </div>
               )}
             </div>
-
-            <div className="md:col-span-2 lg:col-span-4">
-              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">Triệu chứng ban đầu</label>
-              <textarea
-                rows={2}
-                className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs text-slate-900 focus:outline-none focus:border-emerald-600 shadow-xs font-medium"
-                value={symptom}
-                onChange={(e) => setSymptom(e.target.value)}
-                placeholder="Mô tả triệu chứng bệnh nhân khai báo (VD: Sốt cao, đau bụng âm ỉ, ho nhiều...)"
-              />
-            </div>
-
-            <div className="md:col-span-2 lg:col-span-4">
-              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">Ghi chú tiếp nhận</label>
-              <textarea
-                rows={2}
-                className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs text-slate-900 focus:outline-none focus:border-emerald-600 shadow-xs font-medium"
-                value={regNote}
-                onChange={(e) => setRegNote(e.target.value)}
-                placeholder="Ghi chú thêm cho bác sĩ hoặc điều phối phòng"
-              />
-            </div>
-
-            <div className="md:col-span-2 lg:col-span-4 flex items-center gap-2 pt-1">
-              <input
-                id="reg-priority-check"
-                type="checkbox"
-                checked={priority}
-                onChange={(e) => setPriority(e.target.checked)}
-                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
-              />
-              <label htmlFor="reg-priority-check" className="text-xs font-bold text-slate-800 cursor-pointer">
-                Đăng ký khám Ưu tiên (Người già, trẻ sơ sinh, cấp cứu nhẹ)
-              </label>
-            </div>
-          </div>
         </section>
 
         {/* Khối 3: Thông tin lịch sử khám */}
@@ -1432,6 +1915,7 @@ export default function RegistrationHome() {
                 <tr className="bg-slate-100/80 border-b border-slate-300 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                   <th className="py-2.5 px-3.5">Trạng thái</th>
                   <th className="py-2.5 px-3.5">Mã lịch hẹn</th>
+                  <th className="py-2.5 px-3.5">Gói khám / Dịch vụ</th>
                   <th className="py-2.5 px-3.5">Ngày đăng ký</th>
                   <th className="py-2.5 px-3.5">Bác sĩ phụ trách</th>
                   <th className="py-2.5 px-3.5">Chuyên khoa</th>
@@ -1449,6 +1933,7 @@ export default function RegistrationHome() {
                     <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                       <td className="py-2.5 px-3.5 font-semibold text-slate-800">{statusLabelVi(r.status)}</td>
                       <td className="py-2.5 px-3.5 font-mono font-bold text-emerald-700">{r.ticket || '—'}</td>
+                      <td className="py-2.5 px-3.5 font-medium text-slate-900">{historyServicePackageLabel(r)}</td>
                       <td className="py-2.5 px-3.5 text-slate-600">{r.createdAt ? formatDateTimeVi(r.createdAt) : '—'}</td>
                       <td className="py-2.5 px-3.5 font-semibold text-slate-800">{historyDoctorLabel(r)}</td>
                       <td className="py-2.5 px-3.5 text-slate-600">{historySpecialtyLabel(r)}</td>
@@ -1472,7 +1957,7 @@ export default function RegistrationHome() {
 
                 {!examinedHistoryRows.length && !historyLoading ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-400 text-xs font-medium">
+                    <td colSpan={7} className="py-8 text-center text-slate-400 text-xs font-medium">
                       {selectedPatientId ? 'Bệnh nhân chưa có lịch sử khám trước đây.' : 'Chọn bệnh nhân có sẵn để xem lịch sử khám.'}
                     </td>
                   </tr>
@@ -1686,55 +2171,21 @@ export default function RegistrationHome() {
         </div>
       )}
 
-      {/* Modal Quét QR */}
-      {qrOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setQrOpen(false)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h2 className="text-base font-bold text-slate-900">Quét mã QR bệnh nhân</h2>
-              <button
-                type="button"
-                className="w-8 h-8 rounded flex items-center justify-center text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer"
-                onClick={() => setQrOpen(false)}
-              >
-                <CloseIcon className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Hidden element for reading QR from image file */}
+      <div id="reg-qr-hidden-reader" className="hidden" />
 
-            <p className="text-xs text-slate-500">
-              Đưa mã QR trên thẻ khám bệnh / CCCD của bệnh nhân vào khung hình bên dưới.
-            </p>
-
-            <div className="w-full bg-slate-900 rounded overflow-hidden min-h-[260px] flex items-center justify-center">
-              <div id={QR_READER_ELEMENT_ID} className="w-full" />
-            </div>
-
-            {qrErr ? (
-              <div className="p-3 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded font-medium">
-                {qrErr}
-              </div>
-            ) : null}
-
-            <div className="flex justify-end pt-2">
-              <button
-                type="button"
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded text-xs transition-all cursor-pointer"
-                onClick={() => setQrOpen(false)}
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal Quét QR / CCCD trực tiếp trên màn hình đăng ký */}
+      <ReceptionQrScannerModal
+        qrOpen={qrScanOpen}
+        setQrOpen={setQrScanOpen}
+        qrErr={qrScanErr}
+        setQrErr={setQrScanErr}
+        qrImageLoading={qrImageLoading}
+        handleQrFileInput={handleQrFileInput}
+        onScan={handleQrDecoded}
+        title="Quét mã QR thẻ CCCD / Bệnh nhân"
+        description="Đưa mã QR trên thẻ CCCD gắn chip của bệnh nhân hoặc mã QR trên điện thoại vào khung camera, hoặc tải ảnh lên để tự động điền nhanh thông tin."
+      />
     </div>
   )
 }

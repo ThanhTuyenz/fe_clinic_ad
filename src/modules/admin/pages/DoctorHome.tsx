@@ -693,9 +693,7 @@ export default function DoctorHome() {
     }, [loadAppointments]),
   })
 
-  // Sau F5, React state bị mất nhưng ca khám vẫn là IN_EXAMINATION trong DB.
-  // Tự mở lại ca đang khám của bác sĩ; nếu id đã chọn không còn trong dữ liệu thì
-  // cũng khôi phục sang ca đang khám thay vì để màn hình trống.
+  // After F5, React state is lost. Restore by finding the currently active (CHECKED_IN) appointment.
   useEffect(() => {
     if (!items.length) return
     const selectedStillExists = selectedApptId && items.some((item) => String(item?.id || item?._id) === String(selectedApptId))
@@ -704,7 +702,7 @@ export default function DoctorHome() {
       skipNextActiveVisitRestoreRef.current = false
       return
     }
-    const activeVisit = items.find((item) => String(item?.workflowStatus || '').toUpperCase() === 'IN_EXAMINATION')
+    const activeVisit = items.find((item) => String(item?.workflowStatus || '').toUpperCase() === 'CHECKED_IN')
     if (activeVisit) setSelectedApptId(String(activeVisit.id || activeVisit._id || ''))
   }, [items, selectedApptId])
 
@@ -724,7 +722,7 @@ export default function DoctorHome() {
       const paid = isAppointmentPaymentPaid(a)
       if (st === 'cancelled' || st === 'pending') return false
       if (st === 'confirmed' && !paid) return false
-      if (workflow && !['CHECKED_IN', 'IN_EXAMINATION', 'COMPLETED'].includes(workflow)) return false
+      if (workflow && !['CHECKED_IN', 'COMPLETED'].includes(workflow)) return false
       if (!(st === 'confirmed' || isAppointmentExamined(st))) return false
       return true
     })
@@ -759,7 +757,7 @@ export default function DoctorHome() {
   }, [filteredQueue])
 
   const inExaminationQueue = useMemo(() => filteredQueue.filter((appointment) =>
-    String(appointment?.workflowStatus || '').toUpperCase() === 'IN_EXAMINATION'
+    String(appointment?.workflowStatus || '').toUpperCase() === 'CHECKED_IN'
   ), [filteredQueue])
 
   async function startMedicalVisit(appointment) {
@@ -770,7 +768,7 @@ export default function DoctorHome() {
     try {
       const result = await updateAppointmentStatus({ token, appointmentId: id, status: 'in_examination' })
       const updated = result?.appointment
-      setItems((rows) => rows.map((row) => String(row?.id || row?._id) === id ? { ...row, ...(updated || {}), status: 'confirmed', workflowStatus: 'IN_EXAMINATION' } : row))
+      setItems((rows) => rows.map((row) => String(row?.id || row?._id) === id ? { ...row, ...(updated || {}), status: 'confirmed', workflowStatus: 'CHECKED_IN' } : row))
       setSelectedApptId(id)
       flashOk(`Đã bắt đầu khám cho ${patientLabel(appointment)}.`)
       return true
@@ -791,7 +789,7 @@ export default function DoctorHome() {
     if (workflow === 'CHECKED_IN') {
       const started = await startMedicalVisit(selectedAppt)
       if (!started) return
-    } else if (workflow !== 'IN_EXAMINATION') {
+    } else if (workflow !== 'CHECKED_IN') {
       flashErr(doctorExamLockMessage(selectedAppt))
       return
     }

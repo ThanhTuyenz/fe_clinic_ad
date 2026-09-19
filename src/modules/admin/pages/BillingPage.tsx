@@ -126,12 +126,12 @@ export default function BillingPage() {
     const invStatus = (item.invoice?.status || '').toUpperCase()
     const payStatus = (item.payment?.status || '').toLowerCase()
     const wfStatus = (item.workflowStatus || '').toUpperCase()
-    return invStatus === 'PAID' || payStatus === 'paid' || ['COMPLETED', 'CHECKED_IN', 'IN_EXAMINATION'].includes(wfStatus)
+    return invStatus === 'PAID' || payStatus === 'paid' || ['COMPLETED', 'CHECKED_IN', 'CONFIRMED'].includes(wfStatus)
   }
 
   const isInvoicePending = (item: AppointmentRow) => {
     const wfStatus = (item.workflowStatus || '').toUpperCase()
-    return !isInvoicePaid(item) && (wfStatus === 'PENDING_PAYMENT' || item.payment?.status === 'unpaid')
+    return !isInvoicePaid(item) && (wfStatus === 'HOLD' || item.payment?.status === 'unpaid')
   }
 
   const isInvoiceCancelled = (item: AppointmentRow) => {

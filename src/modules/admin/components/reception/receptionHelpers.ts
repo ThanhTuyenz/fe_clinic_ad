@@ -250,13 +250,12 @@ export function statusLabelVi(st: string): string {
 
 export function receptionStatusMeta(row: any): { label: string; tone: string } {
   const workflow = String(row?.workflowStatus || '').toUpperCase()
-  if (workflow === 'PENDING_PAYMENT') return { label: 'Chờ thanh toán', tone: 'pending' }
-  if (workflow === 'BOOKED') return { label: 'Chờ check-in', tone: 'booked' }
+  if (workflow === 'HOLD') return { label: 'Chờ thanh toán', tone: 'pending' }
+  if (workflow === 'CONFIRMED') return { label: 'Chờ check-in', tone: 'booked' }
   if (workflow === 'CHECKED_IN') return { label: 'Đã check-in', tone: 'checked-in' }
-  if (workflow === 'IN_EXAMINATION') return { label: 'Đang khám', tone: 'examining' }
   if (workflow === 'COMPLETED') return { label: 'Đã khám', tone: 'completed' }
   if (workflow === 'CANCELLED') return { label: 'Đã hủy', tone: 'cancelled' }
-  if (workflow === 'EXPIRED') return { label: 'Hết hạn', tone: 'cancelled' }
+  if (workflow === 'NO_SHOW') return { label: 'Vắng mặt', tone: 'cancelled' }
   const status = normalizeStatus(row?.status)
   if (status === 'confirmed') return { label: 'Đã xác nhận', tone: 'booked' }
   if (status === 'examined') return { label: 'Đã khám', tone: 'completed' }
@@ -311,7 +310,7 @@ export function isPaidAppointment(r: any): boolean {
 export function isReceptionPending(r: any): boolean {
   if (!r) return false
   const wf = String(r?.workflowStatus || '').toUpperCase()
-  if (wf === 'PENDING_PAYMENT' || wf === 'BOOKED') return true
+  if (wf === 'HOLD' || wf === 'CONFIRMED') return true
   const st = normalizeStatus(r?.status)
   return st === 'pending'
 }
@@ -324,22 +323,22 @@ export function getAppointmentWorkflowBucket(r: any): 'cancelled' | 'completed' 
   const isExp = isPendingAppointmentPastSlot(r)
 
   // 1. Đã hủy / Hết hạn / Quá giờ slot
-  if (wf === 'CANCELLED' || wf === 'EXPIRED' || st === 'cancelled' || (isReceptionPending(r) && isExp)) {
+  if (wf === 'CANCELLED' || st === 'cancelled' || (isReceptionPending(r) && isExp)) {
     return 'cancelled'
   }
 
-  // 2. Đang khám hoặc Đã khám xong
-  if (wf === 'IN_EXAMINATION' || wf === 'COMPLETED' || st === 'examined') {
+  // 2. Đã khám xong
+  if (wf === 'COMPLETED' || st === 'examined') {
     return 'completed'
   }
 
   // 3. Đã check-in vào phòng (Đang chờ bác sĩ gọi khám)
-  if (wf === 'CHECKED_IN' || (st === 'confirmed' && wf !== 'BOOKED')) {
+  if (wf === 'CHECKED_IN' || (st === 'confirmed' && wf !== 'CONFIRMED')) {
     return 'checked_in'
   }
 
   // 4. Chờ đóng phí khám
-  if (wf === 'PENDING_PAYMENT' || !paid) {
+  if (wf === 'HOLD' || !paid) {
     return 'unpaid'
   }
 

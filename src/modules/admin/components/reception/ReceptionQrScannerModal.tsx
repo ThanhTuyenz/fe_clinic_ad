@@ -14,6 +14,8 @@ interface ReceptionQrScannerModalProps {
   qrImageLoading: boolean
   handleQrFileInput: (e: React.ChangeEvent<HTMLInputElement>) => void
   onScan?: (decodedText: string) => void
+  title?: string
+  description?: string
 }
 
 export default function ReceptionQrScannerModal({
@@ -24,6 +26,8 @@ export default function ReceptionQrScannerModal({
   qrImageLoading,
   handleQrFileInput,
   onScan,
+  title,
+  description,
 }: ReceptionQrScannerModalProps) {
   useEffect(() => {
     if (!qrOpen) return
@@ -73,7 +77,7 @@ export default function ReceptionQrScannerModal({
       >
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <h2 id="tcl-qr-title" className="text-base font-bold text-slate-900">
-            Quét mã QR lịch hẹn
+            {title || 'Quét mã QR lịch hẹn'}
           </h2>
           <button
             type="button"
@@ -86,7 +90,7 @@ export default function ReceptionQrScannerModal({
         </div>
 
         <p className="text-xs text-slate-500">
-          Hướng camera vào mã QR trên phiếu khám / điện thoại bệnh nhân, hoặc tải ảnh mã QR bên dưới.
+          {description || 'Hướng camera vào mã QR trên phiếu khám / điện thoại bệnh nhân, hoặc tải ảnh mã QR bên dưới.'}
         </p>
 
         {qrErr ? (

@@ -38,6 +38,19 @@ function normalizeAppointmentStatus(st) {
 
 export function isPendingAppointmentPastSlot(row, slotMinutes = DEFAULT_SLOT_MINUTES) {
   if (normalizeAppointmentStatus(row?.status) !== 'pending') return false
+
+  // 1. Không tự động hủy phiếu tiếp đón tạo trực tiếp tại quầy (clinic / tiếp tân tạo)
+  const src = String(row?.source || row?.bookingSource || '').toLowerCase()
+  if (src === 'clinic' || Boolean(row?.createdByStaff)) return false
+
+  // 2. Không tự động hủy bất kỳ phiếu nào vừa được tạo trong vòng 45 phút
+  if (row?.createdAt) {
+    const createdTime = new Date(row.createdAt).getTime()
+    if (!Number.isNaN(createdTime) && Date.now() - createdTime < 45 * 60 * 1000) {
+      return false
+    }
+  }
+
   const end = getSlotEndDate(row, slotMinutes)
   if (!end) return false
   return end.getTime() < Date.now()

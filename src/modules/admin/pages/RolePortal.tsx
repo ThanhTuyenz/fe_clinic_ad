@@ -14,71 +14,88 @@ import BillingPage from './BillingPage'
 import AdminAnalyticsPage from './AdminAnalyticsPage'
 import { staffRole } from '../utils/staffSession'
 
-const ROLE_LABELS = { admin: 'Quản trị viên', branch_manager: 'Quản lý chi nhánh', receptionist: 'Tiếp nhận', doctor: 'Bác sĩ' }
-const NAV = {
-  admin: [
-    ['dashboard', 'Tổng quan vận hành', '/dashboard'],
-    ['analytics', 'Báo cáo & Thống kê', '/analytics'],
-    ['doctors', 'Nhân sự phòng khám', '/doctors'],
-    ['staff', 'Tài khoản & phân quyền', '/staff'],
-    ['patients', 'Bệnh nhân', '/patients'],
-    ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
-    ['slots', 'Lịch làm việc & Slot', '/work-schedules'],
-    ['appointments', 'Danh sách lịch hẹn', '/appointments'],
-    ['branches', 'Chi nhánh phòng khám', '/branches'],
-    ['specialties', 'Chuyên khoa', '/specialties'],
-    ['booking-methods', 'Quản lý hình thức đặt khám', '/booking-methods'],
-    ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
-    ['billing', 'Thanh toán', '/billing'],
-  ],
-  branch_manager: [
-    ['dashboard', 'Tổng quan vận hành', '/dashboard'],
-    ['analytics', 'Báo cáo & Thống kê', '/analytics'],
-    ['doctors', '👥 Nhân sự phòng khám', '/doctors'],
-    ['patients', 'Bệnh nhân', '/patients'],
-    ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
-    ['slots', '📅 Lịch làm việc & Slot', '/work-schedules'],
-    ['appointments', 'Danh sách lịch hẹn', '/appointments'],
-    ['branches', '🏥 Chi nhánh phòng khám', '/branches'],
-    ['specialties', 'Chuyên khoa', '/specialties'],
-    ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
-    ['billing', 'Thanh toán', '/billing'],
-  ],
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Quản trị viên',
+  branch_manager: 'Quản lý chi nhánh',
+  receptionist: 'Tiếp nhận',
+  doctor: 'Bác sĩ',
+  pharmacist: 'Dược sĩ',
+  cashier: 'Kế toán / Thu ngân',
+}
 
+const NAV: Record<string, [string, string, string][]> = {
   receptionist: [
-    ['dashboard', 'Tổng quan', '/dashboard'],
-    ['appointments', 'Tiếp đón & Lịch hẹn', '/appointments'],
+    ['dashboard', 'Tổng quan tiếp đón', '/dashboard'],
+    ['reception', 'Tiếp nhận bệnh nhân', '/reception'],
+    ['registration', 'Đăng ký bệnh nhân', '/registration'],
+    ['appointments', 'Danh sách lịch hẹn', '/appointments'],
     ['billing', 'Thanh toán', '/billing'],
   ],
   doctor: [
-    ['dashboard', 'Tổng quan', '/dashboard'],
-    ['appointments', 'Lịch khám của tôi', '/appointments'],
+    ['exam', 'Phòng khám bệnh', '/doctor'],
+    ['schedule', 'Lịch khám của tôi', '/doctor?view=schedule'],
+    ['history', 'Lịch sử bệnh nhân', '/doctor?view=history'],
+    ['laboratory', 'Chỉ định cận lâm sàng', '/clinical-orders'],
+    ['prescription', 'Đơn thuốc', '/doctor/prescriptions'],
+  ],
+  pharmacist: [
+    ['pharmacy', 'Cấp phát thuốc', '/pharmacy'],
+  ],
+  cashier: [
+    ['dashboard', 'Tổng quan thu ngân', '/dashboard'],
+    ['billing', 'Thanh toán & Hóa đơn', '/billing'],
   ],
 }
 
-const PATHS = {
-  dashboard: 'M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z',
-  analytics: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z',
-  staff: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-3h5m-2.5-2.5v5',
-  patients: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
-  appointments: 'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z',
-  schedule: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
-  inventory: 'm4 7 8-4 8 4-8 4-8-4Zm0 0v10l8 4 8-4V7M12 11v10',
-  billing: 'M4 5h16v14H4V5Zm0 4h16M8 15h3',
-  clinical: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9Z',
-  branches: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
-  receptionist: 'M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z',
-  doctors: 'M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z',
-  specialties: 'M12 4.5v15m7.5-7.5h-15',
-  services: 'M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.942A6 6 0 0 1 15 17.25H9a6 6 0 0 1-3.23-.95L4.2 15.3m15.6 0A2.25 2.25 0 0 1 21 17.25V18a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-.75a2.25 2.25 0 0 1 1.2-1.95',
-  packages: 'M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z',
-  roles: 'M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z',
-  methods: 'M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5',
-  server: 'M5 12h14M5 12a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2M5 12a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2m-2-4h.01M17 16h.01',
+import {
+  LayoutDashboard,
+  BarChart3,
+  CalendarCheck,
+  CalendarClock,
+  Users,
+  CreditCard,
+  Stethoscope,
+  UserCheck,
+  Cross,
+  Package,
+  Building2,
+  SlidersHorizontal,
+  Server,
+  DoorOpen,
+  UserPlus,
+  FileText,
+  FlaskConical,
+  FileSpreadsheet,
+  Pill,
+  type LucideIcon,
+} from 'lucide-react'
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  analytics: BarChart3,
+  appointments: CalendarCheck,
+  schedule: CalendarClock,
+  patients: Users,
+  billing: CreditCard,
+  doctors: Stethoscope,
+  staff: UserCheck,
+  specialties: Cross,
+  packages: Package,
+  branches: Building2,
+  methods: SlidersHorizontal,
+  server: Server,
+  reception: DoorOpen,
+  registration: UserPlus,
+  exam: Stethoscope,
+  history: FileText,
+  laboratory: FlaskConical,
+  prescription: FileSpreadsheet,
+  pharmacy: Pill,
 }
 
-function Icon({ name, className = 'h-[18px] w-[18px]' }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}><path strokeLinecap="round" strokeLinejoin="round" d={PATHS[name] || PATHS.dashboard} /></svg>
+function Icon({ name, className = 'h-[18px] w-[18px]' }: { name: string; className?: string }) {
+  const Comp = ICON_MAP[name] || LayoutDashboard
+  return <Comp className={className} strokeWidth={1.8} aria-hidden="true" />
 }
 
 function initials(user) {
@@ -608,10 +625,10 @@ function SystemHealthPage() {
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Uptime hệ thống" value="99.98%" detail="Trong 30 ngày qua" icon="dashboard" tone="emerald" />
-        <Kpi label="Độ trễ API trung bình" value="28 ms" detail="Phản hồi nhanh" icon="clinical" tone="blue" />
-        <Kpi label="Tỉ lệ Cache Hit" value="94.2%" detail="Redis cache hoạt động tối ưu" icon="inventory" tone="emerald" />
-        <Kpi label="Cảnh báo kỹ thuật" value="0 lỗi" detail={`Cập nhật: ${lastCheck}`} icon="roles" tone="amber" />
+        <Kpi label="Uptime hệ thống" value="99.98%" detail="Trong 30 ngày qua" icon="server" tone="emerald" />
+        <Kpi label="Độ trễ API trung bình" value="28 ms" detail="Phản hồi nhanh" icon="analytics" tone="blue" />
+        <Kpi label="Tỉ lệ Cache Hit" value="94.2%" detail="Redis cache hoạt động tối ưu" icon="dashboard" tone="emerald" />
+        <Kpi label="Cảnh báo kỹ thuật" value="0 lỗi" detail={`Cập nhật: ${lastCheck}`} icon="methods" tone="amber" />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_1fr]">
@@ -794,21 +811,19 @@ const ADMIN_NAV_SECTIONS = [
     ],
   },
   {
-    category: 'Chuyên môn & Y tế',
+    category: 'Chuyên môn & Dịch vụ',
     items: [
-      { id: 'doctors', label: 'Bác sĩ & Nhân sự', href: '/doctors', icon: 'doctors' },
       { id: 'specialties', label: 'Chuyên khoa khám', href: '/specialties', icon: 'specialties' },
       { id: 'booking-packages', label: 'Dịch vụ khám bệnh', href: '/booking-packages', icon: 'packages' },
     ],
   },
   {
-    category: 'Hệ thống & Cấu hình',
+    category: 'Quản trị & Hệ thống',
     items: [
+      { id: 'staff', label: 'Nhân sự & Phân quyền', href: '/staff', icon: 'staff' },
       { id: 'branches', label: 'Chi nhánh phòng khám', href: '/branches', icon: 'branches' },
-      { id: 'staff', label: 'Tài khoản & Phân quyền', href: '/staff', icon: 'staff' },
-      { id: 'roles', label: 'Vai trò & Quyền hạn', href: '/roles-permissions', icon: 'roles' },
       { id: 'booking-methods', label: 'Hình thức đặt khám', href: '/booking-methods', icon: 'methods' },
-      { id: 'system-status', label: 'Trạng thái & Kỹ thuật', href: '/system-status', icon: 'server' },
+      { id: 'system-status', label: 'Trạng thái hệ thống', href: '/system-status', icon: 'server' },
     ],
   },
 ]
@@ -817,28 +832,21 @@ const MANAGER_NAV_SECTIONS = [
   {
     category: 'Vận hành chi nhánh',
     items: [
-      { id: 'dashboard', label: 'Tổng quan vận hành', href: '/dashboard', icon: 'dashboard' },
+      { id: 'dashboard', label: 'Tổng quan chi nhánh', href: '/dashboard', icon: 'dashboard' },
       { id: 'analytics', label: 'Báo cáo & Thống kê', href: '/analytics', icon: 'analytics' },
       { id: 'appointments', label: 'Danh sách lịch hẹn', href: '/appointments', icon: 'appointments' },
       { id: 'slots', label: 'Lịch làm việc & Ca trực', href: '/work-schedules', icon: 'schedule' },
       { id: 'patients', label: 'Hồ sơ bệnh nhân', href: '/patients', icon: 'patients' },
       { id: 'billing', label: 'Thanh toán & Hóa đơn', href: '/billing', icon: 'billing' },
-    ],
-  },
-  {
-    category: 'Chuyên môn & Dịch vụ',
-    items: [
-      { id: 'doctors', label: 'Bác sĩ & Nhân sự', href: '/doctors', icon: 'doctors' },
-      { id: 'specialties', label: 'Chuyên khoa khám', href: '/specialties', icon: 'specialties' },
-      { id: 'booking-packages', label: 'Dịch vụ khám bệnh', href: '/booking-packages', icon: 'packages' },
       { id: 'branches', label: 'Thông tin chi nhánh', href: '/branches', icon: 'branches' },
     ],
   },
   {
-    category: 'Thiết lập & Phân quyền',
+    category: 'Chuyên môn & Nhân sự',
     items: [
-      { id: 'roles', label: 'Vai trò & Phân quyền', href: '/roles-permissions', icon: 'roles' },
-      { id: 'booking-methods', label: 'Hình thức đặt khám', href: '/booking-methods', icon: 'methods' },
+      { id: 'staff', label: 'Nhân sự chi nhánh', href: '/staff', icon: 'staff' },
+      { id: 'specialties', label: 'Chuyên khoa khám', href: '/specialties', icon: 'specialties' },
+      { id: 'booking-packages', label: 'Dịch vụ khám bệnh', href: '/booking-packages', icon: 'packages' },
     ],
   },
 ]
@@ -858,8 +866,8 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
 
   const isItemActive = (itemId: string) => {
     if (section === itemId) return true
+    if (itemId === 'staff' && ['staff', 'doctors', 'roles', 'roles-permissions'].includes(section)) return true
     if (itemId === 'slots' && ['slots', 'schedule', 'work-schedules'].includes(section)) return true
-    if (itemId === 'roles' && ['roles', 'roles-permissions'].includes(section)) return true
     if (itemId === 'booking-packages' && ['booking-packages', 'health-packages', 'services', 'specialties-services', 'specialty-services', 'service-packages'].includes(section)) return true
     if (itemId === 'booking-methods' && ['booking-methods', 'booking-types'].includes(section)) return true
     return false
@@ -1029,8 +1037,8 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
 export default function RolePortal({ section = 'dashboard' }) {
   const navigate = useNavigate(); const { token, user, logout: clearAuthSession } = useAuth(); const session = { user }; const role = staffRole(user) || 'admin'; const [stats, setStats] = useState(null); const [loading, setLoading] = useState(true); const [menu, setMenu] = useState(false)
   useEffect(() => { if (!token) return; fetchDashboardStats({ token }).then(setStats).catch(() => setStats(null)).finally(() => setLoading(false)) }, [token])
-  const logout = async () => { await clearAuthSession(); navigate('/login', { replace: true }) }; const nav = NAV[role] || NAV.admin
-  let content = section === 'system-status' ? <SystemHealthPage /> : section === 'analytics' ? <AdminAnalyticsPage stats={stats} loading={loading} /> : section === 'billing' ? <BillingPage /> : section === 'booking-methods' ? <BookingMethodsPage /> : section === 'booking-packages' ? <BookingPackagesPage /> : ['branches', 'specialties', 'service-packages', 'services', 'inventory'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <SystemCatalogCrudPage resource={section === 'inventory' ? 'medicines' : section} /> : ['doctors', 'staff'].includes(section) ? (['admin', 'branch_manager'].includes(role) ? <ClinicStaffPage /> : <StaffCrudPage role="doctor" />) : section === 'pharmacists' ? <StaffCrudPage role="pharmacist" /> : ['schedule', 'slots', 'work-schedules'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <DoctorWorkSchedulesPage /> : section === 'dashboard' ? (role === 'branch_manager' ? <ManagerDashboard stats={stats} loading={loading} /> : <AdminDashboard stats={stats} loading={loading} />) : <GenericPage section={section} role={role} />
+  const logout = async () => { await clearAuthSession(); navigate('/login', { replace: true }) }; const nav = NAV[role] || NAV.receptionist
+  let content = section === 'system-status' ? <SystemHealthPage /> : section === 'analytics' ? <AdminAnalyticsPage stats={stats} loading={loading} /> : section === 'billing' ? <BillingPage /> : section === 'booking-methods' ? <BookingMethodsPage /> : section === 'booking-packages' ? <BookingPackagesPage /> : ['branches', 'specialties', 'service-packages', 'services', 'inventory'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <SystemCatalogCrudPage resource={section === 'inventory' ? 'medicines' : section} /> : ['doctors', 'staff', 'roles'].includes(section) ? (['admin', 'branch_manager'].includes(role) ? <ClinicStaffPage /> : <StaffCrudPage role="doctor" />) : section === 'pharmacists' ? <StaffCrudPage role="pharmacist" /> : ['schedule', 'slots', 'work-schedules'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <DoctorWorkSchedulesPage /> : section === 'dashboard' ? (role === 'branch_manager' ? <ManagerDashboard stats={stats} loading={loading} /> : <AdminDashboard stats={stats} loading={loading} />) : <GenericPage section={section} role={role} />
   if (['admin', 'branch_manager'].includes(role)) return <GroupedPortal section={section} user={user} role={role} content={content} menu={menu} setMenu={setMenu} navigate={navigate} logout={logout} />
   return (
     <div className="min-h-screen bg-[#f5f8f5] font-sans text-slate-800">

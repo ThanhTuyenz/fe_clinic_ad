@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createCatalog, deleteCatalog, listCatalog, syncPackageVectors, updateCatalog } from '../services/systemCatalog'
+import { createCatalog, deleteCatalog, listCatalog, syncPackageVectors, updateCatalog, suggestSymptoms } from '../services/systemCatalog'
+import { X, Loader2 } from 'lucide-react'
 
 type Field = [string, string, 'text' | 'date' | 'number' | 'textarea' | 'select' | 'multiselect', string?]
 type Config = { title: string; singular: string; fields: Field[]; columns: [string, string][] }
@@ -230,6 +231,58 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   const [sortKey, setSortKey] = useState<string>('id')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
+  // Quản lý tags triệu chứng lâm sàng cho AI Semantic Search
+  const [symptomInput, setSymptomInput] = useState('')
+  const [loadingAiSymptoms, setLoadingAiSymptoms] = useState(false)
+  const [aiSuggestedSymptoms, setAiSuggestedSymptoms] = useState<string[]>([])
+
+  const handleAddSymptom = (text: string) => {
+    if (!text) return
+    const parts = text.split(/[,;\n]+/).map((s) => s.trim().toLowerCase()).filter(Boolean)
+    if (parts.length === 0) return
+    const current: string[] = form.symptomTags || []
+    const newTags = parts.filter((p) => !current.includes(p))
+    if (newTags.length > 0) {
+      setForm((prev: any) => ({ ...prev, symptomTags: [...current, ...newTags] }))
+    }
+    setSymptomInput('')
+    setAiSuggestedSymptoms((prev) => prev.filter((s) => !parts.includes(s.toLowerCase())))
+  }
+
+  const handleRemoveSymptom = (tag: string) => {
+    const current: string[] = form.symptomTags || []
+    setForm((prev: any) => ({ ...prev, symptomTags: current.filter((t) => t !== tag) }))
+  }
+
+  const handleAiSuggest = async () => {
+    if (!String(form.name || '').trim()) {
+      setError('Vui lòng nhập Tên gói khám trước để AI có cơ sở phân tích triệu chứng.')
+      return
+    }
+    setLoadingAiSymptoms(true)
+    setError('')
+    try {
+      const specList = options.specialties || []
+      const specObj = specList.find((s: any) => String(s.id) === String(form.specialtyId))
+      const specName = specObj?.name || ''
+      const res = await suggestSymptoms(form.name, specName)
+      const current: string[] = (form.symptomTags || []).map((t: string) => t.toLowerCase())
+      const newSuggestions = (res || []).filter((s: string) => !current.includes(s.toLowerCase()))
+      setAiSuggestedSymptoms(newSuggestions)
+    } catch {
+      setError('Không thể lấy gợi ý triệu chứng từ AI lúc này.')
+    } finally {
+      setLoadingAiSymptoms(false)
+    }
+  }
+
+  const handleAddAllSuggested = () => {
+    const current: string[] = form.symptomTags || []
+    const merged = [...new Set([...current, ...aiSuggestedSymptoms.map((s) => s.toLowerCase())])]
+    setForm((prev: any) => ({ ...prev, symptomTags: merged }))
+    setAiSuggestedSymptoms([])
+  }
+
   useEffect(() => {
     setQ('')
     setFilterBranchId('')
@@ -359,7 +412,10 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       applyAllBranches: false,
       branchIds: branchList.length > 0 ? [branchList[0].id] : [],
       bookingMethodCodes: ['HEALTH_PACKAGE'],
+      symptomTags: [],
     })
+    setSymptomInput('')
+    setAiSuggestedSymptoms([])
     setError('')
     setModal('create')
   }
@@ -380,9 +436,25 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       ].filter(Boolean))
     ] as string[]
 
+    // Ưu tiên đọc từ cột riêng symptoms, nếu có dữ liệu cũ trong description thì fallback parse
+    let baseDesc = row.description || ''
+    let parsedTags: string[] = Array.isArray(row.symptoms) && row.symptoms.length > 0 ? [...row.symptoms] : []
+    if (parsedTags.length === 0) {
+      const match = baseDesc.match(/(?:Triệu chứng lâm sàng|Triệu chứng liên quan|Tags):\s*([^\n\r]+)/i)
+      if (match && match[1]) {
+        parsedTags = match[1].split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean)
+        baseDesc = baseDesc.replace(match[0], '').trim()
+      }
+    } else {
+      baseDesc = baseDesc.replace(/(?:\r?\n)*Triệu chứng lâm sàng:.*$/s, '').trim()
+    }
+
     setForm({
       ...EMPTY,
       ...row,
+      description: baseDesc,
+      symptoms: parsedTags,
+      symptomTags: parsedTags,
       sessionType: row.sessionType || 'ALL_DAY',
       activeDaysOfWeek: Array.isArray(row.activeDaysOfWeek) && row.activeDaysOfWeek.length > 0 ? row.activeDaysOfWeek : [1, 2, 3, 4, 5, 6, 0],
       branchId: row.branchBookingMethod?.branchId || row.branchBookingMethod?.branch?.id || '',
@@ -392,6 +464,8 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       bookingMethodCodes: deployedMethodCodes.length > 0 ? deployedMethodCodes : ['HEALTH_PACKAGE'],
       medicalServiceIds: row.items?.map((item: any) => item.medicalServiceId) || [],
     })
+    setSymptomInput('')
+    setAiSuggestedSymptoms([])
     setModal('edit')
   }
 
@@ -401,6 +475,14 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       return setError('Tên không được để trống.')
     }
     const payload = { ...form }
+
+    // Lưu riêng vào trường symptoms dạng mảng chuẩn hóa
+    if (['service-packages', 'specialties'].includes(resource)) {
+      payload.symptoms = (form.symptomTags || []).map((s: string) => s.trim().toLowerCase()).filter(Boolean)
+      payload.description = String(form.description || '').replace(/(?:\r?\n)*Triệu chứng lâm sàng:.*$/s, '').trim() || null
+      delete payload.symptomTags
+    }
+
     if (resource === 'service-packages') {
       payload.activeDaysOfWeek = Array.isArray(form.activeDaysOfWeek) && form.activeDaysOfWeek.length > 0
         ? form.activeDaysOfWeek
@@ -452,28 +534,27 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
     key === 'items'
       ? `${value?.length || 0} dịch vụ`
       : key === 'sessionType'
-      ? value === 'MORNING'
-        ? 'Buổi sáng (07:30 - 11:30)'
-        : value === 'AFTERNOON'
-        ? 'Buổi chiều (13:30 - 17:00)'
-        : value === 'EVENING'
-        ? 'Ngoài giờ (17:00 - 20:30)'
-        : value === 'OFFICE_HOURS'
-        ? 'Giờ hành chính (07:30 - 17:00)'
-        : 'Cả ngày & Ngoài giờ'
-      : key === 'activeDaysOfWeek'
-      ? formatDaysOfWeek(value)
-      : key === 'schedules'
-      ? `${value?.length || 0} ngày / ${
-          value?.reduce((total: number, item: any) => total + (item.slots?.length || 0), 0) || 0
-        } khung giờ`
-      : key.endsWith('examDate') && value
-      ? new Date(value).toLocaleDateString('vi-VN')
-      : ['price', 'unitPrice'].includes(key)
-      ? money(value)
-      : key === 'durationMin'
-      ? `${value || 0} phút`
-      : value ?? '—'
+        ? value === 'MORNING'
+          ? 'Buổi sáng (07:30 - 11:30)'
+          : value === 'AFTERNOON'
+            ? 'Buổi chiều (13:30 - 17:00)'
+            : value === 'EVENING'
+              ? 'Ngoài giờ (17:00 - 20:30)'
+              : value === 'OFFICE_HOURS'
+                ? 'Giờ hành chính (07:30 - 17:00)'
+                : 'Cả ngày & Ngoài giờ'
+        : key === 'activeDaysOfWeek'
+          ? formatDaysOfWeek(value)
+          : key === 'schedules'
+            ? `${value?.length || 0} ngày / ${value?.reduce((total: number, item: any) => total + (item.slots?.length || 0), 0) || 0
+            } khung giờ`
+            : key.endsWith('examDate') && value
+              ? new Date(value).toLocaleDateString('vi-VN')
+              : ['price', 'unitPrice'].includes(key)
+                ? money(value)
+                : key === 'durationMin'
+                  ? `${value || 0} phút`
+                  : value ?? '—'
 
   const optionValue = (field: Field, option: any) => (field[3] === 'specialties' ? String(option.id) : option.id)
 
@@ -778,9 +859,8 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                         <div className="inline-flex items-center gap-1.5">
                           <span>{label}</span>
                           <span
-                            className={`text-[10px] ${
-                              isSorted ? 'text-emerald-700 font-bold' : 'text-slate-300'
-                            }`}
+                            className={`text-[10px] ${isSorted ? 'text-emerald-700 font-bold' : 'text-slate-300'
+                              }`}
                           >
                             {isSorted ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
                           </span>
@@ -949,13 +1029,125 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                   <label key={key} className={`text-xs font-bold text-slate-600 ${wide ? 'sm:col-span-2' : ''}`}>
                     {label}
                     {type === 'textarea' ? (
-                      <textarea
-                        rows={3}
-                        value={form[key] || ''}
-                        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                        placeholder="Nhập nội dung mô tả, quyền lợi và hướng dẫn chuẩn bị cho gói khám..."
-                        className="mt-1.5 w-full rounded-md border px-3 py-2 text-sm font-normal"
-                      />
+                      <div className="mt-1.5 space-y-3">
+                        <textarea
+                          rows={3}
+                          value={form[key] || ''}
+                          onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                          placeholder="Nhập nội dung mô tả, quyền lợi và hướng dẫn chuẩn bị..."
+                          className="w-full rounded-md border px-3 py-2 text-sm font-normal"
+                        />
+
+                        {/* COMPONENT TAGS TRIỆU CHỨNG LÂM SÀNG CHO GÓI KHÁM & CHUYÊN KHOA */}
+                        {['service-packages', 'specialties'].includes(resource) && key === 'description' && (
+                          <div className="space-y-2 pt-1">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div>
+                                <span className="text-xs font-semibold text-slate-700">
+                                  Triệu chứng lâm sàng liên quan
+                                </span>
+                                <p className="text-[11px] text-slate-400 font-normal mt-0.5">
+                                  Nhập triệu chứng rồi nhấn <span className="font-medium text-slate-600">Enter</span> hoặc bấm Gợi ý triệu chứng.
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={handleAiSuggest}
+                                disabled={loadingAiSymptoms}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition cursor-pointer disabled:opacity-50"
+                              >
+                                {loadingAiSymptoms && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />}
+                                <span>{loadingAiSymptoms ? 'Đang phân tích...' : 'Gợi ý triệu chứng'}</span>
+                              </button>
+                            </div>
+
+                            {/* Khung nhập tag clean tích hợp */}
+                            <div className="rounded-lg border border-slate-200 bg-white p-2 focus-within:border-slate-400 focus-within:ring-1 focus-within:ring-slate-300 transition">
+                              <div className="flex flex-wrap items-center gap-1.5 min-h-[32px]">
+                                {(form.symptomTags || []).map((tag: string) => (
+                                  <span
+                                    key={tag}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200"
+                                  >
+                                    <span>{tag}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSymptom(tag)}
+                                      className="text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                                      title="Xóa triệu chứng"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </span>
+                                ))}
+
+                                <div className="flex-1 min-w-[240px] flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={symptomInput}
+                                    onChange={(e) => setSymptomInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ',') {
+                                        e.preventDefault()
+                                        handleAddSymptom(symptomInput)
+                                      } else if (e.key === 'Backspace' && !symptomInput && (form.symptomTags || []).length > 0) {
+                                        const current = form.symptomTags || []
+                                        handleRemoveSymptom(current[current.length - 1])
+                                      }
+                                    }}
+                                    placeholder={
+                                      (form.symptomTags || []).length > 0
+                                        ? 'Thêm triệu chứng khác (nhấn Enter)...'
+                                        : 'Nhập triệu chứng (ví dụ: mắc ói, đau đầu, tức ngực...)'
+                                    }
+                                    className="flex-1 border-none bg-transparent px-1.5 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                                  />
+                                  {symptomInput.trim() && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddSymptom(symptomInput)}
+                                      className="px-2.5 py-1 rounded text-xs font-medium bg-slate-800 hover:bg-slate-900 text-white transition cursor-pointer shrink-0"
+                                    >
+                                      Thêm
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Khay hiển thị gợi ý */}
+                            {aiSuggestedSymptoms.length > 0 && (
+                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-medium text-slate-700">
+                                    Gợi ý liên quan ({aiSuggestedSymptoms.length}):
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={handleAddAllSuggested}
+                                    className="text-xs font-medium text-slate-600 hover:text-slate-900 underline cursor-pointer"
+                                  >
+                                    + Thêm tất cả
+                                  </button>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                                  {aiSuggestedSymptoms.map((s) => (
+                                    <button
+                                      key={s}
+                                      type="button"
+                                      onClick={() => handleAddSymptom(s)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition cursor-pointer shadow-2xs"
+                                    >
+                                      <span>+ {s}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     ) : type === 'select' ? (
                       <select
                         value={form[key] ?? ''}
@@ -1076,33 +1268,30 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                               <button
                                 type="button"
                                 onClick={() => setForm({ ...form, activeDaysOfWeek: [1, 2, 3, 4, 5, 6, 0] })}
-                                className={`rounded border px-2.5 py-1 text-xs transition-colors ${
-                                  isAll
+                                className={`rounded border px-2.5 py-1 text-xs transition-colors ${isAll
                                     ? 'border-slate-500 bg-slate-100 font-bold text-slate-900 shadow-2xs'
                                     : 'border-slate-200 bg-white font-medium text-slate-600 hover:bg-slate-50'
-                                }`}
+                                  }`}
                               >
                                 Cả tuần (T2–CN)
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setForm({ ...form, activeDaysOfWeek: [1, 2, 3, 4, 5] })}
-                                className={`rounded border px-2.5 py-1 text-xs transition-colors ${
-                                  isWeekdays
+                                className={`rounded border px-2.5 py-1 text-xs transition-colors ${isWeekdays
                                     ? 'border-slate-500 bg-slate-100 font-bold text-slate-900 shadow-2xs'
                                     : 'border-slate-200 bg-white font-medium text-slate-600 hover:bg-slate-50'
-                                }`}
+                                  }`}
                               >
                                 Thứ 2 – Thứ 6 (Hành chính)
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setForm({ ...form, activeDaysOfWeek: [6, 0] })}
-                                className={`rounded border px-2.5 py-1 text-xs transition-colors ${
-                                  isWeekends
+                                className={`rounded border px-2.5 py-1 text-xs transition-colors ${isWeekends
                                     ? 'border-slate-500 bg-slate-100 font-bold text-slate-900 shadow-2xs'
                                     : 'border-slate-200 bg-white font-medium text-slate-600 hover:bg-slate-50'
-                                }`}
+                                  }`}
                               >
                                 T7 & Chủ Nhật (Cuối tuần)
                               </button>
@@ -1127,17 +1316,15 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                               if (next.length === 0) return
                               setForm({ ...form, activeDaysOfWeek: next })
                             }}
-                            className={`flex flex-col items-center justify-center rounded-lg border py-2.5 text-xs transition-all ${
-                              isChecked
+                            className={`flex flex-col items-center justify-center rounded-lg border py-2.5 text-xs transition-all ${isChecked
                                 ? 'border-slate-400 bg-white text-slate-900 font-bold shadow-xs ring-1 ring-slate-400/40'
                                 : 'border-slate-200 bg-slate-50/70 text-slate-400 font-normal hover:bg-white hover:text-slate-600'
-                            }`}
+                              }`}
                           >
                             <span className="text-xs">{day.label}</span>
                             <span
-                              className={`mt-1 text-[10px] ${
-                                isChecked ? 'font-semibold text-slate-700' : 'text-slate-400'
-                              }`}
+                              className={`mt-1 text-[10px] ${isChecked ? 'font-semibold text-slate-700' : 'text-slate-400'
+                                }`}
                             >
                               {isChecked ? 'Mở' : 'Nghỉ'}
                             </span>
@@ -1160,11 +1347,10 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
 
                     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                       <label
-                        className={`flex flex-col gap-1 rounded-lg border p-3 cursor-pointer transition-colors ${
-                          (form.sessionType || 'MORNING') === 'MORNING'
+                        className={`flex flex-col gap-1 rounded-lg border p-3 cursor-pointer transition-colors ${(form.sessionType || 'MORNING') === 'MORNING'
                             ? 'border-slate-800 bg-white shadow-xs'
                             : 'border-slate-200 bg-white/70 hover:bg-white'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2">
                           <input
@@ -1183,11 +1369,10 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                       </label>
 
                       <label
-                        className={`flex flex-col gap-1 rounded-lg border p-3 cursor-pointer transition-colors ${
-                          form.sessionType === 'AFTERNOON'
+                        className={`flex flex-col gap-1 rounded-lg border p-3 cursor-pointer transition-colors ${form.sessionType === 'AFTERNOON'
                             ? 'border-slate-800 bg-white shadow-xs'
                             : 'border-slate-200 bg-white/70 hover:bg-white'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2">
                           <input
@@ -1206,11 +1391,10 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                       </label>
 
                       <label
-                        className={`flex flex-col gap-1 rounded-lg border p-3 cursor-pointer transition-colors ${
-                          form.sessionType === 'EVENING'
+                        className={`flex flex-col gap-1 rounded-lg border p-3 cursor-pointer transition-colors ${form.sessionType === 'EVENING'
                             ? 'border-slate-800 bg-white shadow-xs'
                             : 'border-slate-200 bg-white/70 hover:bg-white'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2">
                           <input
@@ -1229,11 +1413,10 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                       </label>
 
                       <label
-                        className={`flex flex-col gap-1 rounded-lg border p-3 cursor-pointer transition-colors ${
-                          form.sessionType === 'OFFICE_HOURS'
+                        className={`flex flex-col gap-1 rounded-lg border p-3 cursor-pointer transition-colors ${form.sessionType === 'OFFICE_HOURS'
                             ? 'border-slate-800 bg-white shadow-xs'
                             : 'border-slate-200 bg-white/70 hover:bg-white'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2">
                           <input
@@ -1252,11 +1435,10 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                       </label>
 
                       <label
-                        className={`flex flex-col gap-1 rounded-lg border p-3 cursor-pointer transition-colors ${
-                          form.sessionType === 'ALL_DAY'
+                        className={`flex flex-col gap-1 rounded-lg border p-3 cursor-pointer transition-colors ${form.sessionType === 'ALL_DAY'
                             ? 'border-slate-800 bg-white shadow-xs'
                             : 'border-slate-200 bg-white/70 hover:bg-white'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2">
                           <input
