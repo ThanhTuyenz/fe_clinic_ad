@@ -32,11 +32,31 @@ export default function ReceptionQrScannerModal({
   useEffect(() => {
     if (!qrOpen) return
     let disposed = false
-    const scanner = new Html5Qrcode(QR_READER_ELEMENT_ID, { verbose: false })
+    const scanner = new Html5Qrcode(QR_READER_ELEMENT_ID, {
+      verbose: false,
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true,
+      },
+    })
     scanner
       .start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
+        {
+          fps: 20,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const minEdge = Math.min(viewfinderWidth, viewfinderHeight)
+            const qrEdge = Math.max(250, Math.floor(minEdge * 0.8))
+            return { width: qrEdge, height: qrEdge }
+          },
+          videoConstraints: {
+            width: { ideal: 1920, min: 1280 },
+            height: { ideal: 1080, min: 720 },
+            facingMode: 'environment',
+          },
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true,
+          },
+        },
         (decodedText) => {
           if (!disposed && onScan) {
             onScan(decodedText)
@@ -99,13 +119,41 @@ export default function ReceptionQrScannerModal({
           </div>
         ) : null}
 
-        <div className="w-full bg-slate-900 rounded overflow-hidden min-h-[260px] flex items-center justify-center">
-          <div id={QR_READER_ELEMENT_ID} className="w-full" />
+        <div className="w-full bg-slate-950 rounded-xl overflow-hidden aspect-video relative flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center text-slate-400 text-xs gap-2 pointer-events-none z-0">
+            <div className="w-4 h-4 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+            <span>Đang bật camera…</span>
+          </div>
+          <div id={QR_READER_ELEMENT_ID} className="w-full h-full relative z-10" />
         </div>
+
+        <style>{`
+          #${QR_READER_ELEMENT_ID} {
+            width: 100% !important;
+            height: 100% !important;
+            border: none !important;
+            padding: 0 !important;
+          }
+          #${QR_READER_ELEMENT_ID} video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            display: block !important;
+          }
+          #${QR_READER_ELEMENT_ID} canvas {
+            display: none !important;
+          }
+          #${QR_READER_ELEMENT_ID} img {
+            display: none !important;
+          }
+          #${QR_READER_ELEMENT_ID} #qr-shaded-region {
+            display: none !important;
+          }
+        `}</style>
 
         <div className="flex items-center gap-3 pt-2">
           <label
-            className={`flex-1 py-2.5 px-4 rounded text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer shadow-xs transition-all ${
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer shadow-xs transition-all ${
               qrImageLoading ? 'opacity-60 pointer-events-none' : ''
             }`}
           >
@@ -121,7 +169,7 @@ export default function ReceptionQrScannerModal({
           </label>
           <button
             type="button"
-            className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded text-xs transition-all cursor-pointer"
+            className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all cursor-pointer"
             onClick={() => setQrOpen(false)}
           >
             Đóng
