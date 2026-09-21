@@ -1,10 +1,10 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
+import { CheckCircle2, X, Printer, Pencil, Loader2, AlertCircle } from 'lucide-react'
 import {
   appointmentSourceLabel,
   appointmentSourceTitle,
-  appointmentSourceValue,
 } from '../../utils/appointmentSource'
 import {
   ageFromDobField,
@@ -21,7 +21,6 @@ import {
   receptionStatusMeta,
   sourceCreatorLabel,
 } from './receptionHelpers'
-import { CheckCircleIcon, CloseIcon, PrinterIcon } from './ReceptionIcons'
 import { updatePatientProfileByStaff } from '../../services/checkIn'
 
 interface ReceptionDetailModalProps {
@@ -66,6 +65,17 @@ interface ReceptionDetailModalProps {
   onPatientProfileUpdated?: (updatedPatient: any) => void
 }
 
+function InfoRow({ label, value, isMono, isHighlight, isLast }: { label: string; value: React.ReactNode; isMono?: boolean; isHighlight?: boolean; isLast?: boolean }) {
+  return (
+    <div className={`flex justify-between py-1.5 ${isLast ? '' : 'border-b border-slate-100'}`}>
+      <dt className="text-slate-500 font-medium text-xs">{label}</dt>
+      <dd className={`text-xs font-semibold max-w-[220px] text-right truncate ${isMono ? 'font-mono' : ''} ${isHighlight ? 'text-emerald-700 font-bold' : 'text-slate-900'}`}>
+        {value || '—'}
+      </dd>
+    </div>
+  )
+}
+
 export default function ReceptionDetailModal({
   isOpen,
   onClose,
@@ -105,8 +115,8 @@ export default function ReceptionDetailModal({
   onMarkCompleted,
   onPatientProfileUpdated,
 }: ReceptionDetailModalProps) {
-  const [isEditingPatient, setIsEditingPatient] = React.useState(false)
-  const [patientForm, setPatientForm] = React.useState({
+  const [isEditingPatient, setIsEditingPatient] = useState(false)
+  const [patientForm, setPatientForm] = useState({
     fullName: '',
     phone: '',
     dateOfBirth: '',
@@ -115,13 +125,12 @@ export default function ReceptionDetailModal({
     healthInsuranceNumber: '',
     address: '',
   })
-  const [patientSaving, setPatientSaving] = React.useState(false)
-  const [patientSaveErr, setPatientSaveErr] = React.useState('')
+  const [patientSaving, setPatientSaving] = useState(false)
+  const [patientSaveErr, setPatientSaveErr] = useState('')
 
   if (!isOpen || !activeDetail) return null
 
-  const patient = activeDetail.patient
-  const doctor = activeDetail.doctor
+  const { patient, doctor } = activeDetail
   const statusMeta = receptionStatusMeta(activeDetail)
 
   const handleOpenEditPatient = () => {
@@ -163,28 +172,20 @@ export default function ReceptionDetailModal({
         nationalId: patientForm.nationalId.trim() || undefined,
         healthInsuranceNumber: patientForm.healthInsuranceNumber.trim() || undefined,
         address: patientForm.address.trim() || undefined,
-      }
-      if (patientForm.dateOfBirth) {
-        payload.dateOfBirth = patientForm.dateOfBirth
+        ...(patientForm.dateOfBirth ? { dateOfBirth: patientForm.dateOfBirth } : {}),
       }
 
       const updated = await updatePatientProfileByStaff(patientId, payload)
-
       if (activeDetail.patient) {
         Object.assign(activeDetail.patient, {
-          fullName: patientForm.fullName.trim(),
+          ...payload,
           name: patientForm.fullName.trim(),
           phone: patientForm.phone.trim(),
-          phoneNumber: patientForm.phone.trim(),
           dateOfBirth: patientForm.dateOfBirth,
           gender: patientForm.gender,
-          nationalId: patientForm.nationalId.trim(),
-          healthInsuranceNumber: patientForm.healthInsuranceNumber.trim(),
-          address: patientForm.address.trim(),
           ...(updated && typeof updated === 'object' ? updated : {}),
         })
       }
-
       onPatientProfileUpdated?.(updated || activeDetail.patient)
       setIsEditingPatient(false)
     } catch (err: any) {
@@ -194,241 +195,158 @@ export default function ReceptionDetailModal({
     }
   }
 
+  const statusToneClasses = {
+    booked: 'bg-blue-50 text-blue-700 border-blue-200',
+    completed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    cancelled: 'bg-slate-100 text-slate-600 border-slate-200',
+  }[statusMeta.tone as string] || 'bg-amber-50 text-amber-700 border-amber-200'
+
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
-      role="presentation"
+      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 md:p-7 border border-slate-200 max-h-[90vh] overflow-y-auto"
-        role="dialog"
-        aria-labelledby="reception-modal-title"
-        aria-modal="true"
+        className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 border border-slate-200 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header Modal */}
-        <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-200">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-lg border border-emerald-300">
+            <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
               {activeDetail.ticket || '—'}
             </span>
             <div>
-              <h2 id="reception-modal-title" className="text-lg font-bold text-slate-900 leading-none">
+              <h2 className="text-lg font-bold text-slate-900 leading-tight">
                 {patientListDisplayName(patient)}
               </h2>
-              <span className="text-xs text-slate-500 font-medium mt-1 inline-block">
-                Chi tiết hồ sơ tiếp nhận & điều phối
-              </span>
+              <span className="text-xs text-slate-500 font-medium">Chi tiết hồ sơ tiếp nhận & điều phối</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {pastSlotDetail ? (
-              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+            {pastSlotDetail && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
                 Quá giờ slot
               </span>
-            ) : null}
+            )}
             <span
-              className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-300"
+              className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200"
               title={appointmentSourceTitle(activeDetail)}
             >
               {appointmentSourceLabel(activeDetail)}
             </span>
-            <span
-              className={`px-2.5 py-1 rounded-full text-xs font-bold border ${statusMeta.tone === 'booked'
-                ? 'bg-blue-100 text-blue-800 border-blue-300'
-                : statusMeta.tone === 'completed'
-                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                  : statusMeta.tone === 'cancelled'
-                    ? 'bg-slate-200 text-slate-700 border-slate-300'
-                    : 'bg-amber-100 text-amber-800 border-amber-300'
-                }`}
-            >
+            <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${statusToneClasses}`}>
               {statusMeta.label}
             </span>
-
             <button
               type="button"
-              className="w-8 h-8 rounded flex items-center justify-center text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all ml-2 cursor-pointer border border-slate-200"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition ml-2 cursor-pointer border border-slate-200"
               onClick={onClose}
-              aria-label="Đóng"
             >
-              <CloseIcon className="w-4 h-4" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Thông báo kết quả / lỗi */}
-        {saveMsg ? (
-          <div className="mb-4 px-4 py-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs rounded font-medium">
-            {saveMsg}
+        {/* Alerts */}
+        {saveMsg && <div className="mb-4 px-4 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg font-medium">{saveMsg}</div>}
+        {(saveErr || visitErr || detailErr) && (
+          <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg font-medium flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{saveErr || visitErr || detailErr}</span>
           </div>
-        ) : null}
-        {saveErr ? (
-          <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded font-medium">
-            {saveErr}
-          </div>
-        ) : null}
-        {visitErr ? (
-          <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded font-medium">
-            {visitErr}
-          </div>
-        ) : null}
-        {detailErr ? (
-          <div className="mb-4 px-4 py-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded font-medium">
-            {detailErr}
-          </div>
-        ) : null}
-
-        {pastSlotDetail ? (
-          <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-300 text-amber-900 text-xs rounded font-medium">
+        )}
+        {pastSlotDetail && (
+          <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-lg font-medium">
             Khung giờ hẹn đã kết thúc. Bạn có thể bấm <strong>Từ chối / Hủy</strong> nếu bệnh nhân không đến.
           </div>
-        ) : null}
+        )}
 
         {/* 2 Cột: Thông tin bệnh nhân & Thông tin khám */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-          {/* Bệnh nhân */}
-          <section className="bg-slate-50 border border-slate-200 rounded p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                Thông tin bệnh nhân
-              </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-200">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Thông tin bệnh nhân</h3>
               {patient?.id && (
                 <button
                   type="button"
                   onClick={handleOpenEditPatient}
-                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1 cursor-pointer"
+                  className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
                 >
-                  Sửa thông tin
+                  <Pencil className="w-3 h-3" /> Sửa thông tin
                 </button>
               )}
             </div>
-            <dl className="space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Mã bệnh nhân</dt>
-                <dd className="font-mono font-bold text-slate-900">{patient?.patientCode || patient?.id || '—'}</dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Họ và tên</dt>
-                <dd className="font-bold text-slate-900">{patient?.fullName || patient?.name || '—'}</dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Số điện thoại</dt>
-                <dd className="font-semibold text-slate-900">{patient?.phone || '—'}</dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Ngày sinh / Tuổi</dt>
-                <dd className="font-semibold text-slate-900">
-                  {formatDob(patient?.dateOfBirth)}
-                  {ageFromDobField(patient?.dateOfBirth) ? ` (${ageFromDobField(patient.dateOfBirth)} tuổi)` : ''}
-                </dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Giới tính</dt>
-                <dd className="font-semibold text-slate-900">
-                  {patient?.gender === 'male' || patient?.gender === 'MALE'
-                    ? 'Nam'
-                    : patient?.gender === 'female' || patient?.gender === 'FEMALE'
-                      ? 'Nữ'
-                      : '—'}
-                </dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Số CCCD</dt>
-                <dd className="font-mono font-semibold text-slate-900">{patient?.nationalId || '—'}</dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Mã BHYT</dt>
-                <dd className="font-mono font-semibold text-slate-900">{patient?.healthInsuranceNumber || '—'}</dd>
-              </div>
-              <div className="flex justify-between py-1">
-                <dt className="text-slate-500 font-medium">Địa chỉ</dt>
-                <dd className="font-semibold text-slate-900 text-right max-w-[220px] truncate">{patient?.address || '—'}</dd>
-              </div>
+            <dl>
+              <InfoRow label="Mã bệnh nhân" value={patient?.patientCode || patient?.id} isMono />
+              <InfoRow label="Họ và tên" value={patient?.fullName || patient?.name} />
+              <InfoRow label="Số điện thoại" value={patient?.phone} />
+              <InfoRow
+                label="Ngày sinh / Tuổi"
+                value={`${formatDob(patient?.dateOfBirth)}${ageFromDobField(patient?.dateOfBirth) ? ` (${ageFromDobField(patient?.dateOfBirth)} tuổi)` : ''}`}
+              />
+              <InfoRow
+                label="Giới tính"
+                value={patient?.gender?.toLowerCase().includes('fe') || patient?.gender?.toLowerCase().includes('nữ') ? 'Nữ' : patient?.gender ? 'Nam' : '—'}
+              />
+              <InfoRow label="Số CCCD" value={patient?.nationalId} isMono />
+              <InfoRow label="Mã BHYT" value={patient?.healthInsuranceNumber} isMono />
+              <InfoRow label="Địa chỉ" value={patient?.address} isLast />
             </dl>
           </section>
 
-          {/* Thông tin khám */}
-          <section className="bg-slate-50 border border-slate-200 rounded p-4">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-              Thông tin khám bệnh
-            </h3>
-            <dl className="space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Ngày khám</dt>
-                <dd className="font-bold text-slate-900">{formatDateVi(activeDetail.appointmentDate)}</dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Khung giờ</dt>
-                <dd className="font-bold text-emerald-700">
-                  {formatExamTimeLine(activeDetail.startTime, activeDetail.endTime)}
-                </dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Bác sĩ phụ trách</dt>
-                <dd className="font-bold text-slate-900">{doctorDisplayName(doctor)}</dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Chuyên khoa</dt>
-                <dd className="font-semibold text-slate-700">{activeDetail.specialty?.name || activeDetail.servicePackage?.name || doctorSpecialtyDisplay(doctor)}</dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Dịch vụ / Gói khám</dt>
-                <dd className="font-bold text-emerald-800 text-right max-w-[220px]">
-                  {activeDetail.servicePackage?.name || (doctor ? 'Khám với bác sĩ' : activeDetail.bookingMethod?.name || '—')}
-                </dd>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <dt className="text-slate-500 font-medium">Người tạo</dt>
-                <dd className="font-semibold text-slate-700">{sourceCreatorLabel(activeDetail)}</dd>
-              </div>
-              <div className="flex justify-between py-1">
-                <dt className="text-slate-500 font-medium">Ghi chú</dt>
-                <dd className="font-semibold text-slate-900 text-right max-w-[220px] truncate">{activeDetail.note || '—'}</dd>
-              </div>
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4">
+            <div className="mb-2 pb-2 border-b border-slate-200">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Thông tin khám bệnh</h3>
+            </div>
+            <dl>
+              <InfoRow label="Ngày khám" value={formatDateVi(activeDetail.appointmentDate)} />
+              <InfoRow label="Khung giờ" value={formatExamTimeLine(activeDetail.startTime, activeDetail.endTime)} isHighlight />
+              <InfoRow label="Bác sĩ phụ trách" value={doctorDisplayName(doctor)} />
+              <InfoRow label="Chuyên khoa" value={activeDetail.specialty?.name || activeDetail.servicePackage?.name || doctorSpecialtyDisplay(doctor)} />
+              <InfoRow
+                label="Dịch vụ / Gói khám"
+                value={activeDetail.servicePackage?.name || (doctor ? 'Khám với bác sĩ' : activeDetail.bookingMethod?.name)}
+                isHighlight
+              />
+              <InfoRow label="Người tạo" value={sourceCreatorLabel(activeDetail)} />
+              <InfoRow label="Ghi chú" value={activeDetail.note} isLast />
             </dl>
           </section>
         </div>
 
-        {/* 2 Khối: Thu phí khám & Điều phối phòng */}
+        {/* 2 Khối: Thu phí & Điều phối */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Thu Phí */}
-          <section className="bg-slate-50 border border-slate-200 rounded p-4 flex flex-col justify-between">
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 flex flex-col justify-between">
             <div>
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-                Thu phí khám ban đầu
-              </h3>
-              <div className="flex items-baseline justify-between p-3 bg-white border border-slate-300 rounded mb-3">
-                <span className="text-xs font-semibold text-slate-600">Số tiền phí khám:</span>
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Thu phí khám ban đầu</h3>
+              <div className="flex items-baseline justify-between p-3 bg-white border border-slate-200 rounded-lg mb-3">
+                <span className="text-xs font-medium text-slate-600">Số tiền phí khám:</span>
                 <strong className="text-xl font-extrabold text-emerald-700">{formatVnd(consultationFee)}</strong>
               </div>
 
               {isPaid ? (
-                <div className="p-3 bg-emerald-100 border border-emerald-300 rounded space-y-1.5 text-xs text-emerald-950 font-medium">
-                  <div className="font-bold flex items-center gap-1.5 text-emerald-900">
-                    <CheckCircleIcon className="w-4 h-4 text-emerald-700" />
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg space-y-1.5 text-xs text-emerald-950">
+                  <div className="font-bold flex items-center gap-1.5 text-emerald-800">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700" />
                     <span>Đã thu phí thành công</span>
                   </div>
-                  <p className="text-[11px] text-emerald-800">
-                    Phương thức: <strong>{paymentMethodLabel(activeDetail.payment?.method)}</strong> ·{' '}
-                    {formatDateTimeVi(activeDetail.payment?.paidAt)}
+                  <p className="text-[11px] text-emerald-700">
+                    Phương thức: <strong>{paymentMethodLabel(activeDetail.payment?.method)}</strong> · {formatDateTimeVi(activeDetail.payment?.paidAt)}
                   </p>
-                  {activeDetail.payment?.paidBy ? (
-                    <p className="text-[11px] text-emerald-800">
+                  {activeDetail.payment?.paidBy && (
+                    <p className="text-[11px] text-emerald-700">
                       Thu ngân: <strong>{formatPaidByLine(activeDetail.payment.paidBy)}</strong>
                     </p>
-                  ) : null}
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                      Phương thức thu tiền:
-                    </label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1.5">Phương thức thu tiền:</label>
                     <select
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-600"
                       value={paymentMethod}
                       disabled={!canEditStatus || paymentSaving}
                       onChange={(e) => setPaymentMethod(e.target.value)}
@@ -440,43 +358,38 @@ export default function ReceptionDetailModal({
                     </select>
                   </div>
 
-                  {paymentErr ? (
-                    <div className="p-2.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs rounded font-semibold">
+                  {paymentErr && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg font-semibold">
                       {paymentErr}
                     </div>
-                  ) : null}
+                  )}
 
                   <button
                     type="button"
-                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs shadow-sm border border-emerald-600 transition-all cursor-pointer disabled:opacity-50 active:scale-[0.98]"
+                    className="w-full py-2 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg text-xs transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                     disabled={!canEditStatus || !hasClinicRoom || paymentSaving}
                     onClick={handleRecordPayment}
                   >
-                    {paymentSaving ? 'Đang xử lý…' : 'Thu tiền & Tự động xác nhận'}
+                    {paymentSaving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang xử lý…</> : 'Thu tiền & Tự động xác nhận'}
                   </button>
 
-                  {!hasClinicRoom && canEditStatus ? (
-                    <p className="text-[11px] text-amber-700 font-bold">
-                      ⚠️ Vui lòng chọn phòng khám trước khi thu phí.
-                    </p>
-                  ) : null}
+                  {!hasClinicRoom && canEditStatus && (
+                    <p className="text-[11px] text-amber-700 font-medium">⚠️ Vui lòng chọn phòng khám trước khi thu phí.</p>
+                  )}
                 </div>
               )}
             </div>
           </section>
 
-          {/* Điều Phối & Xác Nhận */}
-          <section className="bg-slate-50 border border-slate-200 rounded p-4 space-y-3">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-              Điều phối phòng & Xác nhận
-            </h3>
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-3">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Điều phối phòng & Xác nhận</h3>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
                 Phòng khám <span className="text-rose-600">*</span>
               </label>
               <select
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-600"
                 value={clinicRoomDraft}
                 disabled={!canEditStatus}
                 onChange={(e) => handleClinicRoomChange(e.target.value)}
@@ -488,17 +401,15 @@ export default function ReceptionDetailModal({
                   </option>
                 ))}
               </select>
-              {clinicRoomsErr ? <span className="text-[11px] text-rose-700 font-bold">{clinicRoomsErr}</span> : null}
+              {clinicRoomsErr && <span className="text-[11px] text-rose-700 font-medium">{clinicRoomsErr}</span>}
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                Số thứ tự khám (STT)
-              </label>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">Số thứ tự khám (STT)</label>
               <input
                 type="number"
                 min="1"
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-600"
                 placeholder="Tự động cấp khi chọn phòng"
                 value={visitQueueDraft}
                 disabled={!canEditStatus}
@@ -506,27 +417,26 @@ export default function ReceptionDetailModal({
               />
             </div>
 
-            {/* Các nút hành động */}
-            <div className="pt-2 flex flex-wrap items-center gap-2.5">
+            {/* Actions */}
+            <div className="pt-2 flex flex-wrap items-center gap-2">
               {activeDetail?.workflowStatus === 'CHECKED_IN' ? (
                 <>
-                  <div className="flex-1 py-2 px-3.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs">
-                    <span>✓ Đã Check-in {visitQueueDraft ? `(STT: ${visitQueueDraft})` : ''}</span>
+                  <div className="flex-1 py-2 px-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold flex items-center justify-center">
+                    ✓ Đã Check-in {visitQueueDraft ? `(STT: ${visitQueueDraft})` : ''}
                   </div>
                   {onMarkCompleted && (
                     <button
                       type="button"
-                      className="py-2 px-3.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded transition-all cursor-pointer shadow-xs whitespace-nowrap flex items-center gap-1.5 active:scale-[0.97] disabled:opacity-40"
+                      className="py-2 px-3.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition cursor-pointer disabled:opacity-40"
                       disabled={saving}
                       onClick={onMarkCompleted}
                     >
-                      <span>🩺</span>
                       Khám xong
                     </button>
                   )}
                   <button
                     type="button"
-                    className="py-2 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                    className="py-2 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition cursor-pointer"
                     onClick={openRegistrationFromActive}
                   >
                     Phiếu đăng ký
@@ -537,23 +447,23 @@ export default function ReceptionDetailModal({
                   {handleManualCheckIn && (
                     <button
                       type="button"
-                      className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98] whitespace-nowrap"
+                      className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition cursor-pointer disabled:opacity-50"
                       disabled={saving}
                       onClick={handleManualCheckIn}
                     >
-                      <span>Xác nhận</span>
+                      {saving ? 'Đang xử lý…' : 'Xác nhận'}
                     </button>
                   )}
                   <button
                     type="button"
-                    className="py-2.5 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                    className="py-2 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition cursor-pointer"
                     onClick={openRegistrationFromActive}
                   >
                     Phiếu đăng ký
                   </button>
                   <button
                     type="button"
-                    className="py-2.5 px-3.5 bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 text-xs font-bold rounded transition-all cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
+                    className="py-2 px-3 bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded-lg transition cursor-pointer disabled:opacity-40"
                     disabled={saving}
                     onClick={handleCancelAppointment}
                   >
@@ -564,7 +474,7 @@ export default function ReceptionDetailModal({
                 <>
                   <button
                     type="button"
-                    className="flex-1 min-w-[140px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded shadow-sm border border-emerald-600 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.98] whitespace-nowrap"
+                    className="flex-1 py-2 px-3.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition cursor-pointer disabled:opacity-40"
                     disabled={!canFinishConfirm || saving}
                     onClick={handleFinishConfirm}
                   >
@@ -572,7 +482,7 @@ export default function ReceptionDetailModal({
                   </button>
                   <button
                     type="button"
-                    className="py-2.5 px-3.5 bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 text-xs font-bold rounded transition-all cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
+                    className="py-2 px-3 bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded-lg transition cursor-pointer disabled:opacity-40"
                     disabled={!canEditStatus || saving}
                     onClick={handleCancelAppointment}
                   >
@@ -580,7 +490,7 @@ export default function ReceptionDetailModal({
                   </button>
                   <button
                     type="button"
-                    className="py-2.5 px-3.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold rounded transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                    className="py-2 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition cursor-pointer"
                     onClick={openRegistrationFromActive}
                   >
                     Phiếu đăng ký
@@ -595,16 +505,16 @@ export default function ReceptionDetailModal({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="flex-1 py-2 px-2.5 bg-white hover:bg-slate-100 border border-slate-300 rounded text-[11px] font-bold text-slate-800 transition-all cursor-pointer disabled:opacity-40 shadow-xs flex items-center justify-center gap-1.5"
+                  className="flex-1 py-1.5 px-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 transition cursor-pointer disabled:opacity-40 flex items-center justify-center gap-1.5"
                   disabled={printBothDisabled}
                   onClick={printBothFromDetail}
                 >
-                  <PrinterIcon className="w-3.5 h-3.5 text-slate-600" />
+                  <Printer className="w-3.5 h-3.5 text-slate-500" />
                   <span>In cả hai</span>
                 </button>
                 <button
                   type="button"
-                  className="py-2 px-2.5 bg-white hover:bg-slate-100 border border-slate-300 rounded text-[11px] font-bold text-slate-800 transition-all cursor-pointer disabled:opacity-40 shadow-xs"
+                  className="py-1.5 px-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 transition cursor-pointer disabled:opacity-40"
                   disabled={printSlipDisabled}
                   onClick={printSlipOnly}
                 >
@@ -612,7 +522,7 @@ export default function ReceptionDetailModal({
                 </button>
                 <button
                   type="button"
-                  className="py-2 px-2.5 bg-white hover:bg-slate-100 border border-slate-300 rounded text-[11px] font-bold text-slate-800 transition-all cursor-pointer disabled:opacity-40 shadow-xs"
+                  className="py-1.5 px-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 transition cursor-pointer disabled:opacity-40"
                   disabled={printInvoiceDisabled}
                   onClick={printInvoiceOnly}
                 >
@@ -623,25 +533,26 @@ export default function ReceptionDetailModal({
           </section>
         </div>
 
-        {/* Modal chỉnh sửa thông tin hành chính bệnh nhân */}
+        {/* Modal Chỉnh sửa hồ sơ bệnh nhân */}
         {isEditingPatient && (
-          <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-            <div className="bg-white rounded-2xl p-5 md:p-6 max-w-lg w-full shadow-2xl border border-slate-100 space-y-4">
+          <div className="fixed inset-0 z-60 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-5 max-w-lg w-full shadow-2xl border border-slate-100 space-y-4" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                 <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                  <span>✏️ Chỉnh sửa thông tin bệnh nhân</span>
+                  <Pencil className="w-4 h-4 text-emerald-700" />
+                  Chỉnh sửa thông tin bệnh nhân
                 </h4>
                 <button
                   type="button"
                   onClick={() => setIsEditingPatient(false)}
-                  className="w-7 h-7 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
                 >
-                  ✕
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
               {patientSaveErr && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded font-medium">
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg font-medium">
                   {patientSaveErr}
                 </div>
               )}
@@ -653,7 +564,7 @@ export default function ReceptionDetailModal({
                     type="text"
                     value={patientForm.fullName}
                     onChange={(e) => setPatientForm((p) => ({ ...p, fullName: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
@@ -663,7 +574,7 @@ export default function ReceptionDetailModal({
                     type="tel"
                     value={patientForm.phone}
                     onChange={(e) => setPatientForm((p) => ({ ...p, phone: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
@@ -672,7 +583,7 @@ export default function ReceptionDetailModal({
                   <select
                     value={patientForm.gender}
                     onChange={(e) => setPatientForm((p) => ({ ...p, gender: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600"
                   >
                     <option value="male">Nam</option>
                     <option value="female">Nữ</option>
@@ -686,7 +597,7 @@ export default function ReceptionDetailModal({
                     type="date"
                     value={patientForm.dateOfBirth}
                     onChange={(e) => setPatientForm((p) => ({ ...p, dateOfBirth: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
@@ -696,7 +607,7 @@ export default function ReceptionDetailModal({
                     type="text"
                     value={patientForm.nationalId}
                     onChange={(e) => setPatientForm((p) => ({ ...p, nationalId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
@@ -706,7 +617,7 @@ export default function ReceptionDetailModal({
                     type="text"
                     value={patientForm.healthInsuranceNumber}
                     onChange={(e) => setPatientForm((p) => ({ ...p, healthInsuranceNumber: e.target.value.toUpperCase() }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs uppercase font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs uppercase font-medium text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
@@ -716,7 +627,7 @@ export default function ReceptionDetailModal({
                     type="text"
                     value={patientForm.address}
                     onChange={(e) => setPatientForm((p) => ({ ...p, address: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
               </div>
@@ -725,7 +636,7 @@ export default function ReceptionDetailModal({
                 <button
                   type="button"
                   onClick={() => setIsEditingPatient(false)}
-                  className="flex-1 py-2 px-3 border border-slate-300 rounded text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  className="flex-1 py-2 px-3 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Hủy bỏ
                 </button>
@@ -733,9 +644,9 @@ export default function ReceptionDetailModal({
                   type="button"
                   onClick={handleSavePatient}
                   disabled={patientSaving || !patientForm.fullName.trim()}
-                  className="flex-1 py-2 px-3 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition cursor-pointer shadow-xs"
+                  className="flex-1 py-2 px-3 bg-emerald-700 text-white rounded-lg text-xs font-bold hover:bg-emerald-800 disabled:opacity-50 transition cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  {patientSaving ? 'Đang lưu…' : 'Lưu thông tin'}
+                  {patientSaving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang lưu…</> : 'Lưu thông tin'}
                 </button>
               </div>
             </div>

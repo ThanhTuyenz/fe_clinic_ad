@@ -18,9 +18,6 @@ const STAFF_ROLES = [
   'branch_manager',
   'doctor',
   'receptionist',
-  'registration',
-  'pharmacist',
-  'cashier',
 ]
 
 export function AuthProvider({ children }) {

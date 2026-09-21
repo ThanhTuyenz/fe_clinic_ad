@@ -33,13 +33,15 @@ function userTypeLower(user) {
 }
 
 function redirectPathForUser(user) {
-  if (userTypeLower(user) === 'pharmacist') return '/pharmacy'
+  const t = userTypeLower(user)
+  if (t === 'doctor') return '/doctor'
+  if (t === 'receptionist') return '/reception'
   return '/dashboard'
 }
 
 function isStaffUser(user) {
   const t = userTypeLower(user)
-  return ['admin', 'branch_manager', 'doctor', 'receptionist', 'registration', 'pharmacist', 'cashier'].includes(t)
+  return ['admin', 'branch_manager', 'doctor', 'receptionist'].includes(t)
 }
 
 export default function Login() {

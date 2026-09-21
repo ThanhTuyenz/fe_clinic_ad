@@ -1,20 +1,46 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Edit2, Trash2, Lock, Unlock, Search, RefreshCw, AlertCircle, Plus } from 'lucide-react'
+import {
+  AdminButton,
+  AdminIconButton,
+  AdminPageHeader,
+  FilterTabs,
+  AdminTableCard,
+  AdminTable,
+  AdminTableHead,
+  AdminTableLoading,
+  AdminTableEmpty,
+  AdminTableFooter,
+  AdminModal,
+  StatusBadge,
+  AdminInput,
+  AdminSelect,
+  AdminTextarea,
+} from '@/common/components/ui'
 import { createUser, deleteUser, listUsers, updateUser } from '../services/users'
 import { listCatalog } from '../services/systemCatalog'
 import { listClinicRooms } from '../services/clinicRooms'
+import { resolveMediaUrl } from '../services/media'
+import ImageUploader from '../components/ImageUploader'
 
 const ROLES = [
   ['all', 'Tất cả'],
   ['doctor', 'Bác sĩ'],
-  ['pharmacist', 'Dược sĩ'],
   ['receptionist', 'Lễ tân'],
   ['branch_manager', 'Quản lý chi nhánh'],
-  ['cashier', 'Kế toán / Thu ngân'],
+] as const
+const ROLE_LABEL: Record<string, string> = Object.fromEntries(ROLES)
+const ACADEMIC_RANKS = [
+  'BS. CKI',
+  'BS. CKII',
+  'Thạc sĩ, BS',
+  'Tiến sĩ, BS',
+  'PGS. TS. BS',
+  'GS. TS. BS',
+  'Bác sĩ Đa khoa',
 ]
-const ROLE_LABEL = Object.fromEntries(ROLES)
-const ACADEMIC_RANKS = ['BS. CKI', 'BS. CKII', 'Thạc sĩ, BS', 'Tiến sĩ, BS', 'PGS. TS. BS', 'GS. TS. BS', 'Bác sĩ Đa khoa']
 
 const EMPTY = {
   fullName: '',
@@ -23,6 +49,7 @@ const EMPTY = {
   password: '',
   role: 'doctor',
   isBlocked: false,
+  avatarUrl: '',
   academicRank: 'BS. CKI',
   licenseNumber: '',
   experienceYears: '5',
@@ -31,6 +58,15 @@ const EMPTY = {
   specialtyId: '',
   roomId: '',
 }
+
+const TABLE_COLUMNS = [
+  'Nhân viên',
+  'Chi nhánh',
+  'Chuyên khoa',
+  'Vai trò',
+  'Trạng thái',
+  { label: 'Thao tác', align: 'right' as const },
+]
 
 export default function ClinicStaffPage() {
   const [rows, setRows] = useState<any[]>([])
@@ -41,6 +77,7 @@ export default function ClinicStaffPage() {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [selected, setSelected] = useState<any>(null)
   const [form, setForm] = useState<any>(EMPTY)
@@ -50,16 +87,20 @@ export default function ClinicStaffPage() {
     setLoading(true)
     setError('')
     try {
-      const [resUsers, resBranches, resSpecialties, resRooms] = await Promise.all([
+      const [uRes, bRes, sRes, rRes] = await Promise.all([
         listUsers(),
         listCatalog('branches').catch(() => []),
         listCatalog('specialties').catch(() => []),
         listClinicRooms().catch(() => []),
       ])
-      setRows(resUsers.data.filter((u: any) => ROLES.some(([id]) => id === String(u.role || u.userType).toLowerCase())))
-      setBranches(resBranches)
-      setSpecialties(resSpecialties)
-      setRooms(resRooms)
+      setRows(
+        uRes.data.filter((u: any) =>
+          ROLES.some(([id]) => id === String(u.role || u.userType).toLowerCase())
+        )
+      )
+      setBranches(bRes)
+      setSpecialties(sRes)
+      setRooms(rRes)
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || 'Không tải được nhân sự.')
     } finally {
@@ -72,21 +113,29 @@ export default function ClinicStaffPage() {
   }, [load])
 
   const filtered = useMemo(() => {
-    return rows.filter((row) => {
-      const r = String(row.role || row.userType).toLowerCase()
-      const q = query.trim().toLowerCase()
-      return (filter === 'all' || r === filter) && (!q || `${row.fullName || ''} ${row.email || ''} ${row.phoneNumber || ''}`.toLowerCase().includes(q))
+    const q = query.trim().toLowerCase()
+    return rows.filter((r) => {
+      const roleMatch = filter === 'all' || String(r.role || r.userType).toLowerCase() === filter
+      if (!roleMatch) return false
+      if (!q) return true
+      const b = r.branchAssignments?.[0]?.branch?.name || r.branchName || ''
+      const spec = r.doctor?.specialties?.[0]?.specialty?.name || ''
+      return [r.fullName, r.email, r.phoneNumber, b, spec].join(' ').toLowerCase().includes(q)
     })
   }, [rows, filter, query])
 
   const availableRooms = useMemo(() => {
     if (!form.branchId) return rooms
-    return rooms.filter((rm) => rm.branchId === form.branchId || rm.branch?.id === form.branchId)
+    return rooms.filter((rm: any) => rm.branchId === form.branchId)
   }, [rooms, form.branchId])
 
   const openCreate = () => {
     setSelected(null)
-    setForm({ ...EMPTY, role: filter === 'all' ? 'doctor' : filter, branchId: branches[0]?.id || '' })
+    setForm({
+      ...EMPTY,
+      branchId: branches[0]?.id || '',
+      specialtyId: specialties[0]?.id ? String(specialties[0].id) : '',
+    })
     setError('')
     setModal('create')
   }
@@ -94,31 +143,35 @@ export default function ClinicStaffPage() {
   const openEdit = (row: any) => {
     setSelected(row)
     const doc = row.doctor || {}
-    const bId = row.branchAssignments?.[0]?.branchId || row.branchAssignments?.[0]?.branch?.id || row.branchId || ''
-    const sId = doc.specialties?.[0]?.specialtyId ? String(doc.specialties[0].specialtyId) : doc.specialtyId ? String(doc.specialtyId) : ''
     setForm({
       fullName: row.fullName || '',
       email: row.email || '',
       phoneNumber: row.phoneNumber || '',
       password: '',
       role: String(row.role || row.userType).toLowerCase(),
-      isBlocked: Boolean(row.isBlocked),
+      isBlocked: !!row.isBlocked,
+      avatarUrl: row.avatarUrl || doc.avatarUrl || '',
       academicRank: doc.academicRank || 'BS. CKI',
       licenseNumber: doc.licenseNumber || '',
       experienceYears: doc.experienceYears != null ? String(doc.experienceYears) : '5',
       biography: doc.biography || '',
-      branchId: bId,
-      specialtyId: sId,
+      branchId: row.branchAssignments?.[0]?.branchId || row.branchId || '',
+      specialtyId: doc.specialties?.[0]?.specialtyId
+        ? String(doc.specialties[0].specialtyId)
+        : doc.specialtyId
+        ? String(doc.specialtyId)
+        : '',
       roomId: doc.roomId || row.roomId || '',
     })
     setError('')
     setModal('edit')
   }
 
-  async function submit(e: React.FormEvent) {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.fullName.trim() || !form.email.trim()) return setError('Vui lòng nhập họ tên và email.')
-    if (modal === 'create' && form.password.length < 6) return setError('Mật khẩu phải có ít nhất 6 ký tự.')
+    if (modal === 'create' && form.password.length < 6)
+      return setError('Mật khẩu phải có ít nhất 6 ký tự.')
 
     setSaving(true)
     setError('')
@@ -128,6 +181,7 @@ export default function ClinicStaffPage() {
         email: form.email.trim(),
         role: form.role,
         isBlocked: form.isBlocked,
+        avatarUrl: form.avatarUrl || null,
         ...(form.phoneNumber ? { phoneNumber: form.phoneNumber.trim() } : {}),
         ...(form.password ? { password: form.password } : {}),
         ...(form.branchId ? { branchId: form.branchId } : {}),
@@ -140,9 +194,14 @@ export default function ClinicStaffPage() {
         if (form.specialtyId) payload.specialtyId = Number(form.specialtyId)
         if (form.roomId) payload.roomId = form.roomId
       }
-
-      if (modal === 'create') await createUser({ ...payload, status: 'active' })
-      else await updateUser(selected.id, payload)
+      if (modal === 'create') {
+        await createUser({ ...payload, status: 'active' })
+        setSuccessMsg('Đã tạo tài khoản nhân sự mới.')
+      } else {
+        await updateUser(selected.id, payload)
+        setSuccessMsg('Đã cập nhật thông tin nhân sự.')
+      }
+      setTimeout(() => setSuccessMsg(''), 3500)
       setModal(null)
       await load()
     } catch (err: any) {
@@ -152,347 +211,312 @@ export default function ClinicStaffPage() {
     }
   }
 
-  async function remove(row: any) {
+  const remove = async (row: any) => {
     if (!confirm(`Xóa tài khoản ${row.fullName || row.email}?`)) return
     try {
       await deleteUser(row.id)
+      setSuccessMsg(`Đã xóa tài khoản.`)
+      setTimeout(() => setSuccessMsg(''), 3000)
       await load()
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || 'Không xóa được tài khoản.')
+      setError(e?.response?.data?.message || 'Không xóa được tài khoản.')
     }
   }
 
-  async function toggle(row: any) {
+  const toggle = async (row: any) => {
+    const next = !row.isBlocked
     try {
-      await updateUser(row.id, { isBlocked: !row.isBlocked })
+      await updateUser(row.id, { isBlocked: next })
+      setSuccessMsg(next ? 'Đã khóa tài khoản.' : 'Đã mở khóa tài khoản.')
+      setTimeout(() => setSuccessMsg(''), 3000)
       await load()
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || 'Không cập nhật được trạng thái.')
+      setError(e?.response?.data?.message || 'Không cập nhật được trạng thái.')
     }
   }
+
+  const filterTabs = ROLES.map(([id, label]) => ({
+    id,
+    label,
+    count:
+      id === 'all'
+        ? rows.length
+        : rows.filter((r) => String(r.role || r.userType).toLowerCase() === id).length,
+  }))
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[.13em] text-emerald-700">Quản lý người dùng</p>
-          <h1 className="mt-1 text-2xl font-bold text-slate-950">Nhân sự phòng khám</h1>
-          <p className="mt-1 text-sm text-slate-500">Quản lý tài khoản, phân bổ chi nhánh, chuyên khoa và phòng làm việc.</p>
+      <AdminPageHeader
+        eyebrow="Quản lý người dùng"
+        title="Nhân sự phòng khám"
+        description="Quản lý tài khoản, ảnh đại diện, chi nhánh, chuyên khoa và phòng khám."
+      >
+        <AdminButton
+          variant="secondary"
+          icon={RefreshCw}
+          loading={loading}
+          onClick={() => void load()}
+        >
+          Làm mới
+        </AdminButton>
+        <AdminButton
+          variant="primary"
+          icon={Plus}
+          onClick={openCreate}
+        >
+          Thêm nhân sự
+        </AdminButton>
+      </AdminPageHeader>
+
+      {error && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 font-medium">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
         </div>
-        <button onClick={openCreate} className="rounded bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800">
-          + Thêm nhân sự
-        </button>
-      </div>
+      )}
+      {successMsg && (
+        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 font-medium">
+          {successMsg}
+        </div>
+      )}
 
-      {error && <div className="mt-4 rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
-
-      <section className="mt-5 rounded border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 p-4">
-          <div className="flex flex-wrap gap-1.5">
-            {ROLES.map(([id, label]) => (
-              <button
-                key={id}
-                onClick={() => setFilter(id)}
-                className={`rounded px-3 py-2 text-xs font-bold transition ${
-                  filter === id ? 'bg-emerald-700 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800'
-                }`}
-              >
-                {label}
-                <span className="ml-1.5 opacity-70">
-                  {id === 'all' ? rows.length : rows.filter((r) => String(r.role || r.userType).toLowerCase() === id).length}
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-3 flex gap-2">
+      <AdminTableCard className="mt-5">
+        <div className="border-b border-slate-100 p-4 space-y-3">
+          <FilterTabs
+            tabs={filterTabs}
+            active={filter}
+            onChange={(id) => setFilter(id)}
+          />
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full max-w-md rounded border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-600"
-              placeholder="Tìm theo tên, email, sđt..."
+              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:border-emerald-600 bg-white"
+              placeholder="Tìm theo tên, email, SĐT..."
             />
-            <button onClick={() => void load()} className="rounded border border-slate-200 px-3 text-xs font-semibold hover:bg-slate-50">
-              Làm mới
-            </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px] text-left text-sm">
-            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
-              <tr>
-                {['Nhân viên', 'Chi nhánh', 'Chuyên khoa', 'Vai trò', 'Trạng thái', 'Thao tác'].map((x) => (
-                  <th key={x} className={`px-5 py-3 ${x === 'Thao tác' ? 'text-right' : ''}`}>
-                    {x}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-16 text-center text-slate-400">
-                    Đang tải dữ liệu…
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-16 text-center text-slate-400">
-                    Không có nhân sự phù hợp.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((row) => {
-                  const bName = row.branchAssignments?.[0]?.branch?.name || row.branchName || 'Chi nhánh chính'
-                  const specName = row.doctor?.specialties?.[0]?.specialty?.name || '—'
-                  return (
-                    <tr key={row.id} className="border-t border-slate-100">
-                      <td className="px-5 py-3">
-                        <b>{row.fullName || 'Chưa cập nhật'}</b>
-                        <p className="text-xs text-slate-400">
-                          {row.email} {row.phoneNumber ? `• ${row.phoneNumber}` : ''}
-                        </p>
-                      </td>
-                      <td className="px-5 py-3 text-xs font-semibold text-slate-700">{bName}</td>
-                      <td className="px-5 py-3 text-xs text-emerald-800 font-medium">{specName}</td>
-                      <td className="px-5 py-3 text-slate-600">{ROLE_LABEL[String(row.role || row.userType).toLowerCase()] || row.role}</td>
-                      <td className="px-5 py-3">
-                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${row.isBlocked ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                          {row.isBlocked ? 'Đã khóa' : 'Hoạt động'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <button onClick={() => openEdit(row)} className="mr-2 rounded border border-slate-200 px-2.5 py-1.5 text-xs hover:bg-slate-50">
-                          Sửa
-                        </button>
-                        <button onClick={() => void toggle(row)} className="mr-2 rounded border border-amber-200 px-2.5 py-1.5 text-xs text-amber-700 hover:bg-amber-50">
-                          {row.isBlocked ? 'Mở khóa' : 'Khóa'}
-                        </button>
-                        <button onClick={() => void remove(row)} className="rounded border border-rose-200 px-2.5 py-1.5 text-xs text-rose-700 hover:bg-rose-50">
-                          Xóa
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <footer className="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">
-          Hiển thị {filtered.length}/{rows.length} nhân sự
-        </footer>
-      </section>
+        <AdminTable minWidth="min-w-[750px]">
+          <AdminTableHead columns={TABLE_COLUMNS} />
+          <tbody className="divide-y divide-slate-100">
+            {loading ? (
+              <AdminTableLoading colSpan={6} message="Đang tải dữ liệu nhân sự…" />
+            ) : filtered.length === 0 ? (
+              <AdminTableEmpty colSpan={6} message="Không có nhân sự phù hợp." />
+            ) : (
+              filtered.map((row) => {
+                const bName =
+                  row.branchAssignments?.[0]?.branch?.name || row.branchName || 'Chi nhánh chính'
+                const specName = row.doctor?.specialties?.[0]?.specialty?.name || '—'
+                const avatar = row.avatarUrl || row.doctor?.avatarUrl
+                const roleKey = String(row.role || row.userType).toLowerCase()
+                return (
+                  <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        {avatar ? (
+                          <img
+                            src={resolveMediaUrl(avatar)}
+                            alt=""
+                            className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-xs"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-xs border border-emerald-100 shadow-xs">
+                            {(row.fullName || row.email || '?').charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <strong className="text-slate-900 font-semibold block">
+                            {row.fullName || 'Chưa cập nhật'}
+                          </strong>
+                          <p className="text-xs text-slate-400">
+                            {row.email} {row.phoneNumber ? `• ${row.phoneNumber}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-xs font-semibold text-slate-700">{bName}</td>
+                    <td className="px-5 py-3.5 text-xs text-emerald-800 font-medium">{specName}</td>
+                    <td className="px-5 py-3.5 text-slate-600 text-xs">
+                      <span className="inline-flex items-center font-medium bg-slate-100 px-2 py-0.5 rounded text-slate-800">
+                        {ROLE_LABEL[roleKey] || row.role}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <StatusBadge status={row.isBlocked ? 'blocked' : 'active'}>
+                        {row.isBlocked ? 'Đã khóa' : 'Hoạt động'}
+                      </StatusBadge>
+                    </td>
+                    <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1">
+                        <AdminIconButton
+                          icon={Edit2}
+                          title="Sửa"
+                          tone="emerald"
+                          onClick={() => openEdit(row)}
+                        />
+                        <AdminIconButton
+                          icon={row.isBlocked ? Unlock : Lock}
+                          title={row.isBlocked ? 'Mở khóa' : 'Khóa'}
+                          tone={row.isBlocked ? 'emerald' : 'amber'}
+                          onClick={() => void toggle(row)}
+                        />
+                        <AdminIconButton
+                          icon={Trash2}
+                          title="Xóa"
+                          tone="rose"
+                          onClick={() => void remove(row)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </AdminTable>
+        <AdminTableFooter total={filtered.length} label="nhân sự" />
+      </AdminTableCard>
 
-      {modal && (
-        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-900/35 p-4">
-          <form onSubmit={submit} className="my-8 w-full max-w-xl rounded bg-white shadow-2xl">
-            <header className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-              <b className="text-base text-slate-900">{modal === 'create' ? 'Thêm nhân sự mới' : 'Cập nhật thông tin nhân sự'}</b>
-              <button type="button" onClick={() => setModal(null)} className="text-xl font-bold text-slate-400 hover:text-slate-600">
-                ×
-              </button>
-            </header>
+      {/* CREATE / EDIT MODAL */}
+      <AdminModal
+        isOpen={Boolean(modal)}
+        onClose={() => setModal(null)}
+        eyebrow={modal === 'create' ? 'Tạo mới' : 'Chỉnh sửa'}
+        title={modal === 'create' ? 'Thêm nhân sự mới' : 'Cập nhật nhân sự'}
+        maxWidth="xl"
+        loading={saving}
+      >
+        <form onSubmit={submit} className="space-y-4">
+          <ImageUploader
+            label="Ảnh đại diện (Avatar)"
+            value={form.avatarUrl}
+            onChange={(url) => setForm({ ...form, avatarUrl: url })}
+            aspectRatio="square"
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <AdminInput
+              label="Họ và tên"
+              required
+              value={form.fullName}
+              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+              placeholder="BS. Nguyễn Văn An"
+            />
+            <AdminInput
+              label="Email"
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="doctor@vitacare.local"
+            />
+          </div>
 
-            <div className="max-h-[75vh] space-y-4 overflow-y-auto p-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-xs font-bold text-slate-700">
-                  Họ và tên <span className="text-rose-500">*</span>
-                  <input
-                    type="text"
-                    required
-                    value={form.fullName}
-                    onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                    placeholder="VD: BS. Nguyễn Văn An"
-                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                  />
-                </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <AdminInput
+              label="Số điện thoại"
+              value={form.phoneNumber}
+              onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
+              placeholder="0912345678"
+            />
+            <AdminSelect
+              label="Vai trò hệ thống"
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              options={ROLES.slice(1)}
+            />
+          </div>
 
-                <label className="block text-xs font-bold text-slate-700">
-                  Email <span className="text-rose-500">*</span>
-                  <input
-                    type="email"
-                    required
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    placeholder="VD: doctor.an@vitacare.local"
-                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                  />
-                </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <AdminSelect
+              label="Chi nhánh làm việc"
+              value={form.branchId}
+              onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+              placeholder="-- Chọn chi nhánh --"
+              options={branches.map((b) => ({ value: b.id, label: b.name }))}
+            />
+            <AdminInput
+              label={modal === 'edit' ? 'Mật khẩu (để trống nếu giữ nguyên)' : 'Mật khẩu'}
+              type="password"
+              required={modal !== 'edit'}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder="••••••••"
+            />
+          </div>
+
+          {form.role === 'doctor' && (
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-4 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                Thông tin chuyên môn Bác sĩ
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <AdminSelect
+                  label="Học hàm / Học vị"
+                  value={form.academicRank}
+                  onChange={(e) => setForm({ ...form, academicRank: e.target.value })}
+                  options={ACADEMIC_RANKS.map((r) => ({ value: r, label: r }))}
+                />
+                <AdminInput
+                  label="Số CCHN"
+                  value={form.licenseNumber}
+                  onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })}
+                  placeholder="CCHN-12345"
+                  className="font-mono"
+                />
               </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-xs font-bold text-slate-700">
-                  Số điện thoại
-                  <input
-                    type="text"
-                    value={form.phoneNumber}
-                    onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
-                    placeholder="VD: 0912345678"
-                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                  />
-                </label>
-
-                <label className="block text-xs font-bold text-slate-700">
-                  Vai trò
-                  <select
-                    value={form.role}
-                    onChange={(e) => setForm({ ...form, role: e.target.value })}
-                    className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                  >
-                    {ROLES.slice(1).map(([id, label]) => (
-                      <option key={id} value={id}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <AdminInput
+                  label="Kinh nghiệm (năm)"
+                  type="number"
+                  min="0"
+                  value={form.experienceYears}
+                  onChange={(e) => setForm({ ...form, experienceYears: e.target.value })}
+                />
+                <AdminSelect
+                  label="Chuyên khoa"
+                  value={form.specialtyId}
+                  onChange={(e) => setForm({ ...form, specialtyId: e.target.value })}
+                  placeholder="-- Chọn chuyên khoa --"
+                  options={specialties.map((s) => ({ value: String(s.id), label: s.name }))}
+                />
+                <AdminSelect
+                  label="Phòng khám"
+                  value={form.roomId}
+                  onChange={(e) => setForm({ ...form, roomId: e.target.value })}
+                  placeholder="-- Chọn phòng --"
+                  options={availableRooms.map((r) => ({ value: r.id, label: `${r.name} (${r.code})` }))}
+                />
               </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-xs font-bold text-slate-700">
-                  Chi nhánh làm việc
-                  <select
-                    value={form.branchId}
-                    onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                    className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                  >
-                    <option value="">-- Chọn chi nhánh --</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="block text-xs font-bold text-slate-700">
-                  Mật khẩu {modal === 'edit' ? '(để trống nếu giữ nguyên)' : <span className="text-rose-500">*</span>}
-                  <input
-                    type="password"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder={modal === 'edit' ? '••••••••' : 'Tối thiểu 6 ký tự'}
-                    className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                  />
-                </label>
-              </div>
-
-              {form.role === 'doctor' && (
-                <div className="mt-4 rounded border border-emerald-100 bg-emerald-50/50 p-4 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-emerald-100 pb-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-600" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-800">Thông tin Bác sĩ & Chuyên môn</h3>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="block text-xs font-bold text-slate-700">
-                      Chuyên khoa đảm nhận
-                      <select
-                        value={form.specialtyId}
-                        onChange={(e) => setForm({ ...form, specialtyId: e.target.value })}
-                        className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                      >
-                        <option value="">-- Chọn chuyên khoa --</option>
-                        {specialties.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="block text-xs font-bold text-slate-700">
-                      Phòng làm việc mặc định
-                      <select
-                        value={form.roomId}
-                        onChange={(e) => setForm({ ...form, roomId: e.target.value })}
-                        className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                      >
-                        <option value="">-- Chọn phòng khám --</option>
-                        {availableRooms.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name || r.code}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <label className="block text-xs font-bold text-slate-700">
-                      Học hàm / Học vị
-                      <select
-                        value={form.academicRank}
-                        onChange={(e) => setForm({ ...form, academicRank: e.target.value })}
-                        className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                      >
-                        {ACADEMIC_RANKS.map((rank) => (
-                          <option key={rank} value={rank}>
-                            {rank}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="block text-xs font-bold text-slate-700">
-                      Số CCHN / Giấy phép
-                      <input
-                        type="text"
-                        value={form.licenseNumber}
-                        onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })}
-                        placeholder="VD: 012345/HCM-CCHN"
-                        className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                      />
-                    </label>
-
-                    <label className="block text-xs font-bold text-slate-700">
-                      Kinh nghiệm (Năm)
-                      <input
-                        type="number"
-                        min="0"
-                        value={form.experienceYears}
-                        onChange={(e) => setForm({ ...form, experienceYears: e.target.value })}
-                        placeholder="VD: 8"
-                        className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                      />
-                    </label>
-                  </div>
-
-                  <label className="block text-xs font-bold text-slate-700">
-                    Tiểu sử / Giới thiệu chuyên môn
-                    <textarea
-                      rows={3}
-                      value={form.biography}
-                      onChange={(e) => setForm({ ...form, biography: e.target.value })}
-                      placeholder="Mô tả quá trình học tập, công tác và thế mạnh chuyên môn của bác sĩ..."
-                      className="mt-1.5 w-full rounded border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-600"
-                    />
-                  </label>
-                </div>
-              )}
+              <AdminTextarea
+                label="Giới thiệu bác sĩ"
+                value={form.biography}
+                onChange={(e) => setForm({ ...form, biography: e.target.value })}
+                placeholder="Kinh nghiệm chuyên môn, thế mạnh điều trị..."
+              />
             </div>
+          )}
 
-            <footer className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
-              <button
-                type="button"
-                onClick={() => setModal(null)}
-                className="rounded border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Hủy
-              </button>
-              <button
-                disabled={saving}
-                type="submit"
-                className="rounded bg-emerald-700 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50"
-              >
-                {saving ? 'Đang lưu…' : 'Lưu nhân sự'}
-              </button>
-            </footer>
-          </form>
-        </div>
-      )}
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <AdminButton
+              variant="secondary"
+              disabled={saving}
+              onClick={() => setModal(null)}
+            >
+              Hủy
+            </AdminButton>
+            <AdminButton
+              variant="primary"
+              type="submit"
+              loading={saving}
+            >
+              {modal === 'create' ? 'Tạo nhân sự' : 'Lưu thay đổi'}
+            </AdminButton>
+          </div>
+        </form>
+      </AdminModal>
     </>
   )
 }
-

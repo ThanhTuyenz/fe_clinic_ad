@@ -9,9 +9,10 @@ import {
   FileText,
   FlaskConical,
   FileSpreadsheet,
-  Pill,
   DoorOpen,
   UserPlus,
+  Users,
+  LogOut,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -22,15 +23,14 @@ const ICON_MAP: Record<string, LucideIcon> = {
   history: FileText,
   laboratory: FlaskConical,
   prescription: FileSpreadsheet,
-  pharmacy: Pill,
   reception: DoorOpen,
   registration: UserPlus,
+  patients: Users,
 }
 
 export default function RoleSidebar({ role = 'doctor', active = 'dashboard', user, onLogout, hideTopBar = false }: any) {
   const navigate = useNavigate()
   const doctor = role === 'doctor'
-  const pharmacist = role === 'pharmacist'
   const links = doctor
     ? [
         ['exam', 'Khám bệnh', '/doctor'],
@@ -39,19 +39,16 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
         ['laboratory', 'Cận lâm sàng', '/clinical-orders'],
         ['prescription', 'Đơn thuốc', '/doctor/prescriptions'],
       ]
-    : pharmacist
-    ? [
-        ['pharmacy', 'Cấp thuốc', '/pharmacy'],
-      ]
     : [
         ['dashboard', 'Tổng quan', '/dashboard'],
         ['reception', 'Tiếp nhận', '/reception'],
+        ['patients', 'Bệnh nhân', '/reception/patients'],
         ['registration', 'Đăng ký bệnh nhân', '/registration'],
       ]
 
   const name = String(user?.fullName || user?.displayName || user?.email || (doctor ? 'Bác sĩ' : 'Nhân viên'))
   const avatar = name.split(/\s+/).slice(-2).map((x) => x[0]).join('').toUpperCase() || 'NV'
-  const roleLabel = doctor ? 'Bác sĩ' : pharmacist ? 'Dược sĩ' : 'Lễ tân & Tiếp nhận'
+  const roleLabel = doctor ? 'Bác sĩ' : 'Lễ tân & Tiếp nhận'
 
   return (
     <>
@@ -71,7 +68,7 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
               VitaCare Clinic
             </b>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate">
-              {doctor ? 'Bác sĩ' : pharmacist ? 'Nhà thuốc' : 'Lễ tân & Tiếp nhận'}
+              {doctor ? 'Bác sĩ' : 'Lễ tân & Tiếp nhận'}
             </p>
           </div>
         </div>
@@ -82,7 +79,7 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
             {doctor ? 'PHÒNG KHÁM' : 'KHÔNG GIAN LÀM VIỆC'}
           </p>
           <p className="text-xs font-extrabold text-emerald-800">
-            {doctor ? 'BÁC SĨ' : pharmacist ? 'NHÀ THUỐC' : 'LỄ TÂN & TIẾP NHẬN'}
+            {doctor ? 'BÁC SĨ' : 'LỄ TÂN & TIẾP NHẬN'}
           </p>
         </div>
 
@@ -132,9 +129,7 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
             className="flex w-full items-center justify-center gap-2 rounded bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 transition-colors cursor-pointer shadow-2xs"
             title="Đăng xuất khỏi hệ thống"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-            </svg>
+            <LogOut className="w-4 h-4" strokeWidth={2} aria-hidden="true" />
             <span>Đăng xuất</span>
           </button>
         </div>

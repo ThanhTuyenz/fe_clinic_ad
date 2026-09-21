@@ -7,7 +7,7 @@ import RolePortal from '@/modules/admin/pages/RolePortal'
 
 function DashboardByRole() {
   const { role } = useAuth()
-  return ['admin', 'branch_manager', 'pharmacist', 'cashier'].includes(role)
+  return ['admin', 'branch_manager'].includes(role)
     ? <RolePortal />
     : <Dashboard />
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
+import { Download } from 'lucide-react'
 
 interface AdminAnalyticsPageProps {
   stats?: any
@@ -420,9 +421,7 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
                 className="flex items-center gap-2 rounded border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
                 title="Tải xuống dữ liệu báo cáo đa định dạng"
               >
-                <svg className="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                </svg>
+                <Download className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} />
                 <span>Xuất báo cáo ▾</span>
               </button>
               {/* Menu xuất file */}

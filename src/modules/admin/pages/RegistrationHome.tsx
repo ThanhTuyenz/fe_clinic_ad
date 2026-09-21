@@ -19,14 +19,14 @@ import { getStaffSession, isReceptionStaff } from '../utils/staffSession'
 import { Html5Qrcode } from 'html5-qrcode'
 import ReceptionQrScannerModal from '../components/reception/ReceptionQrScannerModal'
 import {
-  CalendarIcon,
-  CheckCircleIcon,
+  CheckCircle2,
+  ChevronLeft,
+  X,
+  Plus,
+  QrCode,
+  Search,
   ChevronLeftIcon,
-  CloseIcon,
-  PlusIcon,
-  QrCodeIcon,
-  SearchIcon,
-} from '../components/reception/ReceptionIcons'
+} from 'lucide-react'
 
 
 function parseCccdQr(qrText: string) {
@@ -165,11 +165,22 @@ function mapGenderToDraft(g: any) {
 
 function readDisplayNameFromPatient(pat: any) {
   if (!pat) return ''
-  const dn = String(pat.displayName || '').trim()
+  const dn = String(pat.displayName || pat.fullName || pat.name || '').trim()
   if (dn) return dn
   const last = String(pat.lastName || '').trim()
   const first = String(pat.firstName || '').trim()
   return `${last} ${first}`.trim() || `${first} ${last}`.trim() || ''
+}
+
+function patientDobFromRow(pat: any) {
+  return pat?.dob || pat?.dateOfBirth || ''
+}
+
+function genderLabelFromRow(g: any) {
+  const mapped = mapGenderToDraft(g)
+  if (mapped === 'male') return 'Nam'
+  if (mapped === 'female') return 'Nữ'
+  return g ? String(g) : '—'
 }
 
 function formatDateTimeVi(value: any) {
@@ -349,20 +360,23 @@ export default function RegistrationHome() {
 
   const patientDisplay = useMemo(() => {
     if (p) {
+      const dob = patientDobFromRow(p)
       return {
         id: p.id || '',
-        patientCode: p.patientCode || '—',
+        patientCode: p.patientCode || p.nationalId || '—',
         nationalId: p.nationalId || '—',
-        displayName: p.displayName || [p.lastName, p.firstName].filter(Boolean).join(' ').trim() || '—',
-        dobLabel: p.dob ? formatDateVi(p.dob) : '—',
+        displayName: readDisplayNameFromPatient(p) || p.displayName || [p.lastName, p.firstName].filter(Boolean).join(' ').trim() || '—',
+        dobLabel: dob ? formatDateVi(dob) : p.dob ? formatDateVi(p.dob) : '—',
         age:
           p.age != null && p.age !== ''
             ? String(p.age)
-            : p.dob
-              ? ageFromIsoDate(isoDateFromApi(p.dob)) || '—'
-              : '—',
-        phone: p.phone || '—',
-        gender: p.gender || '—',
+            : dob
+              ? ageFromIsoDate(isoDateFromApi(dob)) || '—'
+              : p.dob
+                ? ageFromIsoDate(isoDateFromApi(p.dob)) || '—'
+                : '—',
+        phone: p.phone || p.phoneNumber || '—',
+        gender: genderLabelFromRow(p.gender) || p.gender || '—',
         address: p.address || '—',
         email: p.email || '',
       }
@@ -923,9 +937,9 @@ export default function RegistrationHome() {
   function applySelectedPatient(patient: any) {
     if (!patient) return
     setDraftPatientId(String(patient.id || patient._id || ''))
-    setDraftPatientCode(String(patient.patientCode || '').trim())
+    setDraftPatientCode(String(patient.patientCode || patient.nationalId || '').trim())
     setDraftName(readDisplayNameFromPatient(patient) || patient.fullName || '')
-    const rawDob = patient.dob || patient.dateOfBirth
+    const rawDob = patientDobFromRow(patient) || patient.dob || patient.dateOfBirth
     setDraftDob(rawDob ? (typeof rawDob === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDob) ? rawDob : isoDateFromApi(rawDob)) : '')
     setDraftPhone(String(patient.phone || patient.phoneNumber || '').trim())
     setDraftGender(mapGenderToDraft(patient.gender))
@@ -1156,7 +1170,7 @@ export default function RegistrationHome() {
                 onClick={() => navigate('/reception')}
                 className="text-xs font-semibold text-slate-500 hover:text-emerald-700 flex items-center gap-1 transition-colors cursor-pointer"
               >
-                <ChevronLeftIcon className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-3.5 h-3.5" />
                 <span>Quay lại Lịch hẹn</span>
               </button>
             </div>
@@ -1176,7 +1190,7 @@ export default function RegistrationHome() {
                 }}
                 className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded border border-emerald-600 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                <PlusIcon className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5" />
                 <span>Tạo đăng ký mới</span>
               </button>
             </div>
@@ -1238,7 +1252,7 @@ export default function RegistrationHome() {
                         }
                       }}
                     />
-                    <SearchIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     {searchLoading && (
                       <span className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
                     )}
@@ -1314,7 +1328,7 @@ export default function RegistrationHome() {
                     className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded border border-indigo-600 shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]"
                     title="Quét mã QR thẻ CCCD hoặc mã bệnh nhân"
                   >
-                    <QrCodeIcon className="w-4 h-4" />
+                    <QrCode className="w-4 h-4" />
                     <span>Quét QR / CCCD</span>
                   </button>
 
@@ -1371,8 +1385,8 @@ export default function RegistrationHome() {
               <input
                 readOnly={Boolean(p)}
                 className={`w-full px-3.5 py-2 rounded text-xs font-mono font-medium focus:outline-none focus:border-emerald-600 ${p
-                    ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
-                    : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
+                  ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
+                  : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
                   }`}
                 value={p ? (patientDisplay?.nationalId || '') : draftNationalId}
                 onChange={(e) => setDraftNationalId(e.target.value)}
@@ -1387,8 +1401,8 @@ export default function RegistrationHome() {
               <input
                 readOnly={Boolean(p)}
                 className={`w-full px-3.5 py-2 rounded text-xs font-medium focus:outline-none focus:border-emerald-600 ${p
-                    ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
-                    : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
+                  ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
+                  : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
                   }`}
                 value={p ? patientDisplay?.displayName : draftName}
                 onChange={(e) => setDraftName(e.target.value)}
@@ -1405,8 +1419,8 @@ export default function RegistrationHome() {
                 readOnly={Boolean(p)}
                 max={todayIso}
                 className={`w-full px-3.5 py-2 rounded text-xs font-medium focus:outline-none focus:border-emerald-600 ${p
-                    ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
-                    : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
+                  ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
+                  : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
                   }`}
                 value={p ? patientDisplay?.dobLabel : draftDob}
                 onChange={(e) => handleDraftDobChange(e.target.value)}
@@ -1452,8 +1466,8 @@ export default function RegistrationHome() {
                 type="tel"
                 readOnly={Boolean(p)}
                 className={`w-full px-3.5 py-2 rounded text-xs font-medium focus:outline-none focus:border-emerald-600 ${p
-                    ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
-                    : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
+                  ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
+                  : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
                   }`}
                 value={p ? patientDisplay?.phone : draftPhone}
                 onChange={(e) => setDraftPhone(e.target.value)}
@@ -1466,8 +1480,8 @@ export default function RegistrationHome() {
               <input
                 readOnly={Boolean(p)}
                 className={`w-full px-3.5 py-2 rounded text-xs font-medium focus:outline-none focus:border-emerald-600 ${p
-                    ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
-                    : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
+                  ? 'bg-slate-100 border border-slate-300 text-slate-800 cursor-not-allowed'
+                  : 'bg-white border border-slate-300 text-slate-900 shadow-xs'
                   }`}
                 value={p ? patientDisplay?.address : draftAddress}
                 onChange={(e) => setDraftAddress(e.target.value)}
@@ -1497,11 +1511,10 @@ export default function RegistrationHome() {
                   onClick={() => {
                     setBookingMode('new')
                   }}
-                  className={`px-3 py-1 font-bold rounded transition-all cursor-pointer ${
-                    bookingMode === 'new'
+                  className={`px-3 py-1 font-bold rounded transition-all cursor-pointer ${bookingMode === 'new'
                       ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
                       : 'text-slate-500 hover:text-slate-800 border border-transparent'
-                  }`}
+                    }`}
                 >
                   Khám mới
                 </button>
@@ -1516,11 +1529,10 @@ export default function RegistrationHome() {
                     }
                   }}
                   disabled={examinedHistoryRows.length === 0}
-                  className={`px-3 py-1 font-bold rounded transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-                    bookingMode === 're_exam'
+                  className={`px-3 py-1 font-bold rounded transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${bookingMode === 're_exam'
                       ? 'bg-emerald-600 text-white shadow-xs border border-emerald-600'
                       : 'text-slate-500 hover:text-slate-800 border border-transparent'
-                  }`}
+                    }`}
                   title={
                     examinedHistoryRows.length === 0
                       ? 'Bệnh nhân chưa có lịch sử khám trước để tái khám'
@@ -1530,11 +1542,10 @@ export default function RegistrationHome() {
                   <span>Tái khám</span>
                   {examinedHistoryRows.length > 0 && (
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                        bookingMode === 're_exam'
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${bookingMode === 're_exam'
                           ? 'bg-white/20 text-white'
                           : 'bg-slate-200 text-slate-700'
-                      }`}
+                        }`}
                     >
                       {examinedHistoryRows.length}
                     </span>
@@ -1577,11 +1588,10 @@ export default function RegistrationHome() {
                           <tr
                             key={r.id}
                             onClick={() => startReExam(r)}
-                            className={`cursor-pointer transition-colors ${
-                              isSelected
+                            className={`cursor-pointer transition-colors ${isSelected
                                 ? 'bg-emerald-50/80 font-semibold text-slate-900'
                                 : 'hover:bg-slate-50 text-slate-700'
-                            }`}
+                              }`}
                           >
                             <td className="py-2 px-3 text-center">
                               <input
@@ -1773,129 +1783,126 @@ export default function RegistrationHome() {
             </div>
           )}
 
-            {/* Ngày bác sĩ có lịch trực khả dụng */}
-            {doctorId && !fromAppointment && availableWorkDates.length > 0 && (
-              <div className="md:col-span-2 lg:col-span-4 p-3 bg-slate-50 border border-slate-200 rounded space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                    <CalendarIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Ngày trực khả dụng của bác sĩ:</span>
-                  </span>
-                  {schedulesLoading && (
-                    <span className="text-[11px] text-slate-500 animate-pulse">
-                      Đang cập nhật lịch…
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {availableWorkDates.slice(0, 7).map((dStr) => {
-                    const isToday = dStr === todayIso
-                    const isSelected = appointmentDate === dStr
-                    return (
-                      <button
-                        key={dStr}
-                        type="button"
-                        onClick={() => handleAppointmentDateChange(dStr)}
-                        className={`px-3 py-1.5 rounded text-xs border transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
-                            : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
-                        }`}
-                      >
-                        <span>{isToday ? 'Hôm nay' : formatDayOfWeekVi(dStr)}</span>
-                        <span className="ml-1 opacity-75">({formatDateVi(dStr)})</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Khối hiển thị Lịch Trống (Availability Slots) */}
-            <div className="md:col-span-2 lg:col-span-4 p-4 bg-slate-50 border border-slate-200 rounded space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200">
-                <span className="text-xs font-bold text-slate-800">
-                  Khung giờ khám ({appointmentDate ? formatDateVi(appointmentDate) : '—'})
+          {/* Ngày bác sĩ có lịch trực khả dụng */}
+          {doctorId && !fromAppointment && availableWorkDates.length > 0 && (
+            <div className="md:col-span-2 lg:col-span-4 p-3 bg-slate-50 border border-slate-200 rounded space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <CalendarIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Ngày trực khả dụng của bác sĩ:</span>
                 </span>
-
-                {freeSlots.length > 0 && (
-                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    {freeSlots.length} khung giờ khả dụng
+                {schedulesLoading && (
+                  <span className="text-[11px] text-slate-500 animate-pulse">
+                    Đang cập nhật lịch…
                   </span>
                 )}
               </div>
 
-              {slotsLoading ? (
-                <div className="py-6 text-center text-xs font-medium text-slate-500">
-                  Đang tải khung giờ khám…
-                </div>
-              ) : slotsErr ? (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded font-medium">
-                  {slotsErr}
-                </div>
-              ) : !doctorId ? (
-                <div className="py-6 text-center text-xs text-slate-400 font-medium">
-                  Vui lòng chọn Chuyên khoa và Bác sĩ để xem các khung giờ khám.
-                </div>
-              ) : freeSlots.length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-500 font-medium bg-white rounded border border-slate-200 p-4">
-                  Bác sĩ không có ca trực hoặc đã kín lịch trong ngày {formatDateVi(appointmentDate)}. Vui lòng chọn ngày khám khác.
-                </div>
-              ) : (
-                <div className="space-y-3 pt-1">
-                  {/* Ca Sáng */}
-                  {morningSlots.length > 0 && (
-                    <div>
-                      <span className="block text-[11px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
-                        Ca sáng (08:00 – 12:00)
-                      </span>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {morningSlots.map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => setStartTime(t)}
-                            className={`px-3.5 py-2 rounded text-xs font-medium border transition-all cursor-pointer ${
-                              startTime === t
-                                ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
-                                : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
-                            }`}
-                          >
-                            {formatSlotRange(t)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {availableWorkDates.slice(0, 7).map((dStr) => {
+                  const isToday = dStr === todayIso
+                  const isSelected = appointmentDate === dStr
+                  return (
+                    <button
+                      key={dStr}
+                      type="button"
+                      onClick={() => handleAppointmentDateChange(dStr)}
+                      className={`px-3 py-1.5 rounded text-xs border transition-all cursor-pointer ${isSelected
+                          ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
+                        }`}
+                    >
+                      <span>{isToday ? 'Hôm nay' : formatDayOfWeekVi(dStr)}</span>
+                      <span className="ml-1 opacity-75">({formatDateVi(dStr)})</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
-                  {/* Ca Chiều */}
-                  {afternoonSlots.length > 0 && (
-                    <div>
-                      <span className="block text-[11px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
-                        Ca chiều (13:00 – 17:00)
-                      </span>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {afternoonSlots.map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => setStartTime(t)}
-                            className={`px-3.5 py-2 rounded text-xs font-medium border transition-all cursor-pointer ${
-                              startTime === t
-                                ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
-                                : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
-                            }`}
-                          >
-                            {formatSlotRange(t)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+          {/* Khối hiển thị Lịch Trống (Availability Slots) */}
+          <div className="md:col-span-2 lg:col-span-4 p-4 bg-slate-50 border border-slate-200 rounded space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200">
+              <span className="text-xs font-bold text-slate-800">
+                Khung giờ khám ({appointmentDate ? formatDateVi(appointmentDate) : '—'})
+              </span>
+
+              {freeSlots.length > 0 && (
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  {freeSlots.length} khung giờ khả dụng
+                </span>
               )}
             </div>
+
+            {slotsLoading ? (
+              <div className="py-6 text-center text-xs font-medium text-slate-500">
+                Đang tải khung giờ khám…
+              </div>
+            ) : slotsErr ? (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded font-medium">
+                {slotsErr}
+              </div>
+            ) : !doctorId ? (
+              <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                Vui lòng chọn Chuyên khoa và Bác sĩ để xem các khung giờ khám.
+              </div>
+            ) : freeSlots.length === 0 ? (
+              <div className="py-6 text-center text-xs text-slate-500 font-medium bg-white rounded border border-slate-200 p-4">
+                Bác sĩ không có ca trực hoặc đã kín lịch trong ngày {formatDateVi(appointmentDate)}. Vui lòng chọn ngày khám khác.
+              </div>
+            ) : (
+              <div className="space-y-3 pt-1">
+                {/* Ca Sáng */}
+                {morningSlots.length > 0 && (
+                  <div>
+                    <span className="block text-[11px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
+                      Ca sáng (08:00 – 12:00)
+                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {morningSlots.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setStartTime(t)}
+                          className={`px-3.5 py-2 rounded text-xs font-medium border transition-all cursor-pointer ${startTime === t
+                              ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
+                              : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
+                            }`}
+                        >
+                          {formatSlotRange(t)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ca Chiều */}
+                {afternoonSlots.length > 0 && (
+                  <div>
+                    <span className="block text-[11px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
+                      Ca chiều (13:00 – 17:00)
+                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {afternoonSlots.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setStartTime(t)}
+                          className={`px-3.5 py-2 rounded text-xs font-medium border transition-all cursor-pointer ${startTime === t
+                              ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
+                              : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
+                            }`}
+                        >
+                          {formatSlotRange(t)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </section>
 
         {/* Khối 3: Thông tin lịch sử khám */}
@@ -1984,7 +1991,7 @@ export default function RegistrationHome() {
             onClick={handleSave}
             disabled={!hasUnsavedChanges || saving}
           >
-            <CheckCircleIcon className="w-4 h-4 text-white" />
+            <CheckCircle2 className="w-4 h-4 text-white" />
             <span>{saving ? 'Đang xử lý…' : createNew ? 'Tạo đăng ký khám' : 'Lưu cập nhật'}</span>
           </button>
         </div>
@@ -2009,7 +2016,7 @@ export default function RegistrationHome() {
                 className="w-8 h-8 rounded flex items-center justify-center text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer"
                 onClick={closePicker}
               >
-                <CloseIcon className="w-4 h-4" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -2032,7 +2039,7 @@ export default function RegistrationHome() {
                     setQrOpen(true)
                   }}
                 >
-                  <QrCodeIcon className="w-4 h-4" />
+                  <QrCode className="w-4 h-4" />
                 </button>
               </div>
 
@@ -2059,7 +2066,7 @@ export default function RegistrationHome() {
                 }}
                 disabled={pickerLoading}
               >
-                <SearchIcon className="w-4 h-4 text-white" />
+                <Search className="w-4 h-4 text-white" />
                 <span>{pickerLoading ? 'Đang tìm…' : 'Tìm kiếm'}</span>
               </button>
             </div>
@@ -2101,11 +2108,11 @@ export default function RegistrationHome() {
                           className="w-4 h-4 text-emerald-600 border-slate-300 focus:ring-emerald-500"
                         />
                       </td>
-                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">{r.patientCode || '—'}</td>
-                      <td className="py-2.5 px-3 font-bold text-slate-900">{r.displayName || '—'}</td>
-                      <td className="py-2.5 px-3 font-medium text-slate-700">{r.phone || '—'}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{r.dob ? formatDateVi(r.dob) : '—'}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{r.gender || '—'}</td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">{r.patientCode || r.nationalId || '—'}</td>
+                      <td className="py-2.5 px-3 font-bold text-slate-900">{readDisplayNameFromPatient(r) || '—'}</td>
+                      <td className="py-2.5 px-3 font-medium text-slate-700">{r.phone || r.phoneNumber || '—'}</td>
+                      <td className="py-2.5 px-3 text-slate-600">{patientDobFromRow(r) ? formatDateVi(patientDobFromRow(r)) : '—'}</td>
+                      <td className="py-2.5 px-3 text-slate-600">{genderLabelFromRow(r.gender)}</td>
                       <td className="py-2.5 px-3 text-slate-500">{r.email || r.citizenId || '—'}</td>
                     </tr>
                   ))}

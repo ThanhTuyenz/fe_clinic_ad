@@ -4,7 +4,7 @@ import React, { useEffect } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { QR_READER_ELEMENT_ID } from './receptionHelpers'
 
-import { PhotoIcon } from './ReceptionIcons'
+import { Image as PhotoIcon } from 'lucide-react'
 
 interface ReceptionQrScannerModalProps {
   qrOpen: boolean

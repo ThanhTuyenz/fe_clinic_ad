@@ -1,10 +1,21 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createCatalog, deleteCatalog, listCatalog, syncPackageVectors, updateCatalog, suggestSymptoms } from '../services/systemCatalog'
-import { X, Loader2 } from 'lucide-react'
+import {
+  batchBranchSpecialties,
+  batchRoomSpecialties,
+  createCatalog,
+  deleteCatalog,
+  listCatalog,
+  syncPackageVectors,
+  updateCatalog,
+  suggestSymptoms,
+} from '../services/systemCatalog'
+import { X, Loader2, Zap, Plus } from 'lucide-react'
+import ImageUploader from '../components/ImageUploader'
+import { resolveMediaUrl } from '../services/media'
 
-type Field = [string, string, 'text' | 'date' | 'number' | 'textarea' | 'select' | 'multiselect', string?]
+type Field = [string, string, 'text' | 'date' | 'number' | 'textarea' | 'select' | 'multiselect' | 'image', string?]
 type Config = { title: string; singular: string; fields: Field[]; columns: [string, string][] }
 
 const CONFIG: Record<string, Config> = {
@@ -14,6 +25,7 @@ const CONFIG: Record<string, Config> = {
     fields: [
       ['code', 'Mã chi nhánh', 'text'],
       ['name', 'Tên chi nhánh', 'text'],
+      ['imageUrl', 'Hình ảnh cơ sở', 'image'],
       ['address', 'Địa chỉ', 'text'],
       ['phoneNumber', 'Hotline', 'text'],
       ['timezone', 'Múi giờ', 'text'],
@@ -25,12 +37,28 @@ const CONFIG: Record<string, Config> = {
       ['phoneNumber', 'Hotline'],
     ],
   },
+  rooms: {
+    title: 'Phòng khám',
+    singular: 'phòng khám',
+    fields: [
+      ['branchId', 'Chi nhánh', 'select', 'branches'],
+      ['code', 'Mã phòng', 'text'],
+      ['name', 'Tên phòng', 'text'],
+    ],
+    columns: [
+      ['code', 'Mã'],
+      ['name', 'Tên phòng'],
+      ['branch.name', 'Chi nhánh'],
+      ['isActive', 'Trạng thái'],
+    ],
+  },
   specialties: {
     title: 'Quản lý chuyên khoa',
     singular: 'chuyên khoa',
     fields: [
       ['name', 'Tên chuyên khoa', 'text'],
       ['slug', 'Slug', 'text'],
+      ['iconUrl', 'Biểu tượng chuyên khoa', 'image'],
       ['description', 'Mô tả', 'textarea'],
     ],
     columns: [
@@ -72,6 +100,7 @@ const CONFIG: Record<string, Config> = {
     singular: 'gói dịch vụ',
     fields: [
       ['name', 'Tên gói', 'text'],
+      ['imageUrl', 'Ảnh minh họa gói khám', 'image'],
       ['branchId', 'Chi nhánh', 'select', 'branches'],
       ['branchBookingMethodId', 'Hình thức đặt khám', 'select', 'booking-methods'],
       ['specialtyId', 'Chuyên khoa (không bắt buộc)', 'select', 'specialties'],
@@ -107,63 +136,6 @@ const EMPTY = {
 
 const money = (value: unknown) => `${Number(value || 0).toLocaleString('vi-VN')} đ`
 
-const readVietnameseCurrency = (n: unknown): string => {
-  const num = typeof n === 'string' ? parseInt(n, 10) : Math.floor(Number(n) || 0)
-  if (isNaN(num) || num <= 0) return ''
-  if (num === 0) return 'Không đồng'
-
-  const digits = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín']
-  const units = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ', 'triệu tỷ']
-
-  const readTriple = (triple: number, isLast: boolean): string => {
-    const h = Math.floor(triple / 100)
-    const t = Math.floor((triple % 100) / 10)
-    const u = triple % 10
-    let res = ''
-
-    if (h > 0 || !isLast) {
-      res += digits[h] + ' trăm '
-      if (t === 0 && u > 0) res += 'lẻ '
-    }
-
-    if (t === 1) {
-      res += 'mười '
-    } else if (t > 1) {
-      res += digits[t] + ' mươi '
-    }
-
-    if (t > 0 && u === 1 && t !== 1) {
-      res += 'mốt '
-    } else if (t > 0 && u === 5) {
-      res += 'lăm '
-    } else if (u > 0) {
-      res += digits[u] + ' '
-    }
-
-    return res.trim()
-  }
-
-  let s = num.toString()
-  const chunks: number[] = []
-  while (s.length > 0) {
-    chunks.push(parseInt(s.slice(-3), 10))
-    s = s.slice(0, -3)
-  }
-
-  let result = ''
-  for (let i = chunks.length - 1; i >= 0; i--) {
-    const chunk = chunks[i]
-    if (chunk > 0) {
-      const isHighest = i === chunks.length - 1
-      const str = readTriple(chunk, isHighest)
-      result += str + ' ' + units[i] + ' '
-    }
-  }
-
-  result = result.trim()
-  if (!result) return ''
-  return result.charAt(0).toUpperCase() + result.slice(1) + ' đồng'
-}
 
 const at = (row: any, key: string) => key.split('.').reduce((value, part) => value?.[part], row)
 const timeValue = (value: unknown) => {
@@ -176,6 +148,7 @@ const generateCode = (resource: string) => {
     'service-packages': 'PKG',
     services: 'SVC',
     branches: 'BRC',
+    rooms: 'PK',
     medicines: 'MED',
   }
   const prefix = prefixMap[resource] || 'CAT'
@@ -231,10 +204,76 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   const [sortKey, setSortKey] = useState<string>('id')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
-  // Quản lý tags triệu chứng lâm sàng cho AI Semantic Search
-  const [symptomInput, setSymptomInput] = useState('')
-  const [loadingAiSymptoms, setLoadingAiSymptoms] = useState(false)
-  const [aiSuggestedSymptoms, setAiSuggestedSymptoms] = useState<string[]>([])
+  // Batch Assignment Modal State
+  const [batchModal, setBatchModal] = useState<'branch-specialties' | 'room-specialties' | null>(null)
+  const [batchBranchId, setBatchBranchId] = useState<string>('')
+  const [batchSpecialtyIds, setBatchSpecialtyIds] = useState<number[]>([])
+  const [batchSpecialtyId, setBatchSpecialtyId] = useState<number>(0)
+  const [batchRoomIds, setBatchRoomIds] = useState<string[]>([])
+  const [batchSubmitting, setBatchSubmitting] = useState(false)
+  const [batchError, setBatchError] = useState('')
+
+  const openBatchBranchModal = () => {
+    const defaultBranchId = options.branches?.[0]?.id || ''
+    setBatchBranchId(defaultBranchId)
+    const activeIds = rows
+      .filter((r) => (r.branchId === defaultBranchId || r.branch?.id === defaultBranchId) && r.isActive !== false)
+      .map((r) => Number(r.specialtyId || r.specialty?.id))
+    setBatchSpecialtyIds(activeIds)
+    setBatchError('')
+    setBatchModal('branch-specialties')
+  }
+
+  const openBatchRoomModal = () => {
+    const defaultSpecialtyId = Number(options.specialties?.[0]?.id || 0)
+    setBatchSpecialtyId(defaultSpecialtyId)
+    const activeRooms = rows
+      .filter((r) => Number(r.specialtyId || r.specialty?.id) === defaultSpecialtyId && r.isActive !== false)
+      .map((r) => String(r.roomId || r.room?.id))
+    setBatchRoomIds(activeRooms)
+    setBatchError('')
+    setBatchModal('room-specialties')
+  }
+
+  const handleSaveBatchBranch = async () => {
+    if (!batchBranchId) {
+      setBatchError('Vui lòng chọn cơ sở y tế.')
+      return
+    }
+    setBatchSubmitting(true)
+    setBatchError('')
+    try {
+      await batchBranchSpecialties(batchBranchId, batchSpecialtyIds)
+      setSyncMsg('Đã cập nhật danh sách chuyên khoa cho cơ sở thành công.')
+      setTimeout(() => setSyncMsg(''), 3500)
+      setBatchModal(null)
+      await load()
+    } catch (err: any) {
+      setBatchError(err?.response?.data?.message || err?.message || 'Gán chuyên khoa hàng loạt thất bại.')
+    } finally {
+      setBatchSubmitting(false)
+    }
+  }
+
+  const handleSaveBatchRoom = async () => {
+    if (!batchSpecialtyId) {
+      setBatchError('Vui lòng chọn chuyên khoa.')
+      return
+    }
+    setBatchSubmitting(true)
+    setBatchError('')
+    try {
+      await batchRoomSpecialties(batchSpecialtyId, batchRoomIds)
+      setSyncMsg('Đã cập nhật danh sách phòng khám cho chuyên khoa thành công.')
+      setTimeout(() => setSyncMsg(''), 3500)
+      setBatchModal(null)
+      await load()
+    } catch (err: any) {
+      setBatchError(err?.response?.data?.message || err?.message || 'Gán phòng khám hàng loạt thất bại.')
+    } finally {
+      setBatchSubmitting(false)
+    }
+  }
 
   const handleAddSymptom = (text: string) => {
     if (!text) return
@@ -311,6 +350,8 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   }, [load])
 
   useEffect(() => {
+    setFilterBranchId('')
+    setQ('')
     const resources = [
       ...new Set([
         ...cfg.fields.map((field) => field[3]).filter(Boolean),
@@ -327,6 +368,9 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
     const term = q.trim().toLowerCase()
     if (term) {
       list = list.filter((row) => `${row.code || ''} ${row.name || ''}`.toLowerCase().includes(term))
+    }
+    if (resource === 'rooms' && filterBranchId) {
+      list = list.filter((row) => (row.branchId || row.branch?.id) === filterBranchId)
     }
     if (resource === 'service-packages') {
       if (filterBranchId) {
@@ -397,7 +441,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
 
   const openCreate = () => {
     setSelected(null)
-    const autoCode = ['service-packages', 'services', 'branches', 'medicines'].includes(resource)
+    const autoCode = ['service-packages', 'services', 'branches', 'rooms', 'medicines'].includes(resource)
       ? generateCode(resource)
       : ''
     const branchList = options.branches || []
@@ -411,6 +455,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       schedules: [],
       applyAllBranches: false,
       branchIds: branchList.length > 0 ? [branchList[0].id] : [],
+      branchId: filterBranchId || (branchList[0]?.id ?? ''),
       bookingMethodCodes: ['HEALTH_PACKAGE'],
       symptomTags: [],
     })
@@ -457,7 +502,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       symptomTags: parsedTags,
       sessionType: row.sessionType || 'ALL_DAY',
       activeDaysOfWeek: Array.isArray(row.activeDaysOfWeek) && row.activeDaysOfWeek.length > 0 ? row.activeDaysOfWeek : [1, 2, 3, 4, 5, 6, 0],
-      branchId: row.branchBookingMethod?.branchId || row.branchBookingMethod?.branch?.id || '',
+      branchId: row.branchBookingMethod?.branchId || row.branchBookingMethod?.branch?.id || row.branchId || row.branch?.id || '',
       branchBookingMethodId: row.branchBookingMethodId || row.branchBookingMethod?.id || '',
       applyAllBranches: branchList.length > 0 && deployedBranchIds.length >= branchList.length,
       branchIds: deployedBranchIds.length > 0 ? deployedBranchIds : (branchList.length > 0 ? [branchList[0].id] : []),
@@ -474,8 +519,10 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
     if (!['branch-specialties', 'room-specialties'].includes(resource) && !String(form.name || '').trim()) {
       return setError('Tên không được để trống.')
     }
+    if (resource === 'rooms' && !String(form.branchId || '').trim()) {
+      return setError('Vui lòng chọn chi nhánh.')
+    }
     const payload = { ...form }
-
     // Lưu riêng vào trường symptoms dạng mảng chuẩn hóa
     if (['service-packages', 'specialties'].includes(resource)) {
       payload.symptoms = (form.symptomTags || []).map((s: string) => s.trim().toLowerCase()).filter(Boolean)
@@ -494,7 +541,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         return setError('Vui lòng chọn ít nhất một hình thức đặt khám.')
       }
     }
-    if (!payload.code && ['service-packages', 'services', 'branches', 'medicines'].includes(resource)) {
+    if (!payload.code && ['service-packages', 'services', 'branches', 'rooms', 'medicines'].includes(resource)) {
       payload.code = generateCode(resource)
     }
     if (payload.price !== undefined && payload.price !== null) {
@@ -546,15 +593,20 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         : key === 'activeDaysOfWeek'
           ? formatDaysOfWeek(value)
           : key === 'schedules'
-            ? `${value?.length || 0} ngày / ${value?.reduce((total: number, item: any) => total + (item.slots?.length || 0), 0) || 0
-            } khung giờ`
+            ? `${value?.length || 0} ngày / ${
+                value?.reduce((total: number, item: any) => total + (item.slots?.length || 0), 0) || 0
+              } khung giờ`
             : key.endsWith('examDate') && value
               ? new Date(value).toLocaleDateString('vi-VN')
               : ['price', 'unitPrice'].includes(key)
                 ? money(value)
                 : key === 'durationMin'
                   ? `${value || 0} phút`
-                  : value ?? '—'
+                  : key === 'isActive'
+                    ? value ? 'Đang dùng' : 'Ngừng dùng'
+                    : key === 'specialties'
+                      ? (value?.map((item: any) => item.specialty?.name).filter(Boolean).join(', ') || '—')
+                      : value ?? '—'
 
   const optionValue = (field: Field, option: any) => (field[3] === 'specialties' ? String(option.id) : option.id)
 
@@ -580,9 +632,36 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
           <h1 className="mt-1 text-2xl font-bold text-slate-950">{cfg.title}</h1>
           <p className="mt-1 text-sm text-slate-500">Quản lý {cfg.singular} và trạng thái áp dụng.</p>
         </div>
-        <button onClick={openCreate} className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white">
-          + Thêm {cfg.singular}
-        </button>
+        <div className="flex items-center gap-2">
+          {resource === 'branch-specialties' && (
+            <button
+              type="button"
+              onClick={openBatchBranchModal}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-50 px-3.5 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 transition cursor-pointer"
+            >
+              <Zap className="w-4 h-4 text-emerald-700" />
+              Gán chuyên khoa hàng loạt
+            </button>
+          )}
+          {resource === 'room-specialties' && (
+            <button
+              type="button"
+              onClick={openBatchRoomModal}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-50 px-3.5 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 transition cursor-pointer"
+            >
+              <Zap className="w-4 h-4 text-emerald-700" />
+              Gán phòng khám hàng loạt
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Thêm {cfg.singular}
+          </button>
+        </div>
       </div>
 
       {error && <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
@@ -694,7 +773,21 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
             </div>
           </div>
         ) : (
-          <div className="flex gap-2 border-b p-4">
+          <div className="flex flex-wrap gap-2 border-b p-4">
+            {resource === 'rooms' && (
+              <select
+                value={filterBranchId}
+                onChange={(e) => setFilterBranchId(e.target.value)}
+                className="w-full max-w-xs rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">Tất cả chi nhánh</option>
+                {(options.branches || []).map((branch: any) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -935,7 +1028,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
             <div className="grid gap-4 p-5 sm:grid-cols-2">
               {cfg.fields.map((field) => {
                 const [key, label, type, source] = field
-                const wide = type === 'textarea' || type === 'multiselect'
+                const wide = type === 'textarea' || type === 'multiselect' || type === 'image'
 
                 // Giao diện chọn nhiều cơ sở khi tạo mới hoặc cập nhật gói khám
                 if (resource === 'service-packages' && key === 'branchId') {
@@ -1167,6 +1260,15 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                           </option>
                         ))}
                       </select>
+                    ) : type === 'image' ? (
+                      <div className="mt-1.5">
+                        <ImageUploader
+                          label=""
+                          value={form[key] || ''}
+                          onChange={(url) => setForm({ ...form, [key]: url })}
+                          aspectRatio={key === 'iconUrl' ? 'square' : 'wide'}
+                        />
+                      </div>
                     ) : type === 'multiselect' ? (
                       <div className="mt-1.5 grid max-h-48 gap-1 overflow-y-auto rounded-md border p-2 sm:grid-cols-2">
                         {fieldOptions(source).map((option) => {
@@ -1245,6 +1347,17 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                   </label>
                 )
               })}
+
+              {resource === 'rooms' && (
+                <label className="flex items-center gap-2 text-sm font-normal text-slate-700 sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={form.isActive !== false}
+                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                  />
+                  Đang sử dụng
+                </label>
+              )}
 
               {resource === 'service-packages' && (
                 <section className="sm:col-span-2 space-y-4 rounded-lg border border-slate-200 bg-slate-50/40 p-4">
@@ -1673,6 +1786,291 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
                 Chỉnh sửa
               </button>
             </footer>
+          </div>
+        </div>
+      )}
+      {/* Batch Branch-Specialties Modal */}
+      {batchModal === 'branch-specialties' && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => !batchSubmitting && setBatchModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 border border-slate-100 flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Gán chuyên khoa theo cơ sở hàng loạt</h2>
+                  <p className="text-xs text-slate-500">Chọn cơ sở và tích chọn các chuyên khoa muốn kích hoạt</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
+              {batchError && (
+                <div className="p-3 text-xs rounded-lg bg-rose-50 border border-rose-200 text-rose-700">
+                  {batchError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Cơ sở y tế / Chi nhánh <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={batchBranchId}
+                  onChange={(e) => {
+                    const bId = e.target.value
+                    setBatchBranchId(bId)
+                    const activeIds = rows
+                      .filter((r) => String(r.branchId || r.branch?.id) === String(bId))
+                      .map((r) => String(r.specialtyId || r.specialty?.id))
+                    setBatchSpecialtyIds(activeIds)
+                  }}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none"
+                >
+                  <option value="">-- Chọn cơ sở y tế --</option>
+                  {(options.branches || []).map((b: any) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Danh sách chuyên khoa áp dụng ({batchSpecialtyIds.length}/{(options.specialties || []).length})
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBatchSpecialtyIds((options.specialties || []).map((s: any) => String(s.id)))}
+                      className="text-xs font-semibold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      Chọn tất cả
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setBatchSpecialtyIds([])}
+                      className="text-xs font-semibold text-slate-500 hover:underline cursor-pointer"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-slate-200 rounded-xl p-3 max-h-64 overflow-y-auto bg-slate-50/50">
+                  {(options.specialties || []).map((spec: any) => {
+                    const checked = batchSpecialtyIds.includes(String(spec.id))
+                    return (
+                      <label
+                        key={spec.id}
+                        className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs font-medium cursor-pointer transition ${
+                          checked
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/70'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const id = String(spec.id)
+                            if (e.target.checked) {
+                              setBatchSpecialtyIds((prev) => [...prev, id])
+                            } else {
+                              setBatchSpecialtyIds((prev) => prev.filter((x) => x !== id))
+                            }
+                          }}
+                          className="rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
+                        />
+                        <span className="truncate">{spec.name}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={batchSubmitting}
+                onClick={() => setBatchModal(null)}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={batchSubmitting || !batchBranchId}
+                onClick={handleSaveBatchBranch}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-700 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50 transition cursor-pointer"
+              >
+                {batchSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Lưu gán chuyên khoa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Room-Specialties Modal */}
+      {batchModal === 'room-specialties' && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => !batchSubmitting && setBatchModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 border border-slate-100 flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Gán phòng khám theo chuyên khoa hàng loạt</h2>
+                  <p className="text-xs text-slate-500">Chọn chuyên khoa và tích chọn các phòng khám tương ứng</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
+              {batchError && (
+                <div className="p-3 text-xs rounded-lg bg-rose-50 border border-rose-200 text-rose-700">
+                  {batchError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Chuyên khoa <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={batchSpecialtyId}
+                  onChange={(e) => {
+                    const sId = e.target.value
+                    setBatchSpecialtyId(sId)
+                    const activeRooms = rows
+                      .filter((r) => String(r.specialtyId || r.specialty?.id) === String(sId))
+                      .map((r) => String(r.roomId || r.room?.id))
+                    setBatchRoomIds(activeRooms)
+                  }}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none"
+                >
+                  <option value="">-- Chọn chuyên khoa --</option>
+                  {(options.specialties || []).map((s: any) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Danh sách phòng khám áp dụng ({batchRoomIds.length}/{(options.rooms || []).length})
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBatchRoomIds((options.rooms || []).map((r: any) => String(r.id)))}
+                      className="text-xs font-semibold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      Chọn tất cả
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setBatchRoomIds([])}
+                      className="text-xs font-semibold text-slate-500 hover:underline cursor-pointer"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-slate-200 rounded-xl p-3 max-h-64 overflow-y-auto bg-slate-50/50">
+                  {(options.rooms || []).map((rm: any) => {
+                    const checked = batchRoomIds.includes(String(rm.id))
+                    const branchName = rm.branch?.name || ''
+                    return (
+                      <label
+                        key={rm.id}
+                        className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs font-medium cursor-pointer transition ${
+                          checked
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/70'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const id = String(rm.id)
+                            if (e.target.checked) {
+                              setBatchRoomIds((prev) => [...prev, id])
+                            } else {
+                              setBatchRoomIds((prev) => prev.filter((x) => x !== id))
+                            }
+                          }}
+                          className="rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold">{rm.name}</p>
+                          {branchName && <p className="text-[10px] text-slate-400 truncate">{branchName}</p>}
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={batchSubmitting}
+                onClick={() => setBatchModal(null)}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={batchSubmitting || !batchSpecialtyId}
+                onClick={handleSaveBatchRoom}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-700 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50 transition cursor-pointer"
+              >
+                {batchSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Lưu gán phòng khám
+              </button>
+            </div>
           </div>
         </div>
       )}

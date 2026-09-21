@@ -1,82 +1,47 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { RefreshCw, Search, CreditCard, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/common/hooks/useAuth'
+import {
+  AdminButton,
+  AdminPageHeader,
+  AdminStatCard,
+  FilterTabs,
+  AdminTableCard,
+  AdminTable,
+  AdminTableHead,
+  AdminTableLoading,
+  AdminTableEmpty,
+  AdminTableFooter,
+  AdminModal,
+  StatusBadge,
+} from '@/common/components/ui'
 import { listReceptionAppointments } from '../services/appointments'
 import { recordAppointmentPayment } from '../services/payments'
 import { listCatalog } from '../services/systemCatalog'
 import { staffRole } from '../utils/staffSession'
 
-type AppointmentRow = {
-  id: string
-  ticket?: string
-  bookingCode?: string
-  createdAt?: string
-  appointmentDate?: string
-  startTime?: string
-  endTime?: string
-  status?: string
-  workflowStatus?: string
-  patient?: {
-    id?: string
-    fullName?: string
-    name?: string
-    phone?: string
-    email?: string
-  }
-  patientProfile?: {
-    id?: string
-    fullName?: string
-    phoneNumber?: string
-    email?: string
-  }
-  doctor?: {
-    id?: string
-    fullName?: string
-    name?: string
-    department?: string
-    specialtyName?: string
-  }
-  specialty?: {
-    id?: string | number
-    name?: string
-  }
-  servicePackage?: {
-    id?: string
-    code?: string
-    name?: string
-  }
-  branch?: {
-    id?: string
-    code?: string
-    name?: string
-  }
-  payment?: {
-    status?: string
-    paid?: boolean
-    amount?: number
-    method?: string
-    paidAt?: string
-  }
-  invoice?: {
-    id?: string
-    totalAmount?: number | string
-    status?: string
-    paidAt?: string
-    payments?: any[]
-  }
-}
+type AppointmentRow = Record<string, any>
+const money = (val: any) => `${Number(val || 0).toLocaleString('vi-VN')} đ`
 
-const money = (val: any) => `${Number(val || 0).toLocaleString('vi-VN')}\u00A0đ`
+const TABLE_COLUMNS = [
+  'Mã hóa đơn',
+  'Bệnh nhân',
+  'Dịch vụ & Ngày',
+  'Bác sĩ',
+  { label: 'Số tiền', align: 'right' as const },
+  { label: 'Trạng thái', align: 'center' as const },
+  { label: 'Thao tác', align: 'right' as const },
+]
 
 export default function BillingPage() {
   const { user, token } = useAuth()
-  const role = staffRole(user)
-  const isCashierOrStaff = ['cashier', 'receptionist', 'admin', 'branch_manager'].includes(role)
+  const isStaff = ['receptionist', 'admin', 'branch_manager'].includes(staffRole(user))
 
   const [appointments, setAppointments] = useState<AppointmentRow[]>([])
   const [branches, setBranches] = useState<any[]>([])
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('')
+  const [selectedBranchId, setSelectedBranchId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
@@ -98,7 +63,7 @@ export default function BillingPage() {
       setAppointments(appData || [])
       setBranches(branchData || [])
     } catch (e: any) {
-      setError(e?.message || 'Không tải được danh sách hóa đơn thanh toán.')
+      setError(e?.message || 'Không tải được danh sách hóa đơn.')
     } finally {
       setLoading(false)
     }
@@ -108,92 +73,63 @@ export default function BillingPage() {
     void loadData()
   }, [loadData])
 
-  const getPatientName = (item: AppointmentRow) =>
-    item.patient?.fullName || item.patient?.name || item.patientProfile?.fullName || 'Bệnh nhân'
+  const getPatientName = (it: AppointmentRow) =>
+    it.patient?.fullName || it.patient?.name || it.patientProfile?.fullName || 'Bệnh nhân'
+  const getPatientPhone = (it: AppointmentRow) =>
+    it.patient?.phone || it.patientProfile?.phoneNumber || ''
+  const getInvoiceCode = (it: AppointmentRow) =>
+    `INV-${(it.invoice?.id || it.id).slice(0, 8).toUpperCase()}`
+  const getAmount = (it: AppointmentRow) =>
+    Number(it.payment?.amount ?? it.invoice?.totalAmount ?? 0)
 
-  const getPatientPhone = (item: AppointmentRow) =>
-    item.patient?.phone || item.patientProfile?.phoneNumber || ''
-
-  const getInvoiceCode = (item: AppointmentRow) => {
-    const rawId = item.invoice?.id || item.id
-    return `INV-${rawId.slice(0, 8).toUpperCase()}`
+  const isPaid = (it: AppointmentRow) => {
+    const inv = (it.invoice?.status || '').toUpperCase()
+    const pay = (it.payment?.status || '').toLowerCase()
+    const wf = (it.workflowStatus || '').toUpperCase()
+    return inv === 'PAID' || pay === 'paid' || ['COMPLETED', 'CHECKED_IN', 'CONFIRMED'].includes(wf)
   }
-
-  const getInvoiceAmount = (item: AppointmentRow) =>
-    Number(item.payment?.amount ?? item.invoice?.totalAmount ?? 0)
-
-  const isInvoicePaid = (item: AppointmentRow) => {
-    const invStatus = (item.invoice?.status || '').toUpperCase()
-    const payStatus = (item.payment?.status || '').toLowerCase()
-    const wfStatus = (item.workflowStatus || '').toUpperCase()
-    return invStatus === 'PAID' || payStatus === 'paid' || ['COMPLETED', 'CHECKED_IN', 'CONFIRMED'].includes(wfStatus)
-  }
-
-  const isInvoicePending = (item: AppointmentRow) => {
-    const wfStatus = (item.workflowStatus || '').toUpperCase()
-    return !isInvoicePaid(item) && (wfStatus === 'HOLD' || item.payment?.status === 'unpaid')
-  }
-
-  const isInvoiceCancelled = (item: AppointmentRow) => {
-    const wfStatus = (item.workflowStatus || '').toUpperCase()
-    const invStatus = (item.invoice?.status || '').toUpperCase()
-    return wfStatus === 'CANCELLED' || invStatus === 'CANCELLED'
-  }
+  const isPending = (it: AppointmentRow) =>
+    !isPaid(it) && ((it.workflowStatus || '').toUpperCase() === 'HOLD' || it.payment?.status === 'unpaid')
+  const isCancelled = (it: AppointmentRow) =>
+    (it.workflowStatus || '').toUpperCase() === 'CANCELLED' ||
+    (it.invoice?.status || '').toUpperCase() === 'CANCELLED'
 
   const filtered = useMemo(() => {
-    return appointments.filter((item) => {
-      const search = q.trim().toLowerCase()
-      const invCode = getInvoiceCode(item).toLowerCase()
-      const patientName = getPatientName(item).toLowerCase()
-      const phone = getPatientPhone(item).toLowerCase()
-
-      const matchSearch =
-        !search || invCode.includes(search) || patientName.includes(search) || phone.includes(search)
-
-      const matchBranch = !selectedBranchId || item.branch?.id === selectedBranchId
-
-      const paid = isInvoicePaid(item)
-      const pending = isInvoicePending(item)
-      const cancelled = isInvoiceCancelled(item)
-
-      let matchStatus = true
-      if (statusFilter === 'paid') matchStatus = paid
-      else if (statusFilter === 'pending') matchStatus = pending
-      else if (statusFilter === 'cancelled') matchStatus = cancelled
-
-      return matchSearch && matchBranch && matchStatus
+    return appointments.filter((it) => {
+      const s = q.trim().toLowerCase()
+      if (
+        s &&
+        !getInvoiceCode(it).toLowerCase().includes(s) &&
+        !getPatientName(it).toLowerCase().includes(s) &&
+        !getPatientPhone(it).toLowerCase().includes(s)
+      )
+        return false
+      if (selectedBranchId && it.branch?.id !== selectedBranchId) return false
+      if (statusFilter === 'paid') return isPaid(it)
+      if (statusFilter === 'pending') return isPending(it)
+      if (statusFilter === 'cancelled') return isCancelled(it)
+      return true
     })
   }, [appointments, q, selectedBranchId, statusFilter])
 
   const stats = useMemo(() => {
-    let totalRevenue = 0
-    let paidCount = 0
-    let pendingCount = 0
-    let cancelledCount = 0
-
-    filtered.forEach((item) => {
-      const amount = getInvoiceAmount(item)
-      if (isInvoicePaid(item)) {
-        totalRevenue += amount
-        paidCount++
-      } else if (isInvoicePending(item)) {
-        pendingCount++
-      } else if (isInvoiceCancelled(item)) {
-        cancelledCount++
-      }
+    let rev = 0
+    let paid = 0
+    let pend = 0
+    let canc = 0
+    filtered.forEach((it) => {
+      const amt = getAmount(it)
+      if (isPaid(it)) {
+        rev += amt
+        paid++
+      } else if (isPending(it)) pend++
+      else if (isCancelled(it)) canc++
     })
-
-    return {
-      total: filtered.length,
-      totalRevenue,
-      paidCount,
-      pendingCount,
-      cancelledCount,
-    }
+    return { total: filtered.length, rev, paid, pend, canc }
   }, [filtered])
 
-  const handleConfirmPayment = async (event: React.FormEvent) => {
-    event.preventDefault()
+  const handleConfirmPayment = async (e: React.FormEvent) => {
+    e.preventDefault()
     if (!selectedItem) return
     setSubmittingPay(true)
     setError('')
@@ -202,7 +138,7 @@ export default function BillingPage() {
         token,
         appointmentId: selectedItem.id,
         method: payMethod,
-        amount: getInvoiceAmount(selectedItem),
+        amount: getAmount(selectedItem),
         note: payNote,
       })
       setSelectedItem(null)
@@ -215,394 +151,263 @@ export default function BillingPage() {
     }
   }
 
+  const filterTabs = [
+    { id: 'all', label: 'Tất cả', count: stats.total },
+    { id: 'paid', label: 'Đã thu', count: stats.paid },
+    { id: 'pending', label: 'Chờ thu', count: stats.pend },
+    { id: 'cancelled', label: 'Đã hủy', count: stats.canc },
+  ]
+
   return (
     <>
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[.13em] text-emerald-700">Quản lý tài chính</p>
-          <h1 className="mt-1 text-2xl font-bold text-slate-950">Thanh toán & Hóa đơn</h1>
-          <p className="mt-1 text-sm text-slate-500">Theo dõi doanh thu, hóa đơn thu tiền và lịch sử giao dịch tại cơ sở.</p>
-        </div>
-        <button
+      <AdminPageHeader
+        eyebrow="Quản lý tài chính"
+        title="Thanh toán & Hóa đơn"
+        description="Theo dõi doanh thu, thu tiền trực tiếp và đối soát viện phí."
+      >
+        <AdminButton
+          variant="secondary"
+          icon={RefreshCw}
+          loading={loading}
           onClick={() => void loadData()}
-          className="rounded border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs"
         >
           Làm mới dữ liệu
-        </button>
-      </div>
+        </AdminButton>
+      </AdminPageHeader>
 
       {error && (
-        <div className="mt-4 rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 font-medium">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
       )}
 
-      {/* KPI Stats */}
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded border border-slate-200 bg-white p-5 shadow-xs">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Doanh thu đã thu</p>
-          <p className="mt-2 text-2xl font-extrabold text-emerald-700">{loading ? '—' : money(stats.totalRevenue)}</p>
-          <p className="mt-1 text-xs text-slate-500">{stats.paidCount} hóa đơn đã hoàn tất</p>
-        </div>
-        <div className="rounded border border-slate-200 bg-white p-5 shadow-xs">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Hóa đơn đã thu</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">{loading ? '—' : stats.paidCount}</p>
-          <p className="mt-1 text-xs text-emerald-600 font-medium">Thanh toán thành công</p>
-        </div>
-        <div className="rounded border border-slate-200 bg-white p-5 shadow-xs">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600">Chờ thanh toán</p>
-          <p className="mt-2 text-2xl font-extrabold text-amber-700">{loading ? '—' : stats.pendingCount}</p>
-          <p className="mt-1 text-xs text-amber-700 font-medium">Cần thu tiền tại quầy / Online</p>
-        </div>
-        <div className="rounded border border-slate-200 bg-white p-5 shadow-xs">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Đã hủy / Hoàn tiền</p>
-          <p className="mt-2 text-2xl font-extrabold text-rose-600">{loading ? '—' : stats.cancelledCount}</p>
-          <p className="mt-1 text-xs text-slate-400">Không thực hiện</p>
-        </div>
+        <AdminStatCard
+          label="Doanh thu đã thu"
+          value={money(stats.rev)}
+          detail={`${stats.paid} hóa đơn thành công`}
+          tone="emerald"
+        />
+        <AdminStatCard
+          label="Đã thanh toán"
+          value={stats.paid}
+          detail="Hoàn tất"
+          tone="slate"
+        />
+        <AdminStatCard
+          label="Chờ thanh toán"
+          value={stats.pend}
+          detail="Cần thu tại quầy"
+          tone="amber"
+        />
+        <AdminStatCard
+          label="Đã hủy / Hoàn tiền"
+          value={stats.canc}
+          detail="Không ghi nhận thu"
+          tone="slate"
+        />
       </div>
 
-      {/* Filters Toolbar */}
-      <section className="mt-6 rounded border border-slate-200 bg-white shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
-          <div className="flex flex-1 flex-wrap items-center gap-3">
-            {/* Search Input */}
-            <input
-              type="text"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Tìm theo Mã hóa đơn, Tên bệnh nhân, SĐT..."
-              className="w-full max-w-sm rounded border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-            />
-
-            {/* Branch Selector Dropdown */}
+      <AdminTableCard className="mt-5">
+        <div className="border-b border-slate-100 p-4 flex flex-wrap items-center justify-between gap-3">
+          <FilterTabs
+            tabs={filterTabs}
+            active={statusFilter}
+            onChange={(id) => setStatusFilter(id)}
+          />
+          <div className="flex gap-2 w-full sm:w-auto">
             <select
               value={selectedBranchId}
               onChange={(e) => setSelectedBranchId(e.target.value)}
-              className="rounded border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none"
+              className="text-xs rounded-lg border border-slate-200 px-2.5 py-1.5 bg-white"
             >
-              <option value="">Tất cả chi nhánh</option>
+              <option value="">Tất cả cơ sở</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
                 </option>
               ))}
             </select>
-
-            {/* Status Filter Dropdown */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none"
-            >
-              <option value="all">Tất cả trạng thái</option>
-              <option value="paid">Đã thanh toán</option>
-              <option value="pending">Chờ thanh toán</option>
-              <option value="cancelled">Đã hủy</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Data Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1020px] text-left text-sm">
-            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-100">
-              <tr>
-                <th className="px-5 py-3.5 whitespace-nowrap min-w-[150px]">Mã hóa đơn</th>
-                <th className="px-5 py-3.5 whitespace-nowrap min-w-[170px]">Bệnh nhân</th>
-                <th className="px-5 py-3.5 min-w-[220px]">Dịch vụ</th>
-                <th className="px-5 py-3.5 whitespace-nowrap min-w-[170px]">Bác sĩ phụ trách</th>
-                <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[130px]">Số tiền</th>
-                <th className="px-5 py-3.5 text-center whitespace-nowrap min-w-[140px]">Trạng thái</th>
-                <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[130px]">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center text-slate-400">
-                    Đang tải danh sách hóa đơn…
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center text-slate-400">
-                    Chưa có dữ liệu hóa đơn phù hợp.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((item) => {
-                  const invCode = getInvoiceCode(item)
-                  const patientName = getPatientName(item)
-                  const patientPhone = getPatientPhone(item)
-
-                  const serviceName =
-                    item.servicePackage?.name || item.specialty?.name || 'Khám chuyên khoa'
-                  const doctorName =
-                    item.doctor?.fullName || item.doctor?.name || 'Chưa phân công'
-
-                  const paid = isInvoicePaid(item)
-                  const pending = isInvoicePending(item)
-                  const cancelled = isInvoiceCancelled(item)
-
-                  const rawMethod = item.payment?.method || item.invoice?.payments?.[0]?.method
-                  const methodText = rawMethod ? String(rawMethod).toUpperCase().replace('_', ' ') : (paid ? 'ONLINE' : 'CHỜ THU')
-
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                      <td className="px-5 py-4 font-mono font-bold text-emerald-900 whitespace-nowrap">
-                        {invCode}
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <p className="font-bold text-slate-900">{patientName}</p>
-                        {patientPhone ? <p className="text-xs text-slate-500 font-mono">{patientPhone}</p> : null}
-                      </td>
-                      <td className="px-5 py-4">
-                        <p className="font-medium text-slate-900">{serviceName}</p>
-                        <p className="text-[11px] text-slate-400 whitespace-nowrap">
-                          {item.appointmentDate ? `${item.appointmentDate} (${item.startTime || '08:00'})` : '—'}
-                        </p>
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <p className="font-medium text-slate-800">{doctorName}</p>
-                        {item.doctor?.department && (
-                          <p className="text-[11px] text-slate-400 whitespace-nowrap">{item.doctor.department}</p>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-right font-extrabold text-slate-900 whitespace-nowrap tabular-nums">
-                        {money(getInvoiceAmount(item))}
-                      </td>
-                      <td className="px-5 py-4 text-center whitespace-nowrap">
-                        {paid ? (
-                          <span className="inline-block whitespace-nowrap rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
-                            Đã thanh toán
-                          </span>
-                        ) : pending ? (
-                          <span className="inline-block whitespace-nowrap rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 border border-amber-200">
-                            Chờ thanh toán
-                          </span>
-                        ) : cancelled ? (
-                          <span className="inline-block whitespace-nowrap rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500 border border-slate-200">
-                            Đã hủy
-                          </span>
-                        ) : (
-                          <span className="inline-block whitespace-nowrap rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 border border-blue-200">
-                            {item.workflowStatus}
-                          </span>
-                        )}
-                        <p className="mt-1 text-[10px] font-semibold text-slate-400 whitespace-nowrap">
-                          {methodText}
-                        </p>
-                      </td>
-                      <td className="px-5 py-4 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => setSelectedItem(item)}
-                          className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
-                        >
-                          Chi tiết
-                        </button>
-                        {isCashierOrStaff && pending && (
-                          <button
-                            onClick={() => {
-                              setSelectedItem(item)
-                              setPayMethod('cash')
-                            }}
-                            className="ml-2 rounded bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-800 shadow-xs cursor-pointer"
-                          >
-                            Thu tiền
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <footer className="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">
-          Tổng cộng {filtered.length} hóa đơn trong danh sách
-        </footer>
-      </section>
-
-      {/* Invoice Detail / Cashier Modal */}
-      {selectedItem && (
-        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-900/35 p-4">
-          <div className="my-6 w-full max-w-lg rounded bg-white shadow-2xl overflow-hidden border border-slate-100">
-            <header className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Chi tiết hóa đơn thanh toán</h3>
-                <p className="text-xs font-mono font-semibold text-emerald-800 mt-0.5">
-                  {getInvoiceCode(selectedItem)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedItem(null)}
-                className="text-lg font-bold text-slate-400 hover:text-slate-700"
-              >
-                ×
-              </button>
-            </header>
-
-            <div className="p-6 space-y-4">
-              <div className="rounded-lg bg-slate-50 p-4 border border-slate-200/80">
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-400 font-medium">Bệnh nhân:</span>
-                    <p className="font-bold text-slate-900 mt-0.5">{getPatientName(selectedItem)}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-medium">Số điện thoại:</span>
-                    <p className="font-bold text-slate-900 font-mono mt-0.5">{getPatientPhone(selectedItem)}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-medium">Dịch vụ / Gói:</span>
-                    <p className="font-semibold text-slate-800 mt-0.5">
-                      {selectedItem.servicePackage?.name || selectedItem.specialty?.name || 'Khám chuyên khoa'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-medium">Bác sĩ phụ trách:</span>
-                    <p className="font-semibold text-slate-800 mt-0.5">
-                      {selectedItem.doctor?.fullName || selectedItem.doctor?.name || 'Chưa phân công'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-medium">Chi nhánh:</span>
-                    <p className="font-medium text-slate-800 mt-0.5">
-                      {selectedItem.branch?.name || 'VitaCare Trung tâm'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-medium">Ngày đặt lịch:</span>
-                    <p className="font-medium text-slate-800 mt-0.5">
-                      {selectedItem.appointmentDate ? `${selectedItem.appointmentDate}` : '—'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Itemized Fee Breakdown Table */}
-              <div className="rounded-lg border border-slate-200 overflow-hidden">
-                <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Bảng kê chi tiết dịch vụ & khoản phí</span>
-                  <span className="text-[11px] font-semibold text-slate-500">Mã HĐ: {getInvoiceCode(selectedItem)}</span>
-                </div>
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-100">
-                    <tr>
-                      <th className="px-4 py-2 font-bold">Nội dung thanh toán</th>
-                      <th className="px-3 py-2 text-center font-bold">SL</th>
-                      <th className="px-4 py-2 text-right font-bold">Đơn giá</th>
-                      <th className="px-4 py-2 text-right font-bold">Thành tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-normal text-slate-700">
-                    {selectedItem.invoice?.items?.length ? (
-                      selectedItem.invoice.items.map((item: any, idx: number) => (
-                        <tr key={item.id || idx}>
-                          <td className="px-4 py-2.5 font-medium text-slate-900">{item.description}</td>
-                          <td className="px-3 py-2.5 text-center font-mono">{item.quantity || 1}</td>
-                          <td className="px-4 py-2.5 text-right font-mono">{money(item.unitPrice)}</td>
-                          <td className="px-4 py-2.5 text-right font-bold text-slate-900 font-mono">{money(item.amount)}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="px-4 py-2.5 font-medium text-slate-900">
-                          {selectedItem.servicePackage?.name ||
-                            (selectedItem.specialty?.name ? `Phí khám ${selectedItem.specialty.name}` : 'Phí dịch vụ khám chuyên khoa')}
-                        </td>
-                        <td className="px-3 py-2.5 text-center font-mono">1</td>
-                        <td className="px-4 py-2.5 text-right font-mono">{money(getInvoiceAmount(selectedItem))}</td>
-                        <td className="px-4 py-2.5 text-right font-bold text-slate-900 font-mono">{money(getInvoiceAmount(selectedItem))}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-700">Tổng tiền cần thanh toán</span>
-                  <p className="text-[11px] text-slate-500">Đã bao gồm tất cả các khoản phí</p>
-                </div>
-                <span className="text-2xl font-black text-emerald-800">
-                  {money(getInvoiceAmount(selectedItem))}
-                </span>
-              </div>
-
-              {/* Form Thu Tiền dành cho Cashier / Receptionist nếu Hóa đơn chưa thanh toán */}
-              {isInvoicePending(selectedItem) && isCashierOrStaff && (
-                <form onSubmit={handleConfirmPayment} className="space-y-3 border-t border-slate-100 pt-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800">
-                    Ghi nhận thu tiền trực tiếp
-                  </h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-xs font-semibold cursor-pointer hover:bg-slate-50">
-                      <input
-                        type="radio"
-                        name="payMethod"
-                        checked={payMethod === 'cash'}
-                        onChange={() => setPayMethod('cash')}
-                      />
-                      Tiền mặt (Cash)
-                    </label>
-                    <label className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-xs font-semibold cursor-pointer hover:bg-slate-50">
-                      <input
-                        type="radio"
-                        name="payMethod"
-                        checked={payMethod === 'transfer'}
-                        onChange={() => setPayMethod('transfer')}
-                      />
-                      Chuyển khoản (Bank Transfer)
-                    </label>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">Ghi chú thanh toán</label>
-                    <input
-                      type="text"
-                      value={payNote}
-                      onChange={(e) => setPayNote(e.target.value)}
-                      placeholder="Nhập ghi chú thu tiền (không bắt buộc)..."
-                      className="mt-1.5 w-full rounded border border-slate-200 px-3 py-2 text-xs font-normal outline-none focus:border-emerald-500"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedItem(null)}
-                      className="rounded border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={submittingPay}
-                      className="rounded bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 shadow-xs"
-                    >
-                      {submittingPay ? 'Đang ghi nhận…' : 'Xác nhận đã thu tiền'}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {!isInvoicePending(selectedItem) && (
-                <div className="flex justify-end pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedItem(null)}
-                    className="rounded bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900"
-                  >
-                    Đóng
-                  </button>
-                </div>
-              )}
+            <div className="relative flex-1 sm:w-60">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Tìm mã HĐ, tên, SĐT..."
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:border-emerald-600 bg-white"
+              />
             </div>
           </div>
         </div>
-      )}
+
+        <AdminTable minWidth="min-w-[850px]">
+          <AdminTableHead columns={TABLE_COLUMNS} />
+          <tbody className="divide-y divide-slate-100">
+            {loading ? (
+              <AdminTableLoading colSpan={7} message="Đang tải danh sách hóa đơn…" />
+            ) : filtered.length === 0 ? (
+              <AdminTableEmpty colSpan={7} message="Chưa có dữ liệu hóa đơn phù hợp." />
+            ) : (
+              filtered.map((it) => {
+                const paid = isPaid(it)
+                const pending = isPending(it)
+                const canc = isCancelled(it)
+                const amt = getAmount(it)
+                return (
+                  <tr key={it.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-5 py-3.5 font-mono font-bold text-emerald-900 text-xs">
+                      {getInvoiceCode(it)}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <strong className="text-slate-900 font-semibold block">
+                        {getPatientName(it)}
+                      </strong>
+                      <p className="text-xs text-slate-400 font-mono">{getPatientPhone(it)}</p>
+                    </td>
+                    <td className="px-5 py-3.5 text-xs">
+                      <p className="font-medium text-slate-800">
+                        {it.servicePackage?.name || it.specialty?.name || 'Khám bệnh'}
+                      </p>
+                      <p className="text-slate-400">{it.appointmentDate || '—'}</p>
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-slate-700 font-medium">
+                      {it.doctor?.fullName || it.doctor?.name || '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-extrabold text-slate-900 text-xs tabular-nums">
+                      {money(amt)}
+                    </td>
+                    <td className="px-5 py-3.5 text-center">
+                      <StatusBadge
+                        tone={paid ? 'emerald' : pending ? 'amber' : canc ? 'slate' : 'blue'}
+                      >
+                        {paid ? 'Đã thu' : pending ? 'Chờ thu' : canc ? 'Đã hủy' : it.workflowStatus}
+                      </StatusBadge>
+                    </td>
+                    <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                      <AdminButton
+                        variant="secondary"
+                        size="xs"
+                        onClick={() => setSelectedItem(it)}
+                      >
+                        Chi tiết
+                      </AdminButton>
+                      {isStaff && pending && (
+                        <AdminButton
+                          variant="primary"
+                          size="xs"
+                          className="ml-1.5"
+                          onClick={() => {
+                            setSelectedItem(it)
+                            setPayMethod('cash')
+                          }}
+                        >
+                          Thu tiền
+                        </AdminButton>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </AdminTable>
+        <AdminTableFooter total={filtered.length} label="hóa đơn" />
+      </AdminTableCard>
+
+      {/* DETAIL & PAYMENT MODAL */}
+      <AdminModal
+        isOpen={Boolean(selectedItem)}
+        onClose={() => setSelectedItem(null)}
+        eyebrow="Chi tiết hóa đơn viện phí"
+        title={selectedItem ? getInvoiceCode(selectedItem) : ''}
+        loading={submittingPay}
+      >
+        {selectedItem && (
+          <div className="space-y-4 text-xs">
+            <div className="rounded-xl bg-slate-50/70 p-4 border border-slate-100 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Bệnh nhân:</span>
+                <strong className="text-slate-800">
+                  {getPatientName(selectedItem)} ({getPatientPhone(selectedItem) || '—'})
+                </strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Dịch vụ:</span>
+                <span className="font-semibold text-slate-800">
+                  {selectedItem.servicePackage?.name || selectedItem.specialty?.name || 'Khám bệnh'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Cơ sở:</span>
+                <span className="font-semibold text-slate-800">
+                  {selectedItem.branch?.name || 'Chi nhánh chính'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Tổng tiền:</span>
+                <strong className="text-base text-emerald-700 font-extrabold">
+                  {money(getAmount(selectedItem))}
+                </strong>
+              </div>
+            </div>
+
+            {isPending(selectedItem) && isStaff && (
+              <form onSubmit={handleConfirmPayment} className="space-y-3 pt-3 border-t border-slate-100">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                  Ghi nhận thu tiền trực tiếp
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <label
+                    className={`flex items-center gap-2 rounded-lg border p-2.5 text-xs font-semibold cursor-pointer ${
+                      payMethod === 'cash'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-900'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="method"
+                      checked={payMethod === 'cash'}
+                      onChange={() => setPayMethod('cash')}
+                    />{' '}
+                    Tiền mặt
+                  </label>
+                  <label
+                    className={`flex items-center gap-2 rounded-lg border p-2.5 text-xs font-semibold cursor-pointer ${
+                      payMethod === 'transfer'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-900'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="method"
+                      checked={payMethod === 'transfer'}
+                      onChange={() => setPayMethod('transfer')}
+                    />{' '}
+                    Chuyển khoản QR
+                  </label>
+                </div>
+                <input
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                  placeholder="Ghi chú thu ngân (nếu có)..."
+                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:border-emerald-600 bg-white"
+                />
+                <AdminButton
+                  variant="primary"
+                  type="submit"
+                  loading={submittingPay}
+                  className="w-full py-2.5"
+                >
+                  Xác nhận đã thu {money(getAmount(selectedItem))}
+                </AdminButton>
+              </form>
+            )}
+          </div>
+        )}
+      </AdminModal>
     </>
   )
 }

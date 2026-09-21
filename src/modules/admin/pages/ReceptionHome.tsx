@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import RoleSidebar from '../components/RoleSidebar'
 import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
 import { useStaffLogout } from '@/common/hooks/useStaffLogout'
@@ -19,21 +19,16 @@ import { resolveConsultationFee } from '../utils/consultationFee'
 import { buildPaymentInvoiceView } from '../utils/paymentInvoiceView'
 import { printPaymentInvoice, printPaymentThenVisitSlip } from '../utils/printPaymentInvoice'
 import { printVisitSlip } from '../utils/printVisitSlip'
-import { staffCheckInByQr, staffCheckInByNationalId } from '../services/checkIn'
 import { useAppointmentsSocket } from '../hooks/useAppointmentsSocket'
 
 import {
   PAGE_SIZE,
-  QR_READER_ELEMENT_ID,
   buildVisitSlipView,
   cameraErrorMessage,
   detailMissingForSlip,
   displayName,
   getAppointmentWorkflowBucket,
-  isPaidAppointment,
-  isReceptionPending,
   matchesDashFilter,
-  mergePayment,
   mergeReceptionDetail,
   normalizeLookup,
   normalizeStatus,
@@ -44,35 +39,28 @@ import ReceptionStatsBar from '../components/reception/ReceptionStatsBar'
 import ReceptionAppointmentTable from '../components/reception/ReceptionAppointmentTable'
 import ReceptionDetailModal from '../components/reception/ReceptionDetailModal'
 import ReceptionQrScannerModal from '../components/reception/ReceptionQrScannerModal'
-import { IdentificationIcon, PlusIcon } from '../components/reception/ReceptionIcons'
+import { IdCard, X, Loader2, CheckCircle2 } from 'lucide-react'
 
-/** Quét pending trong khoảng ngày; hủy các lịch đã quá hết khung giờ mà chưa được xác nhận. */
 async function expireStalePendingInRange({ token, from, to }: { token: string; from?: string; to?: string }) {
-  const pendingRows = await listReceptionAppointments({
-    token,
-    from,
-    to,
-    status: 'pending',
-  })
-  const stale = (pendingRows || []).filter((r: any) => isPendingAppointmentPastSlot(r))
-  let anyOk = false
-  const systemCancelReason =
-    'Quá thời gian chờ xác nhận — khung giờ khám đã kết thúc, hệ thống tự hủy lịch.'
-  for (const row of stale) {
-    try {
-      await updateAppointmentStatus({
-        token,
-        appointmentId: row.id,
-        status: 'cancelled',
-        cancelledBySystem: true,
-        cancelReason: systemCancelReason,
-      })
-      anyOk = true
-    } catch {
-      /* có thể đã xử lý ở tab/phiên khác */
-    }
+  try {
+    const pendingRows = await listReceptionAppointments({ token, from, to, status: 'pending' })
+    const stale = (pendingRows || []).filter((r: any) => isPendingAppointmentPastSlot(r))
+    if (!stale.length) return false
+    await Promise.allSettled(
+      stale.map((row: any) =>
+        updateAppointmentStatus({
+          token,
+          appointmentId: row.id,
+          status: 'cancelled',
+          cancelledBySystem: true,
+          cancelReason: 'Quá thời gian chờ xác nhận — khung giờ khám đã kết thúc, hệ thống tự hủy lịch.',
+        })
+      )
+    )
+    return true
+  } catch {
+    return false
   }
-  return anyOk
 }
 
 export default function ReceptionHome() {
@@ -122,7 +110,7 @@ export default function ReceptionHome() {
 
   const [qrOpen, setQrOpen] = useState(false)
   const [qrErr, setQrErr] = useState('')
-  const [qrListFocusTicket, setQrListFocusTicket] = useState('')
+  const [, setQrListFocusTicket] = useState('')
   const qrDecodeHandlerRef = useRef<any>(null)
   const [qrImageLoading, setQrImageLoading] = useState(false)
   const roomSttReqRef = useRef(0)
@@ -150,21 +138,10 @@ export default function ReceptionHome() {
     setListLoading(true)
     setListErr('')
     try {
-      let rows = await listReceptionAppointments({
-        token,
-        from: fromDate,
-        to: toDate,
-        status: statusFilter,
-      })
+      let rows = await listReceptionAppointments({ token, from: fromDate, to: toDate, status: statusFilter })
       const didExpire = await expireStalePendingInRange({ token, from: fromDate, to: toDate })
-
       if (didExpire) {
-        rows = await listReceptionAppointments({
-          token,
-          from: fromDate,
-          to: toDate,
-          status: statusFilter,
-        })
+        rows = await listReceptionAppointments({ token, from: fromDate, to: toDate, status: statusFilter })
       }
       setList(rows || [])
     } catch (e: any) {
@@ -178,10 +155,8 @@ export default function ReceptionHome() {
     void loadList()
   }, [loadList])
 
-  // Lắng nghe sự kiện Realtime khi có bệnh nhân đặt lịch hoặc đổi trạng thái
   useAppointmentsSocket({
     onAppointmentBooked: useCallback((event) => {
-      console.log('[Reception] Realtime appointment:booked received:', event)
       void loadList()
       const patient = event.patientName ? ` (${event.patientName})` : ''
       const code = event.bookingCode ? `#${event.bookingCode}` : ''
@@ -191,28 +166,23 @@ export default function ReceptionHome() {
       setFlashOk(`🔔 Có lịch hẹn mới ${code}${patient}${serviceInfo}${dateInfo} vừa được xác nhận!`)
       setTimeout(() => setFlashOk(''), 8000)
     }, [loadList]),
-    onStatusChanged: useCallback((event) => {
-      console.log('[Reception] Realtime appointment:status_changed received:', event)
+    onStatusChanged: useCallback(() => {
       void loadList()
     }, [loadList]),
   })
 
   useEffect(() => {
     if (!token) return
-    let c = false
+    let active = true
     setClinicRoomsErr('')
     listClinicRooms({ token })
       .then((rows) => {
-        if (c) return
-        setClinicRooms(Array.isArray(rows) ? rows : [])
+        if (active) setClinicRooms(Array.isArray(rows) ? rows : [])
       })
       .catch((e: any) => {
-        if (c) return
-        setClinicRoomsErr(e?.message || 'Không tải được danh sách phòng khám.')
+        if (active) setClinicRoomsErr(e?.message || 'Không tải được danh sách phòng khám.')
       })
-    return () => {
-      c = true
-    }
+    return () => { active = false }
   }, [token])
 
   const activeRow = useMemo(() => {
@@ -223,42 +193,26 @@ export default function ReceptionHome() {
   const activeDetail = useMemo(() => {
     if (lookupDetail) return lookupDetail
     if (!selectedId) return null
-    const cached = detailById[selectedId]
-    return mergeReceptionDetail(cached, activeRow)
+    return mergeReceptionDetail(detailById[selectedId], activeRow)
   }, [lookupDetail, selectedId, detailById, activeRow])
 
   useEffect(() => {
     if (!activeDetail) return
-    const st = normalizeStatus(activeDetail.status)
-    setDetailStatus(st)
+    setDetailStatus(normalizeStatus(activeDetail.status))
     setClinicRoomDraft(String(activeDetail.clinicRoom || '').trim())
     const q = activeDetail.visitQueueNumber
     setVisitQueueDraft(q != null && q !== '' ? String(q) : '')
   }, [activeDetail?.id, activeDetail?.status, activeDetail?.clinicRoom, activeDetail?.visitQueueNumber])
 
-  const consultationFee = useMemo(() => {
-    if (!activeDetail) return 0
-    return resolveConsultationFee(activeDetail)
-  }, [activeDetail])
-
-  const isPaid = useMemo(() => {
-    return String(activeDetail?.payment?.status || '').toLowerCase() === 'paid'
-  }, [activeDetail?.payment?.status])
-
+  const consultationFee = useMemo(() => activeDetail ? resolveConsultationFee(activeDetail) : 0, [activeDetail])
+  const isPaid = useMemo(() => String(activeDetail?.payment?.status || '').toLowerCase() === 'paid', [activeDetail?.payment?.status])
   const currentStatus = normalizeStatus(activeDetail?.status || detailStatus)
   const canEditStatus = currentStatus === 'pending'
   const pastSlotDetail = useMemo(() => isPendingAppointmentPastSlot(activeDetail), [activeDetail])
   const hasClinicRoom = Boolean(String(clinicRoomDraft || activeDetail?.clinicRoom || '').trim())
   const canFinishConfirm = canEditStatus && isPaid && hasClinicRoom
-
-  const printInvoiceDisabled = useMemo(() => {
-    return !activeDetail || !isPaid
-  }, [activeDetail, isPaid])
-
-  const printSlipDisabled = useMemo(() => {
-    return !activeDetail || currentStatus !== 'confirmed' || !activeDetail.clinicRoom
-  }, [activeDetail, currentStatus])
-
+  const printInvoiceDisabled = !activeDetail || !isPaid
+  const printSlipDisabled = !activeDetail || currentStatus !== 'confirmed' || !activeDetail.clinicRoom
   const printBothDisabled = printInvoiceDisabled || printSlipDisabled
 
   const applyPaymentToCaches = useCallback((id: string, payment: any, norm: any = null) => {
@@ -266,16 +220,10 @@ export default function ReceptionHome() {
     if (!key || !payment) return
     setDetailById((prev) => ({
       ...prev,
-      [key]: norm
-        ? { ...(prev[key] || {}), ...norm, payment }
-        : { ...(prev[key] || activeDetail || {}), payment },
+      [key]: norm ? { ...(prev[key] || {}), ...norm, payment } : { ...(prev[key] || activeDetail || {}), payment },
     }))
     setList((prev) => prev.map((r) => (String(r.id) === key ? { ...r, payment } : r)))
-    setLookupDetail((prev) =>
-      prev && String(prev.id) === key
-        ? { ...prev, ...(norm || {}), payment }
-        : prev,
-    )
+    setLookupDetail((prev: any) => (prev && String(prev.id) === key ? { ...prev, ...(norm || {}), payment } : prev))
   }, [activeDetail])
 
   const refreshPaymentFromServer = useCallback(
@@ -290,22 +238,15 @@ export default function ReceptionHome() {
           return true
         }
       } catch {
-        /* bỏ qua */
+        /* ignore */
       }
       return false
     },
     [token, activeDetail?.ticket, applyPaymentToCaches],
   )
 
-  function staffConfirmFallback() {
-    return {
-      displayName: displayName(user),
-      email: String(user?.email || '').trim(),
-    }
-  }
-
   async function persistAppointmentStatus(next: string, options: any = {}) {
-    if (!activeDetail?.id) return
+    if (!activeDetail?.id) return null
     const status = normalizeStatus(next)
     if (status !== 'confirmed' && status !== 'cancelled') {
       throw new Error('Trạng thái không hợp lệ.')
@@ -320,31 +261,22 @@ export default function ReceptionHome() {
     const visitExtra: any = {}
     if (status === 'confirmed') {
       const room = String(clinicRoomDraft || '').trim()
-      if (!room) {
-        throw new Error('Vui lòng chọn phòng khám trước khi xác nhận.')
-      }
+      if (!room) throw new Error('Vui lòng chọn phòng khám trước khi xác nhận.')
       visitExtra.clinicRoom = room
       const qStr = String(visitQueueDraft || '').trim()
       if (qStr) {
         const n = parseInt(qStr, 10)
-        if (!Number.isFinite(n) || n < 1) {
-          throw new Error('Số thứ tự phải là số nguyên dương hoặc để trống.')
-        }
+        if (!Number.isFinite(n) || n < 1) throw new Error('Số thứ tự phải là số nguyên dương.')
         visitExtra.visitQueueNumber = n
       }
     }
 
-    const saveRes = await updateAppointmentStatus({
-      token,
-      appointmentId: activeDetail.id,
-      status,
-      ...visitExtra,
-    })
+    const saveRes = await updateAppointmentStatus({ token, appointmentId: activeDetail.id, status, ...visitExtra })
     const ap = saveRes?.appointment
     const key = String(activeDetail.id)
-    const fallbackConfirm = staffConfirmFallback()
     const nowIso = new Date().toISOString()
     const paymentPatch = options.payment ? { payment: options.payment } : {}
+
     let patch: any = {}
     if (status === 'cancelled' && ap) {
       patch = {
@@ -357,55 +289,23 @@ export default function ReceptionHome() {
         clinicRoom: '',
       }
     } else if (status === 'confirmed') {
-      const qFromDraft = (() => {
-        const qStr = String(visitQueueDraft || '').trim()
-        if (!qStr) return undefined
-        const n = parseInt(qStr, 10)
-        return Number.isFinite(n) && n >= 1 ? n : undefined
-      })()
       patch = {
         cancelReason: '',
         cancelledAt: null,
         cancelledBy: null,
         confirmedAt: ap?.confirmedAt ?? nowIso,
-        confirmedBy: ap?.confirmedBy ?? fallbackConfirm,
-        visitQueueNumber: ap?.visitQueueNumber ?? qFromDraft ?? activeDetail.visitQueueNumber,
-        clinicRoom: ap?.clinicRoom != null ? ap.clinicRoom : clinicRoomDraft || activeDetail.clinicRoom,
+        confirmedBy: ap?.confirmedBy ?? { displayName: displayName(user), email: String(user?.email || '').trim() },
+        visitQueueNumber: ap?.visitQueueNumber ?? (visitQueueDraft ? parseInt(visitQueueDraft, 10) : activeDetail.visitQueueNumber),
+        clinicRoom: ap?.clinicRoom ?? clinicRoomDraft ?? activeDetail.clinicRoom,
       }
     }
 
-    setDetailById((prev) => {
-      const cur = prev[key] || activeDetail
-      return { ...prev, [key]: { ...cur, status, ...paymentPatch, ...patch } }
-    })
+    setDetailById((prev) => ({
+      ...prev,
+      [key]: { ...(prev[key] || activeDetail), status, ...paymentPatch, ...patch },
+    }))
     setList((prev) =>
-      prev.map((r) => {
-        if (String(r.id) !== key) return r
-        if (status === 'confirmed') {
-          return {
-            ...r,
-            status,
-            payment: options.payment ?? r.payment,
-            clinicRoom:
-              (ap?.clinicRoom != null && String(ap.clinicRoom).trim() ? ap.clinicRoom : null) ??
-              patch.clinicRoom ??
-              r.clinicRoom,
-            visitQueueNumber: ap?.visitQueueNumber ?? patch.visitQueueNumber ?? r.visitQueueNumber,
-            confirmedAt: ap?.confirmedAt ?? nowIso,
-            confirmedBy: ap?.confirmedBy ?? fallbackConfirm,
-          }
-        }
-        if (status === 'cancelled' && ap) {
-          return {
-            ...r,
-            status,
-            cancelReason: ap.cancelReason ?? r.cancelReason,
-            cancelledAt: ap.cancelledAt ?? r.cancelledAt,
-            cancelledBy: ap.cancelledBy ?? r.cancelledBy,
-          }
-        }
-        return { ...r, status }
-      }),
+      prev.map((r) => (String(r.id) === key ? { ...r, status, ...(status === 'confirmed' ? { payment: options.payment ?? r.payment, ...patch } : patch) } : r))
     )
     setDetailStatus(status)
     await loadList()
@@ -414,22 +314,16 @@ export default function ReceptionHome() {
 
     if (status !== 'confirmed') return null
     const merged = { ...activeDetail, status, ...paymentPatch, ...patch }
-    const slipOverridesNext = {
-      clinicRoom: patch.clinicRoom,
-      visitQueueNumber: patch.visitQueueNumber,
-    }
+    const slipOverrides = { clinicRoom: patch.clinicRoom, visitQueueNumber: patch.visitQueueNumber }
     return {
-      visitSlip: buildVisitSlipView(merged, clinicRooms, slipOverridesNext),
-      invoice: buildPaymentInvoiceView(merged, slipOverridesNext),
+      visitSlip: buildVisitSlipView(merged, clinicRooms, slipOverrides),
+      invoice: buildPaymentInvoiceView(merged, slipOverrides),
     }
   }
 
   function printAfterConfirm(docs: any) {
     if (!docs?.invoice || !docs?.visitSlip) return false
-    return printPaymentThenVisitSlip({
-      invoice: docs.invoice,
-      visitSlip: docs.visitSlip,
-    })
+    return printPaymentThenVisitSlip({ invoice: docs.invoice, visitSlip: docs.visitSlip })
   }
 
   async function handleRecordPayment() {
@@ -450,18 +344,13 @@ export default function ReceptionHome() {
         method: paymentMethod,
         amount: consultationFee,
       })
-      const ap = data?.appointment
-      const paid = ap?.payment || null
+      const paid = data?.appointment?.payment || null
       if (paid) {
-        applyPaymentToCaches(activeDetail.id, paid, ap ? { ...activeDetail, ...ap, payment: paid } : null)
+        applyPaymentToCaches(activeDetail.id, paid, data.appointment)
       }
       const docs = await persistAppointmentStatus('confirmed', { afterPayment: true, payment: paid })
-      setPaymentErr('')
       if (docs && printAfterConfirm(docs)) {
         setSaveMsg('Đã thu phí, xác nhận lịch và mở in hóa đơn + phiếu khám.')
-      } else if (docs?.visitSlip || docs?.invoice) {
-        setSaveMsg('Đã thu phí và xác nhận lịch. Không mở được cửa sổ in — bấm «In hóa đơn» hoặc «In phiếu khám».')
-        setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
       } else {
         setSaveMsg('Đã thu phí và xác nhận lịch hẹn.')
       }
@@ -472,25 +361,17 @@ export default function ReceptionHome() {
         if (synced) {
           try {
             const docs = await persistAppointmentStatus('confirmed', { afterPayment: true })
-            setPaymentErr('')
             if (docs && printAfterConfirm(docs)) {
               setSaveMsg('Lịch đã thu phí, đã xác nhận và mở in hóa đơn + phiếu khám.')
-            } else if (docs?.visitSlip || docs?.invoice) {
-              setSaveMsg('Lịch đã thu phí và xác nhận. Không mở được cửa sổ in — bấm «In hóa đơn» hoặc «In phiếu khám».')
-              setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
             } else {
               setSaveMsg('Lịch đã thu phí — đã xác nhận lịch hẹn.')
             }
           } catch (e2: any) {
-            setPaymentErr('')
-            setSaveMsg('Đã thu phí. Chưa xác nhận được lịch — bấm «Hoàn tất xác nhận» bên dưới.')
             setSaveErr(e2?.message || 'Không xác nhận được lịch.')
           }
         } else {
           setPaymentErr(msg)
         }
-      } else if (/chưa thu phí|chọn phòng|số thứ tự|chờ xác nhận/i.test(msg)) {
-        setSaveErr(msg)
       } else {
         setPaymentErr(msg)
       }
@@ -509,9 +390,6 @@ export default function ReceptionHome() {
       const docs = await persistAppointmentStatus('confirmed')
       if (docs && printAfterConfirm(docs)) {
         setSaveMsg('Đã xác nhận lịch và mở in hóa đơn + phiếu khám.')
-      } else if (docs?.visitSlip || docs?.invoice) {
-        setSaveMsg('Đã xác nhận lịch. Không mở được cửa sổ in — bấm «In hóa đơn» hoặc «In phiếu khám».')
-        setSaveErr('Không mở được cửa sổ in. Thử lại hoặc kiểm tra trình duyệt.')
       } else {
         setSaveMsg('Đã xác nhận lịch hẹn.')
       }
@@ -598,10 +476,7 @@ export default function ReceptionHome() {
     setSaveMsg('')
     setSaving(true)
     try {
-      await updateAppointmentStatus({
-        appointmentId: activeDetail.id,
-        status: 'completed',
-      })
+      await updateAppointmentStatus({ appointmentId: activeDetail.id, status: 'completed' })
       setSaveMsg('Đã cập nhật trạng thái Khám xong!')
       setFlashOk('✅ Đã đánh dấu khám xong cho bệnh nhân!')
       setDetailById((prev) => ({
@@ -626,9 +501,7 @@ export default function ReceptionHome() {
     try {
       const data = await lookupAppointmentByTicket({ token, ticket: raw })
       const norm = normalizeLookup(data)
-      if (!norm || !norm.id) {
-        throw new Error('Không tìm thấy thông tin lịch hẹn tương ứng.')
-      }
+      if (!norm?.id) throw new Error('Không tìm thấy thông tin lịch hẹn tương ứng.')
 
       setQrOpen(false)
       setSelectedId(String(norm.id))
@@ -653,9 +526,7 @@ export default function ReceptionHome() {
     try {
       const data = await lookupAppointmentByTicket({ token, ticket: val })
       const norm = normalizeLookup(data)
-      if (!norm || !norm.id) {
-        throw new Error('Không tìm thấy lịch hẹn nào khớp với số CCCD này.')
-      }
+      if (!norm?.id) throw new Error('Không tìm thấy lịch hẹn nào khớp với số CCCD này.')
 
       setIsCccdModalOpen(false)
       setCccdInput('')
@@ -703,10 +574,6 @@ export default function ReceptionHome() {
     }
   }
 
-  function handleAdd() {
-    navigate('/registration', { state: { createNew: true } })
-  }
-
   async function openRegistrationFromActive() {
     if (!token || !activeDetail?.ticket) return
     setSaveErr('')
@@ -714,20 +581,15 @@ export default function ReceptionHome() {
     setDetailErr('')
 
     let detail = activeDetail
-    const hasNeeded =
-      Boolean(detail?.patient) &&
-      Boolean(detail?.doctor?.id) &&
-      Boolean(detail?.appointmentDate) &&
-      Boolean(detail?.startTime)
+    const hasNeeded = Boolean(detail?.patient && detail?.doctor?.id && detail?.appointmentDate && detail?.startTime)
 
     if (!hasNeeded) {
       const id = String(detail?.id || '')
       setDetailLoadingId(id || 'lookup')
       try {
         const data = await lookupAppointmentByTicket({ token, ticket: detail.ticket })
-        const norm = normalizeLookup(data)
-        setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
-        detail = norm
+        detail = normalizeLookup(data)
+        setDetailById((prev) => ({ ...prev, [String(detail.id)]: detail }))
       } catch (e: any) {
         setDetailErr(e?.message || 'Không tải được chi tiết lịch hẹn.')
         return
@@ -786,8 +648,7 @@ export default function ReceptionHome() {
       clinicRoom: clinicRoomDraft,
       visitQueueNumber: visitQueueDraft,
     })
-    if (!slip) return
-    printVisitSlip(slip)
+    if (slip) printVisitSlip(slip)
   }, [activeDetail, clinicRooms, clinicRoomDraft, visitQueueDraft])
 
   const printInvoiceOnly = useCallback(() => {
@@ -796,22 +657,14 @@ export default function ReceptionHome() {
       clinicRoom: clinicRoomDraft,
       visitQueueNumber: visitQueueDraft,
     })
-    if (!invoice) return
-    printPaymentInvoice(invoice)
+    if (invoice) printPaymentInvoice(invoice)
   }, [activeDetail, clinicRoomDraft, visitQueueDraft])
 
   const printBothFromDetail = useCallback(() => {
     if (!activeDetail) return
-    const invoice = buildPaymentInvoiceView(activeDetail, {
-      clinicRoom: clinicRoomDraft,
-      visitQueueNumber: visitQueueDraft,
-    })
-    const visitSlip = buildVisitSlipView(activeDetail, clinicRooms, {
-      clinicRoom: clinicRoomDraft,
-      visitQueueNumber: visitQueueDraft,
-    })
-    if (!invoice || !visitSlip) return
-    printPaymentThenVisitSlip({ invoice, visitSlip })
+    const invoice = buildPaymentInvoiceView(activeDetail, { clinicRoom: clinicRoomDraft, visitQueueNumber: visitQueueDraft })
+    const visitSlip = buildVisitSlipView(activeDetail, clinicRooms, { clinicRoom: clinicRoomDraft, visitQueueNumber: visitQueueDraft })
+    if (invoice && visitSlip) printPaymentThenVisitSlip({ invoice, visitSlip })
   }, [activeDetail, clinicRooms, clinicRoomDraft, visitQueueDraft])
 
   const filteredList = useMemo(() => {
@@ -861,15 +714,12 @@ export default function ReceptionHome() {
     }
   }, [list])
 
-  const handleSelectDashFilter = useCallback(
-    (val: string) => {
-      setDashFilter(val)
-      if (val && statusFilter !== 'all') {
-        setStatusFilter('all')
-      }
-    },
-    [statusFilter],
-  )
+  const handleSelectDashFilter = useCallback((val: string) => {
+    setDashFilter(val)
+    if (val && statusFilter !== 'all') {
+      setStatusFilter('all')
+    }
+  }, [statusFilter])
 
   const handleQrFileInput = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -896,18 +746,18 @@ export default function ReceptionHome() {
       <RoleSidebar role="receptionist" active="reception" user={user} onLogout={performLogout} />
 
       <div className="flex-1 p-5 md:p-6 max-w-[1600px] w-full mx-auto flex flex-col">
-        {flashOk ? (
-          <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded shadow-xs">
-            {flashOk}
+        {flashOk && (
+          <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl shadow-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" />
+            <span>{flashOk}</span>
           </div>
-        ) : null}
-        {flashErr ? (
-          <div className="mb-4 px-4 py-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded shadow-xs">
+        )}
+        {flashErr && (
+          <div className="mb-4 px-4 py-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl shadow-xs">
             {flashErr}
           </div>
-        ) : null}
+        )}
 
-        {/* Header trang */}
         <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
           <div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">Tiếp nhận & Điều phối lịch khám</h1>
@@ -915,7 +765,6 @@ export default function ReceptionHome() {
           </div>
         </div>
 
-        {/* Thanh Thống kê */}
         <ReceptionStatsBar
           stats={stats}
           dashFilter={dashFilter}
@@ -923,7 +772,6 @@ export default function ReceptionHome() {
           statusFilter={statusFilter}
         />
 
-        {/* Bảng danh sách lịch hẹn toàn màn hình */}
         <ReceptionAppointmentTable
           listSearch={listSearch}
           setListSearch={setListSearch}
@@ -965,7 +813,6 @@ export default function ReceptionHome() {
         />
       </div>
 
-      {/* Modal Chi tiết lịch hẹn */}
       <ReceptionDetailModal
         isOpen={isDetailOpen}
         onClose={() => {
@@ -1011,7 +858,6 @@ export default function ReceptionHome() {
         onPatientProfileUpdated={handlePatientProfileUpdated}
       />
 
-      {/* Modal Quét QR */}
       <ReceptionQrScannerModal
         qrOpen={qrOpen}
         setQrOpen={setQrOpen}
@@ -1022,29 +868,26 @@ export default function ReceptionHome() {
         onScan={handleQrDecode}
       />
 
-      {/* Modal Check-in bằng CCCD */}
       {isCccdModalOpen && (
         <div
-          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
-          role="presentation"
+          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
           onClick={() => setIsCccdModalOpen(false)}
         >
           <div
             className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-100 space-y-4"
-            role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <IdentificationIcon className="w-5 h-5 text-blue-600 shrink-0" />
+                <IdCard className="w-5 h-5 text-emerald-700 shrink-0" />
                 <span>Check-in bằng CCCD / Mã QR CCCD</span>
               </h2>
               <button
                 type="button"
-                className="w-8 h-8 rounded flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
                 onClick={() => setIsCccdModalOpen(false)}
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -1052,11 +895,11 @@ export default function ReceptionHome() {
               Nhập 12 số CCCD gắn chip của bệnh nhân hoặc quét chuỗi mã QR trên thẻ CCCD Bộ Công An.
             </p>
 
-            {cccdErr ? (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded font-medium">
+            {cccdErr && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg font-medium">
                 {cccdErr}
               </div>
-            ) : null}
+            )}
 
             <form onSubmit={handleCccdCheckIn} className="space-y-4">
               <div>
@@ -1069,14 +912,14 @@ export default function ReceptionHome() {
                   value={cccdInput}
                   onChange={(e) => setCccdInput(e.target.value)}
                   placeholder="Ví dụ: 079099012345..."
-                  className="w-full px-3.5 py-2.5 text-xs font-mono font-bold bg-white border border-slate-300 rounded placeholder:text-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition shadow-xs"
+                  className="w-full px-3.5 py-2.5 text-xs font-mono font-bold bg-white border border-slate-300 rounded-lg placeholder:text-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
                 />
               </div>
 
               <div className="flex items-center gap-2.5 pt-2">
                 <button
                   type="button"
-                  className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded text-xs transition cursor-pointer"
+                  className="flex-1 py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs transition cursor-pointer"
                   onClick={() => setIsCccdModalOpen(false)}
                 >
                   Hủy
@@ -1084,17 +927,16 @@ export default function ReceptionHome() {
                 <button
                   type="submit"
                   disabled={cccdLoading || !cccdInput.trim()}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs transition shadow-xs cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
-                  {cccdLoading ? 'Đang kiểm tra…' : 'Xác nhận Check-in'}
+                  {cccdLoading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang kiểm tra…</> : 'Xác nhận Check-in'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-      {/* Hidden reader element for scanning image file */}
       <div id="tcl-qr-hidden-reader" className="hidden" />
     </div>
-  );
+  )
 }
