@@ -1,0 +1,47 @@
+import {
+  listDoctorAppointments,
+  lookupPatientByCode,
+  listPatientsReception,
+  listPatientHistoryReception,
+  listPatientHistory,
+  lookupAppointmentByTicket,
+  getAvailability,
+  listReceptionAppointments,
+  getNextVisitQueueNumber,
+  updateAppointmentStatus,
+  finishExamAppointment,
+  createAppointmentReception,
+  rescheduleAppointment,
+} from '@/modules/admin/services/appointments'
+
+export const appointmentsService = {
+  listDoctorAppointments,
+  lookupPatientByCode,
+  listPatientsReception,
+  listPatientHistoryReception,
+  listPatientHistory,
+  lookupAppointmentByTicket,
+  getAvailability,
+  listReceptionAppointments,
+  getNextVisitQueueNumber,
+  updateAppointmentStatus,
+  finishExamAppointment,
+  createAppointmentReception,
+  rescheduleAppointment,
+}
+
+export {
+  listDoctorAppointments,
+  lookupPatientByCode,
+  listPatientsReception,
+  listPatientHistoryReception,
+  listPatientHistory,
+  lookupAppointmentByTicket,
+  getAvailability,
+  listReceptionAppointments,
+  getNextVisitQueueNumber,
+  updateAppointmentStatus,
+  finishExamAppointment,
+  createAppointmentReception,
+  rescheduleAppointment,
+}

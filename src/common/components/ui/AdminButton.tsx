@@ -21,10 +21,10 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
 }
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  xs: 'px-2.5 py-1 text-xs font-semibold rounded-lg',
-  sm: 'px-3 py-1.5 text-xs font-semibold rounded-lg',
-  md: 'px-4 py-2 text-xs font-bold rounded-lg',
-  lg: 'px-5 py-2.5 text-sm font-bold rounded-xl',
+  xs: 'px-2.5 py-1 text-xs font-semibold rounded',
+  sm: 'px-3 py-1.5 text-xs font-semibold rounded',
+  md: 'px-4 py-2 text-xs font-bold rounded',
+  lg: 'px-5 py-2.5 text-sm font-bold rounded',
 }
 
 export function AdminButton({
@@ -97,7 +97,7 @@ export function AdminIconButton({
       type="button"
       title={title}
       disabled={disabled}
-      className={`${sz} rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${TONE_CLASSES[tone]} ${className}`}
+      className={`${sz} rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${TONE_CLASSES[tone]} ${className}`}
       {...props}
     >
       <Icon className="w-4 h-4" />

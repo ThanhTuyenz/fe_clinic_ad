@@ -35,3 +35,30 @@ export async function deleteSchedule(id: string) {
   const response = await apiClient.delete(`/schedules/${id}`)
   return unwrap(response.data)
 }
+
+export async function createBatchSchedules(data: {
+  doctorId: string
+  branchId: string
+  roomId?: string
+  startDate: string
+  endDate: string
+  daysOfWeek: number[]
+  shifts?: { startTime: string; endTime: string }[]
+  startTime?: string
+  endTime?: string
+  slotDurationMin?: number
+  capacityPerSlot?: number
+  status?: string
+}) {
+  const response = await apiClient.post('/schedules/batch', data)
+  return unwrap(response.data)
+}
+
+export async function copyWeekSchedules(data: {
+  sourceMonday: string
+  targetMonday: string
+  branchId?: string
+}) {
+  const response = await apiClient.post('/schedules/copy-week', data)
+  return unwrap(response.data)
+}

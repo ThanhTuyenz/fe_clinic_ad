@@ -32,7 +32,7 @@ export function FilterTabs({
             key={tab.id}
             type="button"
             onClick={() => onChange(tab.id)}
-            className={`flex items-center gap-1.5 font-semibold rounded-lg border transition-all cursor-pointer ${pad} ${
+            className={`flex items-center gap-1.5 font-semibold rounded border transition-all cursor-pointer ${pad} ${
               isSelected
                 ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
                 : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
@@ -41,7 +41,7 @@ export function FilterTabs({
             <span>{tab.label}</span>
             {tab.count !== undefined && (
               <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
                   isSelected ? 'bg-emerald-800 text-white' : 'bg-slate-100 text-slate-500'
                 }`}
               >

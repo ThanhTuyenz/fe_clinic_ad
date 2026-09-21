@@ -87,14 +87,14 @@ export default function ReceptionAppointmentTable({
   qrImageLoading,
 }: ReceptionAppointmentTableProps) {
   return (
-    <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden flex flex-col">
+    <div className="bg-white border border-slate-200/90 rounded shadow-xs overflow-hidden flex flex-col">
       <div className="p-4 border-b border-slate-200 bg-slate-50/70 space-y-3">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="relative w-full sm:w-auto flex-1 max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
             <input
               id="reception-table-search"
-              className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-slate-200 rounded-lg placeholder:text-slate-400 text-slate-800 font-medium focus:border-emerald-600 outline-none"
+              className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-slate-200 rounded placeholder:text-slate-400 text-slate-800 font-medium focus:border-emerald-600 outline-none"
               type="search"
               value={listSearch}
               onChange={(e) => {
@@ -109,7 +109,7 @@ export default function ReceptionAppointmentTable({
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
             <button
               type="button"
-              className={`px-3 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
+              className={`px-3 py-2 text-xs font-semibold rounded border transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
                 filtersOpen ? 'bg-emerald-50 border-emerald-600 text-emerald-800' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
               onClick={() => setFiltersOpen((o) => !o)}
@@ -121,7 +121,7 @@ export default function ReceptionAppointmentTable({
             {onOpenCccdCheckIn && (
               <button
                 type="button"
-                className="px-3 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                className="px-3 py-2 text-xs font-bold rounded bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
                 onClick={onOpenCccdCheckIn}
               >
                 <IdCard className="w-4 h-4" />
@@ -131,7 +131,7 @@ export default function ReceptionAppointmentTable({
 
             {handleQrFileInput && (
               <label
-                className={`px-3 py-2 text-xs font-bold rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3 py-2 text-xs font-bold rounded border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 ${
                   qrImageLoading ? 'opacity-60 pointer-events-none' : ''
                 }`}
                 title="Tải tệp ảnh chứa mã QR"
@@ -144,7 +144,7 @@ export default function ReceptionAppointmentTable({
 
             <button
               type="button"
-              className="px-3.5 py-2 text-xs font-bold rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              className="px-3.5 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               disabled={lookupLoading}
               onClick={() => {
                 setTicketErr('')
@@ -158,15 +158,15 @@ export default function ReceptionAppointmentTable({
           </div>
         </div>
 
-        {ticketErr && <div className="px-3.5 py-2 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg font-medium">{ticketErr}</div>}
+        {ticketErr && <div className="px-3.5 py-2 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded font-medium">{ticketErr}</div>}
 
         {filtersOpen && (
-          <div className="p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 shadow-xs">
+          <div className="p-3 bg-white border border-slate-200 rounded text-xs text-slate-700 shadow-xs">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 flex-wrap">
               <div className="flex-1 min-w-[160px]">
                 <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Trạng thái khám</label>
                 <select
-                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:border-emerald-600 outline-none"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs font-medium text-slate-800 focus:border-emerald-600 outline-none"
                   value={statusFilter}
                   onChange={(e) => {
                     setStatusFilter(e.target.value)
@@ -185,7 +185,7 @@ export default function ReceptionAppointmentTable({
                 <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Từ ngày</label>
                 <input
                   type="date"
-                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs font-medium text-slate-800"
                   value={fromDate}
                   onChange={(e) => setFromDate(e.target.value)}
                 />
@@ -195,7 +195,7 @@ export default function ReceptionAppointmentTable({
                 <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Đến ngày</label>
                 <input
                   type="date"
-                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs font-medium text-slate-800"
                   value={toDate}
                   onChange={(e) => setToDate(e.target.value)}
                 />
@@ -203,7 +203,7 @@ export default function ReceptionAppointmentTable({
 
               <button
                 type="button"
-                className="py-1.5 px-3 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-all cursor-pointer shadow-xs"
+                className="py-1.5 px-3 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded transition-all cursor-pointer shadow-xs"
                 onClick={() => {
                   setFromDate('')
                   setToDate('')
@@ -322,7 +322,7 @@ export default function ReceptionAppointmentTable({
                   <td className="py-3 px-4 text-right whitespace-nowrap">
                     <button
                       type="button"
-                      className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 font-semibold rounded-lg text-xs transition-all shadow-xs inline-flex items-center gap-1 cursor-pointer"
+                      className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 font-semibold rounded text-xs transition-all shadow-xs inline-flex items-center gap-1 cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation()
                         onOpenDetail(row)
@@ -351,7 +351,7 @@ export default function ReceptionAppointmentTable({
         <div className="p-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
           <button
             type="button"
-            className="px-3 py-1 rounded-lg bg-white border border-slate-200 font-semibold hover:bg-slate-50 text-slate-700 disabled:opacity-40 cursor-pointer shadow-xs flex items-center gap-1"
+            className="px-3 py-1 rounded bg-white border border-slate-200 font-semibold hover:bg-slate-50 text-slate-700 disabled:opacity-40 cursor-pointer shadow-xs flex items-center gap-1"
             disabled={page <= 0}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
           >
@@ -362,7 +362,7 @@ export default function ReceptionAppointmentTable({
           </span>
           <button
             type="button"
-            className="px-3 py-1 rounded-lg bg-white border border-slate-200 font-semibold hover:bg-slate-50 text-slate-700 disabled:opacity-40 cursor-pointer shadow-xs flex items-center gap-1"
+            className="px-3 py-1 rounded bg-white border border-slate-200 font-semibold hover:bg-slate-50 text-slate-700 disabled:opacity-40 cursor-pointer shadow-xs flex items-center gap-1"
             disabled={page >= totalPages - 1}
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
           >

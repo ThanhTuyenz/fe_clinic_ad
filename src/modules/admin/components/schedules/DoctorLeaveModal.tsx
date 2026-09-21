@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { CalendarOff } from 'lucide-react'
 import {
   analyzeDoctorLeaveImpact,
   executeSmartReschedule,
@@ -45,7 +46,7 @@ export default function DoctorLeaveModal({ isOpen, onClose, doctors, onSuccess }
         toDate,
       })
       setAnalysis(res)
-      // Mặc định chọn slot thay thế đầu tiên do AI gợi ý cho mỗi ca
+      // Mặc định chọn slot thay thế đầu tiên gợi ý cho mỗi ca
       const initialMap: Record<string, string> = {}
       res.impacts.forEach((imp) => {
         if (imp.suggestedSlots && imp.suggestedSlots.length > 0) {
@@ -76,7 +77,7 @@ export default function DoctorLeaveModal({ isOpen, onClose, doctors, onSuccess }
     setErr('')
     try {
       const res = await executeSmartReschedule({ items })
-      setSuccessMsg(`✅ Đã thực hiện đổi lịch thành công cho ${res.successCount}/${res.total} ca khám!`)
+      setSuccessMsg(`Đã thực hiện đổi lịch thành công cho ${res.successCount}/${res.total} ca khám!`)
       if (onSuccess) onSuccess()
     } catch (e: any) {
       setErr(e?.message || 'Không thể thực hiện đổi lịch tự động.')
@@ -92,19 +93,21 @@ export default function DoctorLeaveModal({ isOpen, onClose, doctors, onSuccess }
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded shadow-2xl max-w-2xl w-full p-6 border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto"
         role="dialog"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🤖</span>
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-slate-700">
+              <CalendarOff className="h-5 w-5" />
+            </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                AI Smart Rescheduling: Bác sĩ nghỉ đột xuất
+                Điều phối lịch khám: Bác sĩ nghỉ đột xuất
               </h2>
               <p className="text-xs text-slate-500">
-                AI tự động rà soát bệnh nhân bị ảnh hưởng và tìm slot thay thế tương đương
+                Tự động rà soát bệnh nhân bị ảnh hưởng và tìm khung giờ thay thế phù hợp
               </p>
             </div>
           </div>

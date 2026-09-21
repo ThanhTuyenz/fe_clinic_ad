@@ -40,7 +40,7 @@ export function AdminSelect({
       <select
         id={selectId}
         required={required}
-        className={`w-full px-2.5 py-1.5 text-xs rounded-lg border bg-white transition-colors focus:outline-none focus:border-emerald-600 disabled:bg-slate-50 disabled:text-slate-400 ${
+        className={`w-full px-2.5 py-1.5 text-xs rounded border bg-white transition-colors focus:outline-none focus:border-emerald-600 disabled:bg-slate-50 disabled:text-slate-400 ${
           error ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200'
         } ${className}`}
         {...props}

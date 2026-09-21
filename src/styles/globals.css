@@ -60,3 +60,13 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+/* Ẩn thanh cuộn nhưng vẫn hỗ trợ cuộn chuột / cảm ứng */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

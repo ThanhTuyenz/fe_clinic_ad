@@ -54,7 +54,7 @@ export function StatusBadge({
 
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${TONE_CLASSES[resolvedTone]} ${className}`}
+      className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${TONE_CLASSES[resolvedTone]} ${className}`}
     >
       {children || status}
     </span>

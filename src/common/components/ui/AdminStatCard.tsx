@@ -37,7 +37,7 @@ export function AdminStatCard({
   className = '',
 }: AdminStatCardProps) {
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex items-start justify-between gap-3 ${className}`}>
+    <div className={`rounded border border-slate-200 bg-white p-4 shadow-xs flex items-start justify-between gap-3 ${className}`}>
       <div className="min-w-0 flex-1">
         <p className="text-xs text-slate-500 font-medium truncate">{label}</p>
         <p className={`mt-1 text-2xl font-bold tracking-tight ${TONE_VALUE_CLASSES[tone]}`}>
@@ -50,7 +50,7 @@ export function AdminStatCard({
         )}
       </div>
       {Icon && (
-        <div className={`p-2.5 rounded-xl border shrink-0 ${TONE_ICON_CLASSES[tone]}`}>
+        <div className={`p-2.5 rounded border shrink-0 ${TONE_ICON_CLASSES[tone]}`}>
           <Icon className="w-5 h-5" />
         </div>
       )}

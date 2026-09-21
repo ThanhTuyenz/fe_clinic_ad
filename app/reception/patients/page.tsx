@@ -1,5 +1,5 @@
 import AuthGuard from '@/modules/auth/common/guards/AuthGuard'
-import ReceptionPatientsPage from '@/modules/admin/pages/ReceptionPatientsPage'
+import { ReceptionPatientsPage } from '@/modules/reception'
 
 export default function ReceptionPatientsRoute() {
   return (

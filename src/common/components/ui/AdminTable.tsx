@@ -8,7 +8,7 @@ export interface AdminTableCardProps {
 
 export function AdminTableCard({ children, className = '' }: AdminTableCardProps) {
   return (
-    <section className={`rounded-xl border border-slate-200/90 bg-white shadow-xs overflow-hidden ${className}`}>
+    <section className={`rounded border border-slate-200/90 bg-white shadow-xs overflow-hidden ${className}`}>
       {children}
     </section>
   )
