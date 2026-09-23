@@ -291,13 +291,22 @@ export default function AdminAppointmentsPage() {
           Hôm nay
         </AdminButton>
         <AdminButton
-          variant="secondary"
+          variant={fromDate === shiftDays(today, -6) && toDate === today ? 'primary' : 'secondary'}
           onClick={() => {
             setFromDate(shiftDays(today, -6))
             setToDate(today)
           }}
         >
           7 ngày
+        </AdminButton>
+        <AdminButton
+          variant={!fromDate && !toDate ? 'primary' : 'secondary'}
+          onClick={() => {
+            setFromDate('')
+            setToDate('')
+          }}
+        >
+          Tất cả các ngày
         </AdminButton>
         <AdminButton
           variant="secondary"
@@ -341,27 +350,45 @@ export default function AdminAppointmentsPage() {
       )}
 
       <AdminTableCard className="mt-5">
-        <div className="border-b border-slate-100 p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-            <div className="flex items-center gap-1.5">
+        <div className="border-b border-slate-100 p-4">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Khoảng ngày khám */}
+            <div className="flex items-center gap-1.5 rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-2xs">
+              <span className="text-slate-400 font-medium whitespace-nowrap">Từ:</span>
               <input
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="w-full text-xs rounded border border-slate-200 px-2 py-1.5 bg-white"
+                className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
               />
-              <span className="text-slate-400 text-xs">→</span>
+              <span className="text-slate-300">→</span>
+              <span className="text-slate-400 font-medium whitespace-nowrap">Đến:</span>
               <input
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className="w-full text-xs rounded border border-slate-200 px-2 py-1.5 bg-white"
+                className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
               />
+              {(fromDate || toDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFromDate('')
+                    setToDate('')
+                  }}
+                  title="Xem tất cả ngày"
+                  className="text-slate-400 hover:text-slate-600 ml-1 text-xs font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
             </div>
+
+            {/* Trạng thái */}
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="text-xs rounded border border-slate-200 px-2.5 py-1.5 bg-white"
+              className="text-xs rounded border border-slate-200 px-3 py-1.5 bg-white text-slate-700 font-medium cursor-pointer shadow-2xs"
             >
               {STATUS_OPTIONS.map(([val, label]) => (
                 <option key={val} value={val}>
@@ -369,10 +396,12 @@ export default function AdminAppointmentsPage() {
                 </option>
               ))}
             </select>
+
+            {/* Cơ sở */}
             <select
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
-              className="text-xs rounded border border-slate-200 px-2.5 py-1.5 bg-white"
+              className="text-xs rounded border border-slate-200 px-3 py-1.5 bg-white text-slate-700 font-medium cursor-pointer shadow-2xs max-w-[180px] truncate"
             >
               <option value="">Tất cả cơ sở</option>
               {branches.map((b) => (
@@ -381,10 +410,12 @@ export default function AdminAppointmentsPage() {
                 </option>
               ))}
             </select>
+
+            {/* Bác sĩ */}
             <select
               value={doctorId}
               onChange={(e) => setDoctorId(e.target.value)}
-              className="text-xs rounded border border-slate-200 px-2.5 py-1.5 bg-white"
+              className="text-xs rounded border border-slate-200 px-3 py-1.5 bg-white text-slate-700 font-medium cursor-pointer shadow-2xs max-w-[200px] truncate"
             >
               <option value="">Tất cả bác sĩ</option>
               {doctors.map((d) => (
@@ -393,13 +424,15 @@ export default function AdminAppointmentsPage() {
                 </option>
               ))}
             </select>
-            <div className="relative">
+
+            {/* Ô tìm kiếm */}
+            <div className="relative flex-1 min-w-[220px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Tìm mã vé, tên, SĐT..."
-                className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded border border-slate-200 focus:outline-none focus:border-emerald-600 bg-white"
+                placeholder="Tìm mã vé, tên bệnh nhân, SĐT..."
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded border border-slate-200 focus:outline-none focus:border-emerald-600 bg-white shadow-2xs"
               />
             </div>
           </div>
@@ -426,7 +459,7 @@ export default function AdminAppointmentsPage() {
                         {row.ticket || row.bookingCode || '—'}
                       </span>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        {appointmentSourceLabel(row.source)}
+                        {appointmentSourceLabel(row)}
                       </p>
                     </td>
                     <td className="px-5 py-3.5">
@@ -440,7 +473,7 @@ export default function AdminAppointmentsPage() {
                     <td className="px-5 py-3.5 text-xs text-slate-700">
                       <div className="flex items-center gap-1 font-semibold">
                         <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        {formatExamTimeLine(row)}
+                        {formatExamTimeLine(row.startTime, row.endTime)}
                       </div>
                       <p className="text-slate-400 mt-0.5">{formatDateVi(row.appointmentDate)}</p>
                     </td>

@@ -13,15 +13,16 @@ import {
   formatExamTimeLine,
   patientListDisplayName,
   receptionStatusMeta,
+  ymd,
 } from './receptionHelpers'
-import { ArrowRight, ChevronLeft, ChevronRight, Filter, IdCard, Image, QrCode, Search } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, Image, QrCode, Search } from 'lucide-react'
 
 interface ReceptionAppointmentTableProps {
   listSearch: string
   setListSearch: (val: string) => void
   setQrListFocusTicket: (val: string) => void
-  filtersOpen: boolean
-  setFiltersOpen: React.Dispatch<React.SetStateAction<boolean>>
+  filtersOpen?: boolean
+  setFiltersOpen?: React.Dispatch<React.SetStateAction<boolean>>
   lookupLoading: boolean
   setTicketErr: (val: string) => void
   setQrErr: (val: string) => void
@@ -47,7 +48,6 @@ interface ReceptionAppointmentTableProps {
   listLoading: boolean
   listErr: string
   loadList: () => Promise<void>
-  onOpenCccdCheckIn?: () => void
   handleQrFileInput?: (e: React.ChangeEvent<HTMLInputElement>) => void
   qrImageLoading?: boolean
 }
@@ -82,7 +82,6 @@ export default function ReceptionAppointmentTable({
   listLoading,
   listErr,
   loadList,
-  onOpenCccdCheckIn,
   handleQrFileInput,
   qrImageLoading,
 }: ReceptionAppointmentTableProps) {
@@ -107,28 +106,6 @@ export default function ReceptionAppointmentTable({
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
-            <button
-              type="button"
-              className={`px-3 py-2 text-xs font-semibold rounded border transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
-                filtersOpen ? 'bg-emerald-50 border-emerald-600 text-emerald-800' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-              onClick={() => setFiltersOpen((o) => !o)}
-            >
-              <Filter className={`w-3.5 h-3.5 ${filtersOpen ? 'text-emerald-700' : 'text-slate-500'}`} />
-              <span>Bộ lọc</span>
-            </button>
-
-            {onOpenCccdCheckIn && (
-              <button
-                type="button"
-                className="px-3 py-2 text-xs font-bold rounded bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-                onClick={onOpenCccdCheckIn}
-              >
-                <IdCard className="w-4 h-4" />
-                <span>Quét CCCD</span>
-              </button>
-            )}
-
             {handleQrFileInput && (
               <label
                 className={`px-3 py-2 text-xs font-bold rounded border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -160,8 +137,7 @@ export default function ReceptionAppointmentTable({
 
         {ticketErr && <div className="px-3.5 py-2 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded font-medium">{ticketErr}</div>}
 
-        {filtersOpen && (
-          <div className="p-3 bg-white border border-slate-200 rounded text-xs text-slate-700 shadow-xs">
+        <div className="p-3 bg-white border border-slate-200 rounded text-xs text-slate-700 shadow-xs">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 flex-wrap">
               <div className="flex-1 min-w-[160px]">
                 <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Trạng thái khám</label>
@@ -203,10 +179,43 @@ export default function ReceptionAppointmentTable({
 
               <button
                 type="button"
-                className="py-1.5 px-3 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded transition-all cursor-pointer shadow-xs"
+                className={`py-1.5 px-3 text-xs font-semibold rounded border transition-all cursor-pointer shadow-xs ${
+                  fromDate === ymd(new Date()) && toDate === ymd(new Date())
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold'
+                    : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
+                }`}
+                onClick={() => {
+                  const todayStr = ymd(new Date())
+                  setFromDate(todayStr)
+                  setToDate(todayStr)
+                }}
+              >
+                Hôm nay
+              </button>
+
+              <button
+                type="button"
+                className={`py-1.5 px-3 text-xs font-semibold rounded border transition-all cursor-pointer shadow-xs ${
+                  !fromDate && !toDate
+                    ? 'bg-emerald-700 text-white border-emerald-800 font-bold'
+                    : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
+                }`}
                 onClick={() => {
                   setFromDate('')
                   setToDate('')
+                }}
+                title="Bỏ giới hạn ngày để xem toàn bộ lịch khám trong hệ thống"
+              >
+                Tất cả ngày
+              </button>
+
+              <button
+                type="button"
+                className="py-1.5 px-3 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded transition-all cursor-pointer shadow-xs"
+                onClick={() => {
+                  const todayStr = ymd(new Date())
+                  setFromDate(todayStr)
+                  setToDate(todayStr)
                   setStatusFilter('all')
                   setDashFilter('')
                 }}
@@ -215,12 +224,12 @@ export default function ReceptionAppointmentTable({
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
 
       <div className="px-4 py-2 flex items-center justify-between text-xs font-medium text-slate-500 bg-slate-50/50 border-b border-slate-100">
         <span>
           Hiển thị <strong>{filteredList.length}</strong> lịch hẹn
+          {fromDate || toDate ? ` · ${fromDate === toDate ? `Ngày: ${formatDateVi(fromDate)}` : `Từ ${formatDateVi(fromDate)} đến ${formatDateVi(toDate)}`}` : ' · Toàn bộ thời gian'}
           {dashFilter ? ` · Đang lọc: ${dashFilterLabelVi(dashFilter)}` : ''}
           {listSearch.trim() ? ` · Từ khóa: «${listSearch.trim()}»` : ''}
         </span>
@@ -249,7 +258,13 @@ export default function ReceptionAppointmentTable({
               const patientName = patientListDisplayName(row.patient)
               const doctorName = doctorDisplayName(row.doctor) !== '—' ? doctorDisplayName(row.doctor) : (row.doctor?.fullName || 'Bác sĩ phụ trách')
               const specialty = row.specialty?.name || row.servicePackage?.name || row.doctor?.specialtyName || doctorSpecialtyDisplay(row.doctor) || 'Chuyên khoa'
-              const isPaid = String(row.payment?.status || '').toLowerCase() === 'paid'
+              const isPaid = String(row.payment?.status || '').toLowerCase() === 'paid' || row.payment?.paid === true
+              const isOnlinePaid = isPaid && (
+                String(row.payment?.method || '').toLowerCase() === 'online' ||
+                String(row.payment?.method || '').toLowerCase() === 'momo' ||
+                row.source === 'online' ||
+                row.bookingSource === 'online'
+              )
               const meta = receptionStatusMeta(row)
               const pastSlot = isPendingAppointmentPastSlot(row)
 
@@ -298,15 +313,32 @@ export default function ReceptionAppointmentTable({
                   </td>
 
                   <td className="py-3 px-4 text-center whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      isPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                    }`}>
-                      {isPaid ? 'Đã thu' : 'Chưa thu'}
-                    </span>
+                    {isPaid ? (
+                      isOnlinePaid ? (
+                        <div className="inline-flex flex-col items-center">
+                          <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            Đã thanh toán trước (Online)
+                          </span>
+                          {row.payment?.transactionId && (
+                            <span className="text-[9px] font-mono text-slate-400 mt-0.5" title={`Mã GD: ${row.payment.transactionId}`}>
+                              Mã GD: {row.payment.transactionId}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Đã thu tại quầy
+                        </span>
+                      )
+                    ) : (
+                      <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                        Chưa thu phí
+                      </span>
+                    )}
                   </td>
 
                   <td className="py-3 px-4 text-center whitespace-nowrap">
-                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    <span className={`inline-flex px-2.5 py-0.5 rounded text-[10px] font-bold ${
                       meta.tone === 'completed'
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         : meta.tone === 'booked'

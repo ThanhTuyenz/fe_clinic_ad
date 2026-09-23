@@ -168,7 +168,13 @@ export function detailMissingForSlip(detail: any): boolean {
   return false
 }
 
-export function formatExamTimeLine(start: string, end?: string): string {
+export function formatExamTimeLine(start: any, end?: string): string {
+  if (start && typeof start === 'object') {
+    const s = String(start.startTime || '').trim().slice(0, 5)
+    const e = String(start.endTime || '').trim().slice(0, 5)
+    if (!s) return '—'
+    return e && e !== s ? `${s} – ${e}` : s
+  }
   const s = String(start || '').trim().slice(0, 5)
   if (!s) return '—'
   const e = String(end || '').trim().slice(0, 5)
@@ -304,16 +310,23 @@ export function normalizeStatus(st: string): string {
 }
 
 export function readReceptionNavState(location: any) {
-  const from = String(location?.state?.fromDate || '').trim()
-  const to = String(location?.state?.toDate || '').trim()
+  const todayStr = ymd(new Date())
+  const from = String(location?.state?.fromDate || todayStr).trim()
+  const to = String(location?.state?.toDate || todayStr).trim()
   const st = String(location?.state?.statusFilter || '').trim()
   const dashFilter = String(location?.state?.dashFilter || '').trim()
+  const openQrScan = false
+  const openCccd = false
+  const ticket = String(location?.state?.ticket || location?.state?.bookingCode || '').trim()
   return {
     fromDate: from,
     toDate: to,
     statusFilter: st || 'all',
     dashFilter,
-    filtersOpen: Boolean(from || to || st || dashFilter),
+    openQrScan,
+    openCccd,
+    ticket,
+    filtersOpen: Boolean(dashFilter || (st && st !== 'all')),
   }
 }
 

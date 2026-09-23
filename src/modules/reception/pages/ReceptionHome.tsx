@@ -20,6 +20,8 @@ import { buildPaymentInvoiceView } from '@/modules/admin/utils/paymentInvoiceVie
 import { printPaymentInvoice, printPaymentThenVisitSlip } from '@/modules/admin/utils/printPaymentInvoice'
 import { printVisitSlip } from '@/modules/admin/utils/printVisitSlip'
 import { useAppointmentsSocket } from '@/modules/admin/hooks/useAppointmentsSocket'
+import { ticketFromQrPayload } from '@/modules/admin/utils/ticketQr'
+import { decodeQrFromImageFile } from '@/modules/admin/utils/imageQrDecoder'
 
 import {
   PAGE_SIZE,
@@ -27,6 +29,7 @@ import {
   cameraErrorMessage,
   detailMissingForSlip,
   displayName,
+  formatDateVi,
   getAppointmentWorkflowBucket,
   matchesDashFilter,
   mergeReceptionDetail,
@@ -39,7 +42,7 @@ import ReceptionStatsBar from '../components/ReceptionStatsBar'
 import ReceptionAppointmentTable from '../components/ReceptionAppointmentTable'
 import ReceptionDetailModal from '../components/ReceptionDetailModal'
 import ReceptionQrScannerModal from '../components/ReceptionQrScannerModal'
-import { IdCard, X, Loader2, CheckCircle2 } from 'lucide-react'
+import { X, Loader2, CheckCircle2 } from 'lucide-react'
 
 
 export default function ReceptionHome() {
@@ -83,7 +86,7 @@ export default function ReceptionHome() {
   const [paymentSaving, setPaymentSaving] = useState(false)
   const [paymentErr, setPaymentErr] = useState('')
 
-  const [ticket, setTicket] = useState('')
+  const [ticket, setTicket] = useState(navInit.ticket || '')
   const [ticketErr, setTicketErr] = useState('')
   const [lookupLoading, setLookupLoading] = useState(false)
 
@@ -97,10 +100,33 @@ export default function ReceptionHome() {
   const [flashOk, setFlashOk] = useState('')
   const [flashErr, setFlashErr] = useState('')
 
-  const [isCccdModalOpen, setIsCccdModalOpen] = useState(false)
-  const [cccdInput, setCccdInput] = useState('')
-  const [cccdLoading, setCccdLoading] = useState(false)
-  const [cccdErr, setCccdErr] = useState('')
+  // Tự động tra cứu và mở chi tiết tiếp đón nếu được điều hướng tới kèm ticket/bookingCode
+  useEffect(() => {
+    if (!navInit.ticket || !token) return
+    let active = true
+    setLookupLoading(true)
+    lookupAppointmentByTicket({ token, ticket: navInit.ticket })
+      .then((data) => {
+        if (!active) return
+        const norm = normalizeLookup(data)
+        if (norm?.id) {
+          setSelectedId(String(norm.id))
+          setLookupDetail(norm)
+          setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
+          setIsDetailOpen(true)
+        }
+      })
+      .catch((err: any) => {
+        if (!active) return
+        setFlashErr(err?.message || 'Không tìm thấy lịch hẹn được chỉ định.')
+      })
+      .finally(() => {
+        if (active) setLookupLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [navInit.ticket, token])
 
   useEffect(() => {
     if (!token || !user) {
@@ -472,9 +498,10 @@ export default function ReceptionHome() {
 
   const handleQrDecode = useCallback(async (payload: string) => {
     const raw = String(payload || '').trim()
+    const cleanTicket = ticketFromQrPayload(raw) || raw
     setQrErr('')
     try {
-      const data = await lookupAppointmentByTicket({ token, ticket: raw })
+      const data = await lookupAppointmentByTicket({ token, ticket: cleanTicket })
       const norm = normalizeLookup(data)
       if (!norm?.id) throw new Error('Không tìm thấy thông tin lịch hẹn tương ứng.')
 
@@ -489,33 +516,6 @@ export default function ReceptionHome() {
     }
   }, [token])
 
-  const handleCccdCheckIn = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
-    const val = cccdInput.trim()
-    if (!val) {
-      setCccdErr('Vui lòng nhập số CCCD hoặc quét mã QR thẻ CCCD')
-      return
-    }
-    setCccdLoading(true)
-    setCccdErr('')
-    try {
-      const data = await lookupAppointmentByTicket({ token, ticket: val })
-      const norm = normalizeLookup(data)
-      if (!norm?.id) throw new Error('Không tìm thấy lịch hẹn nào khớp với số CCCD này.')
-
-      setIsCccdModalOpen(false)
-      setCccdInput('')
-      setSelectedId(String(norm.id))
-      setLookupDetail(norm)
-      setDetailById((prev) => ({ ...prev, [String(norm.id)]: norm }))
-      setIsDetailOpen(true)
-      setFlashOk(`🔍 Đã tìm thấy lịch hẹn [${norm.ticket || norm.bookingCode}] theo CCCD. Vui lòng đối chiếu thông tin và bấm Xác nhận Check-in.`)
-    } catch (err: any) {
-      setCccdErr(err?.message || 'Không tìm thấy lịch hẹn phù hợp với CCCD này.')
-    } finally {
-      setCccdLoading(false)
-    }
-  }
 
   useEffect(() => {
     qrDecodeHandlerRef.current = handleQrDecode
@@ -702,15 +702,15 @@ export default function ReceptionHome() {
     setQrImageLoading(true)
     setQrErr('')
     try {
-      const html5QrCode = new Html5Qrcode('tcl-qr-hidden-reader')
-      const decodedText = await html5QrCode.scanFile(file, true)
+      const decodedText = await decodeQrFromImageFile(file)
       if (qrDecodeHandlerRef.current) {
         await qrDecodeHandlerRef.current(decodedText)
       }
     } catch (err: any) {
-      setQrErr(cameraErrorMessage(err))
+      setQrErr(err?.message || 'Không thể giải mã ảnh QR. Vui lòng thử lại với ảnh rõ nét hơn.')
     } finally {
       setQrImageLoading(false)
+      e.target.value = ''
     }
   }, [])
 
@@ -736,7 +736,9 @@ export default function ReceptionHome() {
         <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
           <div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">Tiếp nhận & Điều phối lịch khám</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Danh sách lịch hẹn, kiểm tra thanh toán và phân phòng khám</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Danh sách lịch hẹn, kiểm tra thanh toán và phân phòng khám · {!fromDate && !toDate ? 'Toàn bộ thời gian' : fromDate === toDate ? `Ngày ${formatDateVi(fromDate)}` : `Từ ${formatDateVi(fromDate)} đến ${formatDateVi(toDate)}`}
+            </p>
           </div>
         </div>
 
@@ -778,11 +780,6 @@ export default function ReceptionHome() {
           listLoading={listLoading}
           listErr={listErr}
           loadList={loadList}
-          onOpenCccdCheckIn={() => {
-            setCccdErr('')
-            setCccdInput('')
-            setIsCccdModalOpen(true)
-          }}
           handleQrFileInput={handleQrFileInput}
           qrImageLoading={qrImageLoading}
         />
@@ -843,75 +840,7 @@ export default function ReceptionHome() {
         onScan={handleQrDecode}
       />
 
-      {isCccdModalOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
-          onClick={() => setIsCccdModalOpen(false)}
-        >
-          <div
-            className="bg-white rounded shadow-2xl max-w-md w-full p-6 border border-slate-100 space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <IdCard className="w-5 h-5 text-emerald-700 shrink-0" />
-                <span>Check-in bằng CCCD / Mã QR CCCD</span>
-              </h2>
-              <button
-                type="button"
-                className="w-8 h-8 rounded flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-                onClick={() => setIsCccdModalOpen(false)}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <p className="text-xs text-slate-500">
-              Nhập 12 số CCCD gắn chip của bệnh nhân hoặc quét chuỗi mã QR trên thẻ CCCD Bộ Công An.
-            </p>
-
-            {cccdErr && (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded font-medium">
-                {cccdErr}
-              </div>
-            )}
-
-            <form onSubmit={handleCccdCheckIn} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Số CCCD / Dữ liệu QR CCCD:
-                </label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={cccdInput}
-                  onChange={(e) => setCccdInput(e.target.value)}
-                  placeholder="Ví dụ: 079099012345..."
-                  className="w-full px-3.5 py-2.5 text-xs font-mono font-bold bg-white border border-slate-300 rounded placeholder:text-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
-                />
-              </div>
-
-              <div className="flex items-center gap-2.5 pt-2">
-                <button
-                  type="button"
-                  className="flex-1 py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded text-xs transition cursor-pointer"
-                  onClick={() => setIsCccdModalOpen(false)}
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={cccdLoading || !cccdInput.trim()}
-                  className="flex-1 py-2 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded text-xs transition shadow-xs cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
-                >
-                  {cccdLoading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang kiểm tra…</> : 'Xác nhận Check-in'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      <div id="tcl-qr-hidden-reader" className="hidden" />
     </div>
   )
 }

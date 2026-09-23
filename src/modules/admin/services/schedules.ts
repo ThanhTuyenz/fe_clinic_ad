@@ -4,11 +4,16 @@ function unwrap(payload: any) {
   return payload?.success === true && 'data' in payload ? payload.data : payload
 }
 
-export async function listSchedules(params?: { doctorId?: string; branchId?: string; startDate?: string; endDate?: string }) {
+export async function listSchedules(params?: {
+  doctorId?: string
+  branchId?: string
+  startDate?: string
+  endDate?: string
+  withSlots?: string
+  availableOnly?: string
+}) {
   const response = await apiClient.get('/schedules', { params })
-  console.log('🔍 [API GET /schedules] Raw Response:', response.data)
   const result = unwrap(response.data)
-  console.log('🔍 [API GET /schedules] Unwrapped Result:', result)
   return Array.isArray(result) ? result : Array.isArray(result?.data) ? result.data : []
 }
 

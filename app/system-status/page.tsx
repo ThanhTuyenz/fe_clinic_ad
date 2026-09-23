@@ -1,10 +1,5 @@
-import AuthGuard from '@/modules/auth/common/guards/AuthGuard'
-import { RolePortal } from '@/modules/portal'
+import { redirect } from 'next/navigation'
 
 export default function SystemStatusPage() {
-  return (
-    <AuthGuard allowedRoles={['admin']}>
-      <RolePortal section="system-status" />
-    </AuthGuard>
-  )
+  redirect('/dashboard')
 }

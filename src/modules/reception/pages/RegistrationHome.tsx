@@ -16,16 +16,18 @@ import { listSpecialties, listDoctorsBySpecialty, listSpecialtyServices } from '
 import { listUsers } from '@/modules/admin/services/users'
 import { listSchedules } from '@/modules/admin/services/schedules'
 import { getStaffSession, isReceptionStaff } from '@/modules/admin/utils/staffSession'
-import { Html5Qrcode } from 'html5-qrcode'
+import { decodeQrFromImageFile } from '@/modules/admin/utils/imageQrDecoder'
 import ReceptionQrScannerModal from '../components/ReceptionQrScannerModal'
 import {
   CheckCircle2,
   ChevronLeft,
+  ChevronRight,
   X,
   Plus,
   QrCode,
   Search,
   ChevronLeftIcon,
+  CalendarIcon,
 } from 'lucide-react'
 
 
@@ -90,6 +92,7 @@ export default function RegistrationHome() {
   const [appointmentDate, setAppointmentDate] = useState(() => (createNew ? todayIsoDate() : ''))
   const [availableWorkDates, setAvailableWorkDates] = useState<string[]>([])
   const [schedulesLoading, setSchedulesLoading] = useState(false)
+  const dateScrollRef = useRef<HTMLDivElement>(null)
 
   const [startTime, setStartTime] = useState('')
   const [slotsLoading, setSlotsLoading] = useState(false)
@@ -415,7 +418,7 @@ export default function RegistrationHome() {
     })
   }, [doctors])
 
-  // Lấy các ngày bác sĩ có lịch làm việc (Schedules)
+  // Lấy các ngày bác sĩ có lịch làm việc (Schedules) - Backend đã tối ưu lọc sẵn ca trực còn lịch khả dụng
   useEffect(() => {
     if (!doctorId) {
       setAvailableWorkDates([])
@@ -423,23 +426,28 @@ export default function RegistrationHome() {
     }
     let mounted = true
     setSchedulesLoading(true)
-    listSchedules({ doctorId, startDate: todayIsoDate() })
+    listSchedules({ doctorId, startDate: todayIsoDate(), availableOnly: 'true' })
       .then((schedules) => {
         if (!mounted) return
-        const today = todayIsoDate()
         const dates = Array.from(
           new Set(
             (schedules || [])
-              .filter((s: any) => s?.status === 'OPEN' || !s?.status)
               .map((s: any) => String(s?.workDate || '').slice(0, 10))
-              .filter((dStr: string) => dStr && dStr >= today),
+              .filter(Boolean),
           ),
         ).sort()
+
         setAvailableWorkDates(dates)
+        if (dates.length > 0) {
+          setAppointmentDate((prev) => (dates.includes(prev) ? prev : dates[0]))
+        } else {
+          setAppointmentDate('')
+        }
       })
       .catch(() => {
         if (!mounted) return
         setAvailableWorkDates([])
+        setAppointmentDate('')
       })
       .finally(() => {
         if (!mounted) return
@@ -920,8 +928,7 @@ export default function RegistrationHome() {
     setQrImageLoading(true)
     setQrScanErr('')
     try {
-      const html5QrCode = new Html5Qrcode('reg-qr-hidden-reader')
-      const decodedText = await html5QrCode.scanFile(file, true)
+      const decodedText = await decodeQrFromImageFile(file)
       await handleQrDecoded(decodedText)
     } catch {
       setQrScanErr('Không thể đọc mã QR từ ảnh này. Vui lòng thử ảnh rõ nét hơn.')
@@ -1336,8 +1343,8 @@ export default function RegistrationHome() {
                     setBookingMode('new')
                   }}
                   className={`px-3 py-1 font-bold rounded transition-all cursor-pointer ${bookingMode === 'new'
-                      ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
-                      : 'text-slate-500 hover:text-slate-800 border border-transparent'
+                    ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                    : 'text-slate-500 hover:text-slate-800 border border-transparent'
                     }`}
                 >
                   Khám mới
@@ -1354,8 +1361,8 @@ export default function RegistrationHome() {
                   }}
                   disabled={examinedHistoryRows.length === 0}
                   className={`px-3 py-1 font-bold rounded transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${bookingMode === 're_exam'
-                      ? 'bg-emerald-600 text-white shadow-xs border border-emerald-600'
-                      : 'text-slate-500 hover:text-slate-800 border border-transparent'
+                    ? 'bg-emerald-600 text-white shadow-xs border border-emerald-600'
+                    : 'text-slate-500 hover:text-slate-800 border border-transparent'
                     }`}
                   title={
                     examinedHistoryRows.length === 0
@@ -1367,8 +1374,8 @@ export default function RegistrationHome() {
                   {examinedHistoryRows.length > 0 && (
                     <span
                       className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${bookingMode === 're_exam'
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-200 text-slate-700'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-200 text-slate-700'
                         }`}
                     >
                       {examinedHistoryRows.length}
@@ -1413,8 +1420,8 @@ export default function RegistrationHome() {
                             key={r.id}
                             onClick={() => startReExam(r)}
                             className={`cursor-pointer transition-colors ${isSelected
-                                ? 'bg-emerald-50/80 font-semibold text-slate-900'
-                                : 'hover:bg-slate-50 text-slate-700'
+                              ? 'bg-emerald-50/80 font-semibold text-slate-900'
+                              : 'hover:bg-slate-50 text-slate-700'
                               }`}
                           >
                             <td className="py-2 px-3 text-center">
@@ -1452,9 +1459,9 @@ export default function RegistrationHome() {
                 </div>
               </div>
 
-              {/* Tóm tắt thông tin đợt tái khám & ô ngày khám */}
+              {/* Tóm tắt thông tin đợt tái khám */}
               {doctorId && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">1. Chuyên khoa tái khám</label>
                     <input
@@ -1487,24 +1494,12 @@ export default function RegistrationHome() {
                       value={doctors.find((d) => String(d.id) === String(doctorId))?.fullName || '—'}
                     />
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      4. Ngày tái khám <span className="text-rose-600">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      min={todayIso}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600 shadow-xs cursor-pointer"
-                      value={appointmentDate}
-                      onChange={(e) => handleAppointmentDateChange(e.target.value)}
-                    />
-                  </div>
                 </div>
               )}
             </div>
           ) : (
             /* CHẾ ĐỘ KHÁM MỚI */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
                   1. Chuyên khoa khám <span className="text-rose-600">*</span>
@@ -1591,62 +1586,92 @@ export default function RegistrationHome() {
                   </select>
                 )}
               </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  4. Ngày khám (Chọn ngày) <span className="text-rose-600">*</span>
-                </label>
-                <input
-                  type="date"
-                  min={todayIso}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600 shadow-xs cursor-pointer"
-                  value={appointmentDate}
-                  onChange={(e) => handleAppointmentDateChange(e.target.value)}
-                />
-              </div>
             </div>
           )}
 
           {/* Ngày bác sĩ có lịch trực khả dụng */}
-          {doctorId && !fromAppointment && availableWorkDates.length > 0 && (
-            <div className="md:col-span-2 lg:col-span-4 p-3 bg-slate-50 border border-slate-200 rounded space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                  <CalendarIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Ngày trực khả dụng của bác sĩ:</span>
-                </span>
-                {schedulesLoading && (
-                  <span className="text-[11px] text-slate-500 animate-pulse">
-                    Đang cập nhật lịch…
+          {doctorId && !fromAppointment && (
+            availableWorkDates.length > 0 ? (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                    <CalendarIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Ngày trực khả dụng của bác sĩ:</span>
                   </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {availableWorkDates.slice(0, 7).map((dStr) => {
-                  const isToday = dStr === todayIso
-                  const isSelected = appointmentDate === dStr
-                  return (
+                  <div className="flex items-center gap-1">
+                    {schedulesLoading && (
+                      <span className="text-[11px] text-slate-500 animate-pulse mr-2">
+                        Đang cập nhật lịch…
+                      </span>
+                    )}
                     <button
-                      key={dStr}
                       type="button"
-                      onClick={() => handleAppointmentDateChange(dStr)}
-                      className={`px-3 py-1.5 rounded text-xs border transition-all cursor-pointer ${isSelected
-                          ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
-                          : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
-                        }`}
+                      onClick={() => dateScrollRef.current?.scrollBy({ left: -220, behavior: 'smooth' })}
+                      className="p-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shadow-2xs"
+                      title="Cuộn sang trái"
                     >
-                      <span>{isToday ? 'Hôm nay' : formatDayOfWeekVi(dStr)}</span>
-                      <span className="ml-1 opacity-75">({formatDateVi(dStr)})</span>
+                      <ChevronLeft className="w-3.5 h-3.5" />
                     </button>
-                  )
-                })}
+                    <button
+                      type="button"
+                      onClick={() => dateScrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })}
+                      className="p-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shadow-2xs"
+                      title="Cuộn sang phải"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  ref={dateScrollRef}
+                  className="flex items-center gap-2 overflow-x-auto scroll-smooth py-0.5 [&::-webkit-scrollbar]:hidden"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                  {availableWorkDates.slice(0, 14).map((dStr) => {
+                    const isToday = dStr === todayIso
+                    const isSelected = appointmentDate === dStr
+                    const parts = dStr.split('-')
+                    const shortDate = parts.length === 3 ? `${parts[2]}/${parts[1]}` : dStr
+                    return (
+                      <button
+                        key={dStr}
+                        type="button"
+                        onClick={() => handleAppointmentDateChange(dStr)}
+                        className={`shrink-0 w-24 py-2 px-1 rounded border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                          isSelected
+                            ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:bg-emerald-50/50'
+                        }`}
+                      >
+                        <span
+                          className={`text-[11px] font-medium leading-none ${
+                            isSelected ? 'text-emerald-100' : isToday ? 'text-emerald-700 font-bold' : 'text-slate-500'
+                          }`}
+                        >
+                          {isToday ? 'Hôm nay' : formatDayOfWeekVi(dStr)}
+                        </span>
+                        <span
+                          className={`text-xs font-bold leading-none ${
+                            isSelected ? 'text-white' : 'text-slate-900'
+                          }`}
+                        >
+                          {shortDate}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
+            ) : !schedulesLoading ? (
+              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded">
+                Bác sĩ hiện chưa có ca trực nào còn mở trong các ngày tới. Vui lòng chọn bác sĩ khác.
+              </div>
+            ) : null
           )}
 
           {/* Khối hiển thị Lịch Trống (Availability Slots) */}
-          <div className="md:col-span-2 lg:col-span-4 p-4 bg-slate-50 border border-slate-200 rounded space-y-3">
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200">
               <span className="text-xs font-bold text-slate-800">
                 Khung giờ khám ({appointmentDate ? formatDateVi(appointmentDate) : '—'})
@@ -1671,9 +1696,11 @@ export default function RegistrationHome() {
               <div className="py-6 text-center text-xs text-slate-400 font-medium">
                 Vui lòng chọn Chuyên khoa và Bác sĩ để xem các khung giờ khám.
               </div>
-            ) : freeSlots.length === 0 ? (
+            ) : !appointmentDate || freeSlots.length === 0 ? (
               <div className="py-6 text-center text-xs text-slate-500 font-medium bg-white rounded border border-slate-200 p-4">
-                Bác sĩ không có ca trực hoặc đã kín lịch trong ngày {formatDateVi(appointmentDate)}. Vui lòng chọn ngày khám khác.
+                {appointmentDate
+                  ? `Bác sĩ không có ca trực hoặc đã kín lịch trong ngày ${formatDateVi(appointmentDate)}. Vui lòng chọn ngày khám khác.`
+                  : 'Bác sĩ hiện không có ca trực nào còn trống trong các ngày tới. Vui lòng chọn bác sĩ khác.'}
               </div>
             ) : (
               <div className="space-y-3 pt-1">
@@ -1690,8 +1717,8 @@ export default function RegistrationHome() {
                           type="button"
                           onClick={() => setStartTime(t)}
                           className={`px-3.5 py-2 rounded text-xs font-medium border transition-all cursor-pointer ${startTime === t
-                              ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
+                            ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
                             }`}
                         >
                           {formatSlotRange(t)}
@@ -1714,8 +1741,8 @@ export default function RegistrationHome() {
                           type="button"
                           onClick={() => setStartTime(t)}
                           className={`px-3.5 py-2 rounded text-xs font-medium border transition-all cursor-pointer ${startTime === t
-                              ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
+                            ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
                             }`}
                         >
                           {formatSlotRange(t)}

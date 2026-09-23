@@ -1,4 +1,9 @@
 export function appointmentSourceValue(appointment) {
+  if (typeof appointment === 'string') {
+    const raw = appointment.trim().toLowerCase()
+    if (['clinic', 'walkin', 'walk-in', 'direct', 'reception', 'offline'].includes(raw)) return 'clinic'
+    if (['online', 'web', 'patient'].includes(raw)) return 'online'
+  }
   const raw = String(
     appointment?.source ||
       appointment?.bookingSource ||
@@ -19,7 +24,7 @@ export function appointmentSourceValue(appointment) {
   if (appointment?.createdByStaff || appointment?.createdByReceptionist || appointment?.staffCreatedBy) {
     return 'clinic'
   }
-  return 'unknown'
+  return 'online'
 }
 
 export function appointmentSourceLabel(appointment) {

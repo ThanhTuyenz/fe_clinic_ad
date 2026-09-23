@@ -1,7 +1,27 @@
-import { fetchDashboardStats } from '@/modules/admin/services/stats'
+import {
+  fetchAnalyticsData,
+  fetchDashboardStats,
+  fetchReceptionSummary,
+  fetchReceptionRoomsStatus,
+  fetchReceptionUpcoming,
+  fetchDoctorQueueSummary,
+} from '@/modules/admin/services/stats'
 
 export const analyticsService = {
   fetchDashboardStats,
+  fetchAnalyticsData,
+  fetchReceptionSummary,
+  fetchReceptionRoomsStatus,
+  fetchReceptionUpcoming,
+  fetchDoctorQueueSummary,
 }
 
-export { fetchDashboardStats }
+export {
+  fetchDashboardStats,
+  fetchAnalyticsData,
+  fetchReceptionSummary,
+  fetchReceptionRoomsStatus,
+  fetchReceptionUpcoming,
+  fetchDoctorQueueSummary,
+}
+

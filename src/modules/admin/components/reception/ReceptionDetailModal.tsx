@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { CheckCircle2, X, Printer, Pencil, Loader2, AlertCircle } from 'lucide-react'
+import { CheckCircle2, X, Printer, Pencil, Loader2, AlertCircle, Copy, Check, QrCode, Smartphone } from 'lucide-react'
 import {
   appointmentSourceLabel,
   appointmentSourceTitle,
@@ -127,11 +127,26 @@ export default function ReceptionDetailModal({
   })
   const [patientSaving, setPatientSaving] = useState(false)
   const [patientSaveErr, setPatientSaveErr] = useState('')
+  const [copiedNote, setCopiedNote] = useState(false)
 
   if (!isOpen || !activeDetail) return null
 
   const { patient, doctor } = activeDetail
   const statusMeta = receptionStatusMeta(activeDetail)
+
+  const ticketCode = activeDetail?.ticket || activeDetail?.bookingCode || activeDetail?.id?.slice(0, 8) || 'VITACARE'
+  const transferNote = `TT LK ${ticketCode}`
+  const feeAmount = Math.round(consultationFee || 0)
+  const momoPayload = `2|99|0901234567|PHÒNG KHÁM ĐA KHOA VITACARE|hotro@vitacare.vn|0|0|${feeAmount}|${transferNote}|transfer_p2p`
+  const momoQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(momoPayload)}`
+
+  const handleCopyNote = (text: string) => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text)
+      setCopiedNote(true)
+      setTimeout(() => setCopiedNote(false), 2000)
+    }
+  }
 
   const handleOpenEditPatient = () => {
     if (!patient) return
@@ -226,17 +241,17 @@ export default function ReceptionDetailModal({
 
           <div className="flex items-center gap-2">
             {pastSlotDetail && (
-              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+              <span className="px-2.5 py-1 rounded text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
                 Quá giờ slot
               </span>
             )}
             <span
-              className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200"
+              className="px-2.5 py-1 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200"
               title={appointmentSourceTitle(activeDetail)}
             >
               {appointmentSourceLabel(activeDetail)}
             </span>
-            <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${statusToneClasses}`}>
+            <span className={`px-2.5 py-1 rounded text-xs font-bold border ${statusToneClasses}`}>
               {statusMeta.label}
             </span>
             <button
@@ -317,7 +332,7 @@ export default function ReceptionDetailModal({
         </div>
 
         {/* 2 Khối: Thu phí & Điều phối */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
           <section className="bg-slate-50 border border-slate-200/80 rounded p-4 flex flex-col justify-between">
             <div>
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Thu phí khám ban đầu</h3>
@@ -352,11 +367,78 @@ export default function ReceptionDetailModal({
                       onChange={(e) => setPaymentMethod(e.target.value)}
                     >
                       <option value="cash">Tiền mặt</option>
-                      <option value="transfer">Chuyển khoản</option>
                       <option value="momo">Ví MoMo</option>
-                      <option value="card">Thẻ POS</option>
                     </select>
                   </div>
+
+                  {/* MoMo QR Display */}
+                  {paymentMethod === 'momo' && (
+                    <div className="p-3 bg-pink-50/80 border border-pink-200 rounded space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded bg-[#a50064] text-white flex items-center justify-center font-black text-[10px]">
+                            M
+                          </span>
+                          <span className="text-xs font-bold text-[#a50064]">Thanh toán Ví MoMo</span>
+                        </div>
+                        <span className="text-[10px] font-semibold text-pink-700 bg-pink-100/90 px-2 py-0.5 rounded border border-pink-200">
+                          Quét mã MoMo
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-2.5 rounded border border-pink-100 shadow-2xs">
+                        <div className="relative shrink-0 p-1.5 bg-white border border-pink-200 rounded shadow-xs">
+                          <img
+                            src={momoQrUrl}
+                            alt="Mã QR MoMo"
+                            className="w-28 h-28 object-contain rounded"
+                            loading="eager"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-6 h-6 bg-white rounded-full p-0.5 shadow-sm border border-pink-200 flex items-center justify-center">
+                              <span className="text-[9px] font-black text-[#a50064]">M</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 min-w-0 space-y-1 text-xs">
+                          <div>
+                            <span className="text-[10px] text-slate-500 block">Số tiền phí khám:</span>
+                            <strong className="text-sm font-extrabold text-[#a50064]">{formatVnd(consultationFee)}</strong>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 block">Người nhận:</span>
+                            <span className="font-semibold text-slate-800 text-[11px] truncate block">PHÒNG KHÁM ĐA KHOA VITACARE</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 block">Số MoMo:</span>
+                            <span className="font-mono font-bold text-slate-800 text-[11px]">0901 234 567</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 block">Nội dung chuyển:</span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <code className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-[11px] font-bold text-slate-800 truncate">
+                                {transferNote}
+                              </code>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyNote(transferNote)}
+                                className="p-1 rounded hover:bg-pink-100 text-pink-700 transition cursor-pointer"
+                                title="Sao chép nội dung"
+                              >
+                                {copiedNote ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-[10px] text-pink-800 bg-pink-100/60 p-2 rounded border border-pink-200/50 flex items-start gap-1.5 leading-tight">
+                        <Smartphone className="w-3.5 h-3.5 text-[#a50064] shrink-0 mt-0.5" />
+                        <span>Bệnh nhân mở ứng dụng <strong>MoMo</strong> &gt; chọn <strong>Quét Mã</strong> để hoàn tất thanh toán.</span>
+                      </div>
+                    </div>
+                  )}
 
                   {paymentErr && (
                     <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded font-semibold">
@@ -370,7 +452,13 @@ export default function ReceptionDetailModal({
                     disabled={!canEditStatus || !hasClinicRoom || paymentSaving}
                     onClick={handleRecordPayment}
                   >
-                    {paymentSaving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang xử lý…</> : 'Thu tiền & Tự động xác nhận'}
+                    {paymentSaving ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang xử lý…</>
+                    ) : (
+                      paymentMethod === 'momo'
+                        ? 'Xác nhận đã nhận tiền MoMo & Tiếp đón'
+                        : 'Thu tiền mặt & Tự động xác nhận'
+                    )}
                   </button>
 
                   {!hasClinicRoom && canEditStatus && (

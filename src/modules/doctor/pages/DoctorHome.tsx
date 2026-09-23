@@ -6,7 +6,7 @@ import { useStaffLogout } from '@/common/hooks/useStaffLogout'
 import { Html5Qrcode } from 'html5-qrcode'
 import { finishExamAppointment, listDoctorAppointments, listPatientHistory, updateAppointmentStatus } from '@/modules/admin/services/appointments'
 import { listClinicRooms } from '@/modules/admin/services/clinicRooms'
-import { getClinicalOrderPass, getMedicalVisitByAppointment, listClinicalServices, mockClinicalOrderResult, saveMedicalVisit } from '@/modules/admin/services/medicalVisits'
+import { getClinicalOrderPass, getMedicalVisitByAppointment, listClinicalServices, saveMedicalVisit } from '@/modules/admin/services/medicalVisits'
 import { searchMedicines } from '@/modules/admin/services/medicines'
 import DoctorAppHeader from '../components/DoctorAppHeader'
 import IcdDiagnosisField, { formatIcdLabel, parseIcdFromMedicalVisit } from '../components/IcdDiagnosisField'
@@ -1467,17 +1467,6 @@ export default function DoctorHome() {
     setClinicalOrders((items) => [...items, { serviceId: service.id, serviceCode: service.code, serviceName: service.name, category: service.category, price: service.price, status: 'ORDERED', assignedRoomId: '', note: '' }])
   }
 
-  async function simulateClinicalResult(order) {
-    if (!order.id) { flashErr('Hãy lưu hồ sơ trước khi mô phỏng kết quả.'); return }
-    setClinicalBusy(order.id)
-    try {
-      const data = await mockClinicalOrderResult(order.id)
-      setClinicalOrders((items) => items.map((item) => item.id === order.id ? { ...item, ...data, result: data.result } : item))
-      flashOk('Đã nhận kết quả mô phỏng.')
-    } catch (e) { flashErr(e?.message || 'Không mô phỏng được kết quả.') }
-    finally { setClinicalBusy('') }
-  }
-
   if (!token || !user) return null
 
   return (
@@ -2152,11 +2141,10 @@ export default function DoctorHome() {
                   <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Chỉ định và kết quả LIS/PACS mô phỏng</div>
                   {!examLocked ? <div className="dr-clinical-add"><select className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs" defaultValue="" onChange={(e) => { addClinicalOrder(e.target.value); e.target.value = '' }}><option value="">+ Chọn dịch vụ để chỉ định</option>{clinicalServices.map((service) => <option key={service.id} value={service.id}>{service.category === 'LAB_TEST' ? 'Xét nghiệm' : 'Hình ảnh'} — {service.name}</option>)}</select></div> : null}
                   {clinicalOrders.length === 0 ? <div className="py-8 text-center text-xs text-slate-400">Chưa có chỉ định cận lâm sàng.</div> : <div className="space-y-4">{clinicalOrders.map((order) => <article className="border border-slate-200 rounded p-4 bg-slate-50/50 space-y-3" key={order.id || order.serviceId}>
-                    <header><div><strong>{order.serviceName}</strong><small>{order.category === 'IMAGING' ? 'PACS mô phỏng' : 'LIS mô phỏng'} · {order.status === 'COMPLETED' ? 'Đã có kết quả' : 'Đã chỉ định'}</small></div><div>{!examLocked && order.status !== 'COMPLETED' ? <><button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" disabled={!order.id || clinicalBusy === order.id} onClick={() => void simulateClinicalResult(order)}>{clinicalBusy === order.id ? 'Đang tạo…' : 'Mô phỏng có kết quả'}</button><button type="button" className="w-6 h-6 rounded bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 flex items-center justify-center text-sm font-bold transition-colors cursor-pointer" onClick={() => setClinicalOrders((items) => items.filter((item) => item !== order))}>×</button></> : null}</div></header>
+                    <header><div><strong>{order.serviceName}</strong><small>{order.category === 'IMAGING' ? 'Chẩn đoán hình ảnh' : 'Xét nghiệm'} · {order.status === 'COMPLETED' ? 'Đã có kết quả' : 'Đã chỉ định'}</small></div><div>{!examLocked && order.status !== 'COMPLETED' ? <button type="button" className="w-6 h-6 rounded bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 flex items-center justify-center text-sm font-bold transition-colors cursor-pointer" title="Xóa chỉ định" onClick={() => setClinicalOrders((items) => items.filter((item) => item !== order))}>×</button> : null}</div></header>
                     {order.result?.observations ? <div className="overflow-x-auto rounded border border-slate-200 bg-white"><table className="w-full text-left text-xs divide-y divide-slate-200"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Tham chiếu</th><th>Đánh giá</th></tr></thead><tbody>{order.result.observations.map((obs) => <tr key={obs.code}><td>{obs.name}</td><td><strong>{obs.value}</strong> {obs.unit}</td><td>{obs.referenceRange}</td><td className={obs.flag === 'HIGH' ? 'dr-result-high' : 'dr-result-normal'}>{obs.flag === 'HIGH' ? 'Cao' : 'Bình thường'}</td></tr>)}</tbody></table><p className="dr-result-conclusion">Kết luận: {order.result.conclusion}</p></div> : null}
-                    {order.result?.imageUrl ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded bg-slate-900 text-white"><img src={order.result.imageUrl} alt="Ảnh X-quang ngực mô phỏng"/><div><p><b>StudyInstanceUID</b><br/><code>{order.result.studyInstanceUid}</code></p><label className="dr-field"><span className="dr-field-label">Kết luận hình ảnh</span><textarea className="w-full p-3 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs" rows={3} placeholder="Nhập kết luận chẩn đoán hình ảnh…" value={order.result.conclusion || ''} readOnly /></label></div></div> : null}
+                    {order.result?.imageUrl ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded bg-slate-900 text-white"><img src={order.result.imageUrl} alt="Ảnh X-quang ngực"/><div className="space-y-2"><p><b>StudyInstanceUID</b><br/><code>{order.result.studyInstanceUid}</code></p><label className="dr-field"><span className="dr-field-label">Kết luận hình ảnh</span><textarea className="w-full p-3 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs" rows={3} placeholder="Nhập kết luận chẩn đoán hình ảnh…" value={order.result.conclusion || ''} readOnly /></label></div></div> : null}
                   </article>)}</div>}
-                  {!examLocked ? <p className="dr-modal-hint">Lưu hồ sơ để tạo mã chỉ định, sau đó bấm “Mô phỏng có kết quả”. Dữ liệu chỉ dùng cho demo.</p> : null}
                 </div>
               ) : examSubTab === 'history' ? (
                 <div className="p-5 space-y-4">

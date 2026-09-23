@@ -31,10 +31,10 @@ import {
   FileText,
   FlaskConical,
   FileSpreadsheet,
-  RefreshCw,
   ChevronDown,
   LogOut,
   Menu,
+  Shield,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -51,14 +51,12 @@ const NAV: Record<string, [string, string, string][]> = {
     ['analytics', 'Báo cáo & Phân tích', '/analytics'],
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
     ['patients', 'Quản lý bệnh nhân', '/patients'],
+    ['staff', 'Tài khoản & Nhân sự', '/staff'],
     ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
-    ['doctors', 'Nhân sự phòng khám', '/doctors'],
-    ['staff', 'Tài khoản nhân viên', '/staff'],
     ['slots', 'Lịch làm việc & Slot', '/work-schedules'],
     ['branches', 'Chi nhánh phòng khám', '/branches'],
     ['rooms', 'Phòng khám', '/rooms'],
     ['specialties', 'Chuyên khoa', '/specialties'],
-    ['services', 'Dịch vụ & Xét nghiệm', '/services'],
     ['booking-methods', 'Quản lý hình thức đặt khám', '/booking-methods'],
     ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
     ['billing', 'Thanh toán & Hóa đơn', '/billing'],
@@ -68,12 +66,12 @@ const NAV: Record<string, [string, string, string][]> = {
     ['analytics', 'Báo cáo chi nhánh', '/analytics'],
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
     ['patients', 'Bệnh nhân', '/patients'],
-    ['doctors', 'Nhân sự phòng khám', '/doctors'],
+    ['staff', 'Nhân sự chi nhánh', '/staff'],
+    ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
     ['slots', 'Lịch làm việc & Slot', '/work-schedules'],
     ['branches', 'Chi nhánh phòng khám', '/branches'],
     ['rooms', 'Phòng khám', '/rooms'],
     ['specialties', 'Chuyên khoa', '/specialties'],
-    ['services', 'Dịch vụ & Xét nghiệm', '/services'],
     ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
     ['billing', 'Thanh toán', '/billing'],
   ],
@@ -103,6 +101,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   billing: CreditCard,
   doctors: Stethoscope,
   staff: UserCheck,
+  roles: Shield,
   specialties: Cross,
   packages: Package,
   branches: Building2,
@@ -167,47 +166,45 @@ function Card({ title, action, children, className = '' }: any) {
 function ActivityTable({ title = 'Lịch hẹn hôm nay', items = [] }: { title?: string; items?: any[] }) {
   const rows = items.length
     ? items.map((it: any) => [
-        it.startTime || '08:00',
-        it.patientProfile?.fullName || 'Bệnh nhân',
-        it.doctor?.fullName ? `BS. ${it.doctor.fullName}` : 'Khám tổng quát',
-        it.status === 'CHECKED_IN' ? 'Đã check-in' : it.status === 'COMPLETED' ? 'Đã khám' : 'Chờ xử lý',
-      ])
-    : [
-        ['08:30', 'Nguyễn Minh Anh', 'Khám Nội tổng quát', 'Đã check-in'],
-        ['09:15', 'Trần Hoàng Nam', 'Khám Tim mạch', 'Đang chờ'],
-        ['10:00', 'Lê Thu Hà', 'Tái khám', 'Đã xác nhận'],
-        ['10:30', 'Phạm Quốc Bảo', 'Khám Da liễu', 'Chờ xác nhận'],
-      ]
+      it.startTime || '08:00',
+      it.patientName || it.patientProfile?.fullName || 'Bệnh nhân',
+      it.doctorName || (it.doctor?.fullName ? `BS. ${it.doctor.fullName}` : 'Khám tổng quát'),
+      it.status === 'CHECKED_IN' ? 'Đã check-in' : it.status === 'COMPLETED' ? 'Đã khám' : 'Chờ xử lý',
+    ])
+    : []
 
   return (
     <Card title={title} action="Xem tất cả →">
-      <div className="-m-5 overflow-x-auto">
-        <table className="w-full min-w-[650px] text-left text-xs">
-          <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
-            <tr>
-              {['Thời gian', 'Bệnh nhân', 'Dịch vụ / Bác sĩ', 'Trạng thái'].map((x) => (
-                <th key={x} className="px-5 py-3">{x}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((r: any, i: number) => (
-              <tr key={i} className="hover:bg-slate-50/60 transition-colors">
-                <td className="px-5 py-3 font-semibold text-slate-700">{r[0]}</td>
-                <td className="px-5 py-3 font-bold text-slate-900">{r[1]}</td>
-                <td className="px-5 py-3 text-slate-500">{r[2]}</td>
-                <td className="px-5 py-3">
-                  <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${
-                    r[3] === 'Đã check-in' ? 'bg-emerald-50 text-emerald-700' : r[3] === 'Chờ xử lý' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'
-                  }`}>
-                    {r[3]}
-                  </span>
-                </td>
+      {rows.length === 0 ? (
+        <p className="py-8 text-center text-xs text-slate-400">Chưa có lịch hẹn nào ghi nhận trong ca trực</p>
+      ) : (
+        <div className="-m-5 overflow-x-auto">
+          <table className="w-full min-w-[650px] text-left text-xs">
+            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+              <tr>
+                {['Thời gian', 'Bệnh nhân', 'Dịch vụ / Bác sĩ', 'Trạng thái'].map((x) => (
+                  <th key={x} className="px-5 py-3">{x}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((r: any, i: number) => (
+                <tr key={i} className="hover:bg-slate-50/60 transition-colors">
+                  <td className="px-5 py-3 font-semibold text-slate-700">{r[0]}</td>
+                  <td className="px-5 py-3 font-bold text-slate-900">{r[1]}</td>
+                  <td className="px-5 py-3 text-slate-500">{r[2]}</td>
+                  <td className="px-5 py-3">
+                    <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${r[3] === 'Đã check-in' ? 'bg-emerald-50 text-emerald-700' : r[3] === 'Chờ xử lý' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'
+                      }`}>
+                      {r[3]}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   )
 }
@@ -217,80 +214,87 @@ function AdminDashboard({ stats, loading }: any) {
   const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month'>('week')
   const [branchFilter, setBranchFilter] = useState('all')
 
-  const today = stats?.today || stats?.data?.today || {}
-  const revToday = stats?.revenueToday || stats?.data?.revenueToday || { total: 14850000 }
+  const todayCounts = stats?.appointments?.today || stats?.today || {}
+  const weekCounts = stats?.appointments?.week || {}
+  const monthCounts = stats?.appointments?.month || {}
+
+  const revTodayObj = stats?.revenue?.today || stats?.revenueToday || {}
+  const revWeekObj = stats?.revenue?.week || {}
+  const revMonthObj = stats?.revenue?.month || {}
 
   const metrics = useMemo(() => {
     if (timeFilter === 'today') {
-      const rev = revToday.total || 14850000
+      const rev = revTodayObj.total != null ? revTodayObj.total : 0
+      const totalRev = Number(rev) || 0
+      const cash = Number(revTodayObj.cash) || 0
+      const transfer = Number(revTodayObj.transfer || 0) + Number(revTodayObj.online || 0)
+      const cashShare = totalRev > 0 ? Math.round((cash / totalRev) * 100) : 0
+      const transferShare = totalRev > 0 ? 100 - cashShare : 0
+
       return {
         revenue: `${Math.round(rev).toLocaleString('vi-VN')} đ`,
-        revenueSub: 'Hôm nay · Tăng +6.2% so với hôm qua',
-        appointments: `${today.total ?? 34} ca`,
-        appointmentsSub: `${today.examined ?? 18} đã hoàn thành · ${today.pending ?? 6} chờ xử lý`,
-        patients: '28 người',
-        patientsSub: '18 tiếp đón trực tiếp · 10 đặt trước',
-        occupancy: '84%',
-        occupancySub: 'Công suất các cơ sở',
-        chartLabel: 'Doanh thu theo khung giờ hôm nay',
-        chartBars: [
-          { label: '08h-10h', rev: 3.8, count: 9 },
-          { label: '10h-12h', rev: 4.2, count: 11 },
-          { label: '12h-14h', rev: 1.5, count: 3 },
-          { label: '14h-16h', rev: 3.6, count: 8 },
-          { label: '16h-18h', rev: 2.8, count: 6 },
-          { label: '18h-20h', rev: 1.2, count: 3 },
-        ],
-        cashShare: 35,
-        transferShare: 65,
+        revenueSub: 'Hôm nay · Dữ liệu ghi nhận từ hệ thống',
+        appointments: `${todayCounts.total ?? 0} ca`,
+        appointmentsSub: `${todayCounts.examined ?? 0} đã hoàn thành · ${todayCounts.pending ?? 0} chờ xử lý`,
+        patients: `${stats?.patients?.today ?? 0} người`,
+        patientsSub: 'Tiếp đón trực tiếp và đặt trước',
+        occupancy: `${stats?.occupancyRate ?? 0}%`,
+        occupancySub: 'Công suất các phòng khám hôm nay',
+        chartLabel: 'Doanh thu theo khung giờ hôm nay (Triệu VNĐ)',
+        chartBars: stats?.chartBars?.today || [],
+        cashShare,
+        transferShare,
       }
     }
     if (timeFilter === 'month') {
+      const rev = revMonthObj.total != null ? revMonthObj.total : 0
+      const totalRev = Number(rev) || 0
+      const cash = Number(revMonthObj.cash) || 0
+      const transfer = Number(revMonthObj.transfer || 0) + Number(revMonthObj.online || 0)
+      const cashShare = totalRev > 0 ? Math.round((cash / totalRev) * 100) : 0
+      const transferShare = totalRev > 0 ? 100 - cashShare : 0
+
       return {
-        revenue: '612.450.000 đ',
-        revenueSub: 'Tháng này · Tăng +16.8%',
-        appointments: '1,420 ca',
-        appointmentsSub: '1,310 hoàn thành · Hủy 4.2%',
-        patients: '1,085 người',
-        patientsSub: '68% mới · 32% tái khám',
-        occupancy: '89%',
+        revenue: `${Math.round(rev).toLocaleString('vi-VN')} đ`,
+        revenueSub: 'Tháng này · Giao dịch thanh toán thành công',
+        appointments: `${monthCounts.total ?? 0} ca`,
+        appointmentsSub: `${monthCounts.examined ?? 0} hoàn thành · Hủy ${monthCounts.cancelled ?? 0} ca`,
+        patients: `${stats?.patients?.month ?? 0} người`,
+        patientsSub: 'Bệnh nhân khám trong tháng',
+        occupancy: `${stats?.occupancyRate ?? 0}%`,
         occupancySub: 'Hiệu suất vận hành toàn hệ thống',
         chartLabel: 'Doanh thu theo tuần trong tháng (Triệu VNĐ)',
-        chartBars: [
-          { label: 'Tuần 1', rev: 142.5, count: 330 },
-          { label: 'Tuần 2', rev: 156.0, count: 365 },
-          { label: 'Tuần 3', rev: 148.2, count: 345 },
-          { label: 'Tuần 4', rev: 165.75, count: 380 },
-        ],
-        cashShare: 32,
-        transferShare: 68,
+        chartBars: stats?.chartBars?.month || [],
+        cashShare,
+        transferShare,
       }
     }
+
+    const rev = revWeekObj.total != null ? revWeekObj.total : 0
+    const totalRev = Number(rev) || 0
+    const cash = Number(revWeekObj.cash) || 0
+    const transfer = Number(revWeekObj.transfer || 0) + Number(revWeekObj.online || 0)
+    const cashShare = totalRev > 0 ? Math.round((cash / totalRev) * 100) : 0
+    const transferShare = totalRev > 0 ? 100 - cashShare : 0
+
     return {
-      revenue: '154.200.000 đ',
-      revenueSub: 'Tuần này · Tăng +14.2%',
-      appointments: '356 ca',
-      appointmentsSub: '328 hoàn thành · Đúng giờ 94%',
-      patients: '264 người',
-      patientsSub: '62% trực tuyến · 38% tại quầy',
-      occupancy: '86%',
+      revenue: `${Math.round(rev).toLocaleString('vi-VN')} đ`,
+      revenueSub: 'Tuần này · Giao dịch thanh toán thành công',
+      appointments: `${weekCounts.total ?? 0} ca`,
+      appointmentsSub: `${weekCounts.examined ?? 0} hoàn thành · ${weekCounts.pending ?? 0} chờ xử lý`,
+      patients: `${stats?.patients?.week ?? 0} người`,
+      patientsSub: 'Bệnh nhân khám trong tuần',
+      occupancy: `${stats?.occupancyRate ?? 0}%`,
       occupancySub: 'Hiệu suất buồng khám đạt mục tiêu',
       chartLabel: 'Doanh thu 7 ngày gần nhất (Triệu VNĐ)',
-      chartBars: [
-        { label: 'T2', rev: 23.5, count: 54 },
-        { label: 'T3', rev: 26.2, count: 61 },
-        { label: 'T4', rev: 22.0, count: 50 },
-        { label: 'T5', rev: 29.8, count: 68 },
-        { label: 'T6', rev: 27.5, count: 63 },
-        { label: 'T7', rev: 18.2, count: 42 },
-        { label: 'CN', rev: 7.0, count: 18 },
-      ],
-      cashShare: 36,
-      transferShare: 64,
+      chartBars: stats?.chartBars?.week || [],
+      cashShare,
+      transferShare,
     }
-  }, [timeFilter, revToday, today])
+  }, [timeFilter, revTodayObj, revWeekObj, revMonthObj, todayCounts, weekCounts, monthCounts, stats])
 
-  const ceiling = timeFilter === 'month' ? 200 : timeFilter === 'week' ? 32 : 5
+  const maxBarRev = Math.max(...(metrics.chartBars.map((b: any) => Number(b.rev) || 0) || [0]), 1)
+  const ceiling = Math.ceil(maxBarRev * 1.25) || (timeFilter === 'month' ? 200 : timeFilter === 'week' ? 32 : 5)
   const todayRows = stats?.todayRows || stats?.data?.todayRows || []
 
   return (
@@ -316,9 +320,8 @@ function AdminDashboard({ stats, loading }: any) {
                 key={t}
                 type="button"
                 onClick={() => setTimeFilter(t)}
-                className={`rounded px-3 py-1 font-bold transition-colors cursor-pointer ${
-                  timeFilter === t ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`rounded px-3 py-1 font-bold transition-colors cursor-pointer ${timeFilter === t ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 {t === 'today' ? 'Hôm nay' : t === 'week' ? 'Tuần này' : 'Tháng này'}
               </button>
@@ -336,54 +339,58 @@ function AdminDashboard({ stats, loading }: any) {
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_1fr]">
         <Card title={metrics.chartLabel} action={timeFilter === 'month' ? '4 tuần trong tháng' : timeFilter === 'today' ? 'Khung giờ trong ngày' : '7 ngày gần nhất'}>
-          <div className="pt-2">
-            <div className="relative h-48 border-b border-slate-200 flex items-end justify-around px-2">
-              {metrics.chartBars.map((item, idx) => {
-                const height = Math.min(100, Math.max(8, Math.round((item.rev / ceiling) * 100)))
-                return (
-                  <div key={idx} className="group relative flex flex-1 flex-col items-center h-full justify-end max-w-[64px] cursor-pointer">
-                    <span className="mb-1 text-[10px] font-bold text-slate-700 group-hover:text-emerald-700">{item.rev}</span>
-                    <div className="w-7 sm:w-9 rounded-t bg-emerald-700 hover:bg-emerald-800 transition-all shadow-xs" style={{ height: `${height}%` }} />
+          {metrics.chartBars.length === 0 ? (
+            <p className="py-12 text-center text-xs text-slate-400">Chưa có dữ liệu biểu đồ trong khoảng thời gian này</p>
+          ) : (
+            <div className="pt-2">
+              <div className="relative h-48 border-b border-slate-200 flex items-end justify-around px-2">
+                {metrics.chartBars.map((item: any, idx: number) => {
+                  const height = Math.min(100, Math.max(8, Math.round((item.rev / ceiling) * 100)))
+                  return (
+                    <div key={idx} className="group relative flex flex-1 flex-col items-center h-full justify-end max-w-[64px] cursor-pointer">
+                      <span className="mb-1 text-[10px] font-bold text-slate-700 group-hover:text-emerald-700">{item.rev}</span>
+                      <div className="w-7 sm:w-9 rounded-t bg-emerald-700 hover:bg-emerald-800 transition-all shadow-xs" style={{ height: `${height}%` }} />
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="flex justify-around px-2 pt-2 text-center">
+                {metrics.chartBars.map((item: any, idx: number) => (
+                  <div key={idx} className="flex-1 max-w-[64px]">
+                    <p className="text-xs font-bold text-slate-700">{item.label}</p>
+                    <p className="text-[10px] text-slate-400">{item.count} ca</p>
                   </div>
-                )
-              })}
+                ))}
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+                <span>Chuyển khoản / QR: <b className="text-slate-900">{metrics.transferShare}%</b></span>
+                <span>Tiền mặt tại quầy: <b className="text-slate-900">{metrics.cashShare}%</b></span>
+              </div>
             </div>
-            <div className="flex justify-around px-2 pt-2 text-center">
-              {metrics.chartBars.map((item, idx) => (
-                <div key={idx} className="flex-1 max-w-[64px]">
-                  <p className="text-xs font-bold text-slate-700">{item.label}</p>
-                  <p className="text-[10px] text-slate-400">{item.count} ca</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-              <span>Chuyển khoản / QR: <b className="text-slate-900">{metrics.transferShare}%</b></span>
-              <span>Tiền mặt tại quầy: <b className="text-slate-900">{metrics.cashShare}%</b></span>
-            </div>
-          </div>
+          )}
         </Card>
 
-        <Card title="Hiệu suất theo Chi nhánh" action="3 cơ sở VitaCare">
+        <Card title="Hiệu suất theo Chi nhánh" action="Hệ thống VitaCare Clinic">
           <div className="space-y-3">
-            {[
-              { name: 'Cơ sở Quận 1 (Trụ sở chính)', appts: 196, rev: '84.800.000 đ', cap: 92, col: 'bg-emerald-600' },
-              { name: 'Cơ sở Quận 5 (Đa khoa)', appts: 108, rev: '46.200.000 đ', cap: 78, col: 'bg-blue-600' },
-              { name: 'Cơ sở TP. Thủ Đức', appts: 52, rev: '23.200.000 đ', cap: 64, col: 'bg-amber-500' },
-            ].map((b) => (
-              <div key={b.name} className="rounded border border-slate-200/80 bg-white p-3 shadow-xs">
-                <div className="flex items-start justify-between text-xs">
-                  <h3 className="font-bold text-slate-900">{b.name}</h3>
-                  <span className="font-bold text-slate-900">{b.rev}</span>
+            {(!stats?.branchComparison || stats.branchComparison.length === 0) ? (
+              <p className="py-8 text-center text-xs text-slate-400">Chưa có dữ liệu cơ sở chi nhánh</p>
+            ) : (
+              stats.branchComparison.map((b: any) => (
+                <div key={b.id || b.name} className="rounded border border-slate-200/80 bg-white p-3 shadow-xs">
+                  <div className="flex items-start justify-between text-xs">
+                    <h3 className="font-bold text-slate-900">{b.name}</h3>
+                    <span className="font-bold text-slate-900">{b.rev}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Lượt khám: <b>{b.appts} ca</b></span>
+                    <span>Công suất: <b>{b.cap}%</b></span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                    <div className={`h-full ${b.col}`} style={{ width: `${b.cap}%` }} />
+                  </div>
                 </div>
-                <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                  <span>Lượt khám: <b>{b.appts} ca</b></span>
-                  <span>Công suất: <b>{b.cap}%</b></span>
-                </div>
-                <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
-                  <div className={`h-full ${b.col}`} style={{ width: `${b.cap}%` }} />
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
       </div>
@@ -395,112 +402,30 @@ function AdminDashboard({ stats, loading }: any) {
   )
 }
 
-function SystemHealthPage() {
-  const [checking, setChecking] = useState(false)
-  const [lastCheck, setLastCheck] = useState('Vừa xong')
-
-  const handlePing = () => {
-    setChecking(true)
-    setTimeout(() => {
-      setChecking(false)
-      setLastCheck(new Date().toLocaleTimeString('vi-VN'))
-    }, 500)
-  }
-
-  const services = [
-    { name: 'Máy chủ Backend API (NestJS)', status: 'Hoạt động tốt', latency: '24 ms', uptime: '99.98%' },
-    { name: 'Cơ sở dữ liệu chính (PostgreSQL / Prisma)', status: 'Ổn định', latency: '12 ms', uptime: '99.99%' },
-    { name: 'Bộ nhớ đệm Redis & Token Blacklist', status: 'Đang kết nối', latency: '4 ms', uptime: '100%' },
-    { name: 'Cổng thanh toán điện tử (MoMo Sandbox / QR)', status: 'Sẵn sàng giao dịch', latency: '120 ms', uptime: '99.5%' },
-    { name: 'Dịch vụ thông báo (Email / SMS OTP)', status: 'Đang hoạt động', latency: '210 ms', uptime: '99.2%' },
-  ]
-
-  return (
-    <>
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Hệ thống & Cấu hình</p>
-          <h1 className="mt-0.5 text-2xl font-bold text-slate-900">Trạng thái Kỹ thuật Hệ thống</h1>
-          <p className="text-xs text-slate-500">Giám sát sức khỏe hạ tầng, cơ sở dữ liệu và bộ nhớ đệm Redis.</p>
-        </div>
-        <button
-          type="button"
-          onClick={handlePing}
-          disabled={checking}
-          className="flex items-center gap-2 rounded bg-emerald-700 hover:bg-emerald-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs cursor-pointer disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${checking ? 'animate-spin' : ''}`} />
-          <span>{checking ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}</span>
-        </button>
-      </div>
-
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Uptime hệ thống" value="99.98%" detail="Trong 30 ngày qua" icon="server" tone="emerald" />
-        <Kpi label="Độ trễ API TB" value="28 ms" detail="Phản hồi nhanh" icon="analytics" tone="blue" />
-        <Kpi label="Tỉ lệ Cache Hit" value="94.2%" detail="Redis cache hoạt động tối ưu" icon="dashboard" tone="emerald" />
-        <Kpi label="Cảnh báo kỹ thuật" value="0 lỗi" detail={`Cập nhật: ${lastCheck}`} icon="methods" tone="amber" />
-      </div>
-
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_1fr]">
-        <Card title="Trạng thái dịch vụ cốt lõi" action={`Kiểm tra: ${lastCheck}`}>
-          <div className="space-y-3">
-            {services.map((s) => (
-              <div key={s.name} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-b-0 last:pb-0 text-xs">
-                <div>
-                  <h3 className="font-bold text-slate-800">{s.name}</h3>
-                  <p className="text-[11px] text-slate-400">Độ trễ: {s.latency} · Sẵn sàng: {s.uptime}</p>
-                </div>
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 border border-emerald-100">
-                  {s.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card title="Hạ tầng máy chủ">
-          <div className="space-y-3.5 text-xs">
-            <div>
-              <div className="flex justify-between font-semibold text-slate-700 mb-1">
-                <span>Tải CPU:</span>
-                <span className="text-emerald-700">14% (Bình thường)</span>
-              </div>
-              <div className="h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-emerald-500 w-[14%]" /></div>
-            </div>
-            <div>
-              <div className="flex justify-between font-semibold text-slate-700 mb-1">
-                <span>Bộ nhớ RAM:</span>
-                <span className="text-blue-700">1.85 GB / 8.00 GB (23%)</span>
-              </div>
-              <div className="h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-blue-500 w-[23%]" /></div>
-            </div>
-            <div className="rounded border border-slate-100 bg-slate-50 p-3 text-slate-600 space-y-1.5 mt-2">
-              <div className="flex justify-between"><span>Phiên bản:</span><b className="text-slate-800">v2.4.1 (Node v20.x, NestJS 10)</b></div>
-              <div className="flex justify-between"><span>Redis Auth:</span><b className="text-emerald-700">Active</b></div>
-            </div>
-          </div>
-        </Card>
-      </div>
-    </>
-  )
-}
 
 function ManagerDashboard({ stats, loading }: any) {
-  const t = stats?.today || stats?.data?.today || {}
+  const t = stats?.appointments?.today || stats?.today || {}
+  const rev = stats?.revenue?.today?.total != null
+    ? `${Math.round(stats.revenue.today.total).toLocaleString('vi-VN')} đ`
+    : '—'
+  const todayRows = stats?.todayRows || []
+
   return (
     <>
       <div className="border-b border-slate-200 pb-4">
         <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Chi nhánh quản lý</p>
         <h1 className="mt-0.5 text-2xl font-bold text-slate-900">Tổng quan chi nhánh</h1>
-        <p className="text-xs text-slate-500">Hoạt động vận hành và lịch khám hôm nay.</p>
+        <p className="text-xs text-slate-500">Hoạt động vận hành và lịch khám hôm nay theo thời gian thực.</p>
       </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Lịch hẹn hôm nay" value={loading ? '—' : t.total ?? 0} detail="Trong ngày" />
-        <Kpi label="Bác sĩ làm việc" value="12" detail="4 chuyên khoa" tone="blue" icon="staff" />
-        <Kpi label="Đang chờ khám" value={loading ? '—' : t.checkedIn ?? 0} detail="Thời gian chờ TB 12 phút" tone="amber" icon="patients" />
-        <Kpi label="Hoàn thành" value={loading ? '—' : t.completed ?? 0} detail="Tỷ lệ đúng giờ 92%" icon="appointments" />
+        <Kpi label="Lịch hẹn hôm nay" value={loading ? '—' : `${t.total ?? 0} ca`} detail={`Đã khám: ${t.examined ?? 0} · Đang chờ: ${t.checkedIn ?? 0}`} icon="appointments" />
+        <Kpi label="Doanh thu hôm nay" value={loading ? '—' : rev} detail="Thu tiền mặt & chuyển khoản" tone="emerald" icon="billing" />
+        <Kpi label="Đang chờ khám" value={loading ? '—' : `${t.checkedIn ?? 0} ca`} detail="Bệnh nhân đã tiếp đón vào phòng" tone="amber" icon="patients" />
+        <Kpi label="Hoàn thành" value={loading ? '—' : `${t.examined ?? 0} ca`} detail="Đã hoàn tất ca khám và kê đơn" tone="blue" icon="appointments" />
       </div>
-      <div className="mt-5"><ActivityTable /></div>
+      <div className="mt-5">
+        <ActivityTable title="Lịch hẹn tại chi nhánh hôm nay" items={todayRows} />
+      </div>
     </>
   )
 }
@@ -547,18 +472,15 @@ const ADMIN_NAV_SECTIONS = [
       { id: 'rooms', label: 'Phòng khám', href: '/rooms', icon: 'rooms' },
       { id: 'specialties', label: 'Chuyên khoa khám', href: '/specialties', icon: 'specialties' },
       { id: 'booking-packages', label: 'Dịch vụ khám bệnh', href: '/booking-packages', icon: 'packages' },
-      { id: 'services', label: 'Dịch vụ & Xét nghiệm', href: '/services', icon: 'services' },
     ],
   },
   {
     category: 'Quản trị & Hệ thống',
     items: [
-      { id: 'doctors', label: 'Nhân sự bác sĩ', href: '/doctors', icon: 'doctors' },
-      { id: 'staff', label: 'Tài khoản nhân viên', href: '/staff', icon: 'staff' },
-      { id: 'roles', label: 'Vai trò & Phân quyền', href: '/roles-permissions', icon: 'staff' },
+      { id: 'staff', label: 'Tài khoản & Nhân sự', href: '/staff', icon: 'staff' },
+      { id: 'roles', label: 'Vai trò & Phân quyền', href: '/roles-permissions', icon: 'roles' },
       { id: 'branches', label: 'Chi nhánh phòng khám', href: '/branches', icon: 'branches' },
       { id: 'booking-methods', label: 'Hình thức đặt khám', href: '/booking-methods', icon: 'methods' },
-      { id: 'system-status', label: 'Trạng thái hệ thống', href: '/system-status', icon: 'server' },
     ],
   },
 ]
@@ -579,13 +501,11 @@ const MANAGER_NAV_SECTIONS = [
   {
     category: 'Chuyên môn & Nhân sự',
     items: [
-      { id: 'doctors', label: 'Nhân sự bác sĩ', href: '/doctors', icon: 'doctors' },
       { id: 'staff', label: 'Nhân sự chi nhánh', href: '/staff', icon: 'staff' },
-      { id: 'roles', label: 'Vai trò & Phân quyền', href: '/roles-permissions', icon: 'staff' },
+      { id: 'roles', label: 'Vai trò & Phân quyền', href: '/roles-permissions', icon: 'roles' },
       { id: 'rooms', label: 'Phòng khám', href: '/rooms', icon: 'rooms' },
       { id: 'specialties', label: 'Chuyên khoa khám', href: '/specialties', icon: 'specialties' },
       { id: 'booking-packages', label: 'Dịch vụ khám bệnh', href: '/booking-packages', icon: 'packages' },
-      { id: 'services', label: 'Dịch vụ & Xét nghiệm', href: '/services', icon: 'services' },
     ],
   },
 ]
@@ -618,9 +538,8 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
                       key={item.id}
                       type="button"
                       onClick={() => go(item.href)}
-                      className={`flex w-full items-center gap-3 rounded px-3 py-2 text-left text-xs font-semibold transition cursor-pointer ${
-                        active ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                      }`}
+                      className={`flex w-full items-center gap-3 rounded px-3 py-2 text-left text-xs font-semibold transition cursor-pointer ${active ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        }`}
                     >
                       <span className={`shrink-0 ${active ? 'text-emerald-700' : 'text-slate-400'}`}><Icon name={item.icon} /></span>
                       <span className="truncate">{item.label}</span>
@@ -688,19 +607,18 @@ export default function RolePortal({ section = 'dashboard' }: { section?: string
   const nav = NAV[role] || NAV.admin
 
   const content =
-    section === 'system-status' ? <SystemHealthPage /> :
     section === 'analytics' ? <AdminAnalyticsPage stats={stats} loading={loading} /> :
-    section === 'roles' ? <RolesPermissionsPage /> :
-    section === 'patients' ? (role === 'receptionist' ? <ReceptionPatientsPage /> : <AdminPatientsPage />) :
-    section === 'appointments' ? <AdminAppointmentsPage /> :
-    section === 'billing' ? <BillingPage /> :
-    section === 'booking-methods' ? <BookingMethodsPage /> :
-    section === 'booking-packages' ? <BookingPackagesPage /> :
-    ['branches', 'rooms', 'specialties', 'service-packages', 'services', 'inventory'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <SystemCatalogCrudPage resource={section === 'inventory' ? 'medicines' : section} /> :
-    ['doctors', 'staff'].includes(section) ? (['admin', 'branch_manager'].includes(role) ? <ClinicStaffPage /> : <StaffCrudPage role="doctor" />) :
-    ['schedule', 'slots', 'work-schedules'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <DoctorWorkSchedulesPage /> :
-    section === 'dashboard' ? (role === 'branch_manager' ? <ManagerDashboard stats={stats} loading={loading} /> : <AdminDashboard stats={stats} loading={loading} />) :
-    <GenericPage section={section} role={role} />
+      section === 'roles' ? <RolesPermissionsPage /> :
+        section === 'patients' ? (role === 'receptionist' ? <ReceptionPatientsPage /> : <AdminPatientsPage />) :
+          section === 'appointments' ? <AdminAppointmentsPage /> :
+            section === 'billing' ? <BillingPage /> :
+              section === 'booking-methods' ? <BookingMethodsPage /> :
+                section === 'booking-packages' ? <BookingPackagesPage /> :
+                  ['branches', 'rooms', 'specialties', 'service-packages', 'services', 'inventory'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <SystemCatalogCrudPage resource={section === 'inventory' ? 'medicines' : section} /> :
+                    ['doctors', 'staff'].includes(section) ? (['admin', 'branch_manager'].includes(role) ? <ClinicStaffPage /> : <StaffCrudPage role="doctor" />) :
+                      ['schedule', 'slots', 'work-schedules'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <DoctorWorkSchedulesPage /> :
+                        section === 'dashboard' ? (role === 'branch_manager' ? <ManagerDashboard stats={stats} loading={loading} /> : <AdminDashboard stats={stats} loading={loading} />) :
+                          <GenericPage section={section} role={role} />
 
   if (['admin', 'branch_manager'].includes(role)) {
     return <GroupedPortal section={section} user={user} role={role} content={content} menu={menu} setMenu={setMenu} navigate={navigate} logout={logout} />
