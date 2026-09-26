@@ -1471,15 +1471,15 @@ export default function DoctorHome() {
 
   return (
     <div className="min-h-screen bg-slate-50 relative">
-      {examSaveOk ? <div className="fixed right-5 top-5 z-[100] max-w-md border border-emerald-300 bg-emerald-50 px-5 py-4 font-bold text-emerald-800 shadow-lg" role="status">✓ {examSaveOk}</div> : null}
-      {examSaveErr ? <div className="fixed right-5 top-5 z-[100] max-w-md border border-red-300 bg-red-50 px-5 py-4 font-bold text-red-700 shadow-lg" role="alert">{examSaveErr}</div> : null}
+      {examSaveOk ? <div className="fixed top-16 right-3 left-3 sm:left-auto sm:right-6 z-[100] sm:max-w-md border border-emerald-300 bg-emerald-50 px-4 sm:px-5 py-3 sm:py-4 font-bold text-emerald-800 shadow-lg rounded" role="status">✓ {examSaveOk}</div> : null}
+      {examSaveErr ? <div className="fixed top-16 right-3 left-3 sm:left-auto sm:right-6 z-[100] sm:max-w-md border border-red-300 bg-red-50 px-4 sm:px-5 py-3 sm:py-4 font-bold text-red-700 shadow-lg rounded" role="alert">{examSaveErr}</div> : null}
       <DoctorAppHeader activeTab="exam" user={user} onLogout={logout} />
 
-      <main className="p-4 sm:p-6 max-w-[1680px] mx-auto w-full space-y-6" role="main">
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-5 rounded border border-slate-200/90 shadow-xs">
+      <main className="p-3.5 sm:p-5 md:p-6 max-w-[1680px] mx-auto w-full space-y-6 lg:pl-[256px]" role="main">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded border border-slate-200/90 shadow-xs">
           <div>
-            <h1>Quản lý khám bệnh</h1>
-            <p>{selectedAppt ? `Bệnh nhân hiện tại: ${patientLabel(selectedAppt)}` : 'Chọn bệnh nhân trong lịch khám để bắt đầu.'}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Quản lý khám bệnh</h1>
+            <p className="text-xs text-slate-500 mt-0.5">{selectedAppt ? `Bệnh nhân hiện tại: ${patientLabel(selectedAppt)}` : 'Chọn bệnh nhân trong lịch khám để bắt đầu.'}</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => navigate('/dashboard')}>Lịch sử khám</button>
@@ -1599,14 +1599,16 @@ export default function DoctorHome() {
 
             <article className="bg-white rounded border border-slate-200/90 p-5 shadow-xs space-y-4">
               <header className="flex items-center justify-between pb-3 border-b border-slate-100"><div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2"><span>▤</span> Kê thuốc</div><button type="button" className="dr-stitch-voice" disabled>♩ Kê thuốc bằng giọng nói</button></header>
-              <div className="space-y-2">
-                <div className="grid grid-cols-[1fr_120px_160px_32px] gap-3 text-xs font-bold text-slate-500 px-2"><span>Tên thuốc</span><span>Số lượng (SL)</span><span>Cách dùng</span><span /></div>
-                {prescriptionLines.map((line, idx) => <div className="grid grid-cols-[1fr_120px_160px_32px] gap-3 items-center text-xs" key={idx}>
-                  <button type="button" className="w-full text-left px-3 py-2 bg-white border border-slate-300 rounded text-slate-700 hover:border-emerald-500 transition-colors truncate" onClick={() => openMedicinePicker(idx)} disabled={examLocked || !selectedAppt}>{line.medicineDisplayName || line.medicineName || 'Tìm và chọn thuốc...'}</button>
-                  <input type="text" inputMode="decimal" value={line.quantity} onChange={(e) => updateRxLine(idx, { quantity: sanitizeQuantityInput(e.target.value), quantityManual: true })} placeholder="Nhập số lượng" aria-label="Số lượng thuốc" disabled={examLocked || !selectedAppt} />
-                  <select value={line.frequencyPerDay} onChange={(e) => updateRxLine(idx, { frequencyPerDay: e.target.value })} disabled={examLocked || !selectedAppt}><option value="">Chọn cách dùng</option>{RX_FREQUENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-                  <button type="button" className="w-8 h-8 rounded border border-slate-200 hover:bg-rose-50 text-slate-400 hover:text-rose-600 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer" onClick={() => removeRxLine(idx)} disabled={examLocked || prescriptionLines.length < 2}>×</button>
-                </div>)}
+              <div className="space-y-2 overflow-x-auto [scrollbar-width:thin] -mx-1 px-1 pb-1">
+                <div className="min-w-[520px] space-y-2">
+                  <div className="grid grid-cols-[1fr_120px_160px_32px] gap-3 text-xs font-bold text-slate-500 px-2"><span>Tên thuốc</span><span>Số lượng (SL)</span><span>Cách dùng</span><span /></div>
+                  {prescriptionLines.map((line, idx) => <div className="grid grid-cols-[1fr_120px_160px_32px] gap-3 items-center text-xs" key={idx}>
+                    <button type="button" className="w-full text-left px-3 py-2 bg-white border border-slate-300 rounded text-slate-700 hover:border-emerald-500 transition-colors truncate" onClick={() => openMedicinePicker(idx)} disabled={examLocked || !selectedAppt}>{line.medicineDisplayName || line.medicineName || 'Tìm và chọn thuốc...'}</button>
+                    <input type="text" inputMode="decimal" value={line.quantity} onChange={(e) => updateRxLine(idx, { quantity: sanitizeQuantityInput(e.target.value), quantityManual: true })} placeholder="Nhập số lượng" aria-label="Số lượng thuốc" disabled={examLocked || !selectedAppt} />
+                    <select value={line.frequencyPerDay} onChange={(e) => updateRxLine(idx, { frequencyPerDay: e.target.value })} disabled={examLocked || !selectedAppt}><option value="">Chọn cách dùng</option>{RX_FREQUENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                    <button type="button" className="w-8 h-8 rounded border border-slate-200 hover:bg-rose-50 text-slate-400 hover:text-rose-600 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer" onClick={() => removeRxLine(idx)} disabled={examLocked || prescriptionLines.length < 2}>×</button>
+                  </div>)}
+                </div>
                 {!examLocked ? <button type="button" className="mt-2 px-3.5 py-2 text-xs font-bold text-emerald-700 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded transition-colors cursor-pointer" onClick={addRxLine} disabled={!selectedAppt}>＋ Thêm thuốc</button> : null}
               </div>
               <footer className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100"><button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => void handleSaveMedicalVisit({ draftOnly: true })} disabled={!selectedAppt || examLocked || examSaving}>Lưu nháp</button><button type="button" className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer" onClick={() => requestFinishExam()} disabled={!selectedAppt || examLocked || examSaving}>{examSaving ? 'Đang hoàn thành…' : '✓ Hoàn thành khám'}</button></footer>

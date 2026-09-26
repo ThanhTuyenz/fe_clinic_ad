@@ -35,6 +35,7 @@ import {
   LogOut,
   Menu,
   Shield,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -518,12 +519,22 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
   return (
     <div className="min-h-screen bg-[#f5f8f5] text-slate-800">
       <aside className={`fixed inset-y-0 left-0 z-30 flex w-[264px] flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex h-[76px] items-center gap-3 border-b border-slate-100 px-4 cursor-pointer hover:bg-slate-50/60" onClick={() => go('/dashboard')}>
-          <img src="/imgs/logo/logo2.png" alt="VitaCare Clinic" className="h-12 w-12 object-contain shrink-0" />
-          <div className="min-w-0 flex-1">
-            <strong className="text-sm font-extrabold text-emerald-800 tracking-tight block truncate">VitaCare Clinic</strong>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate">{roleTitle}</p>
+        <div className="flex h-[76px] items-center justify-between border-b border-slate-100 px-4">
+          <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-50/60 flex-1 min-w-0" onClick={() => go('/dashboard')}>
+            <img src="/imgs/logo/logo2.png" alt="VitaCare Clinic" className="h-11 w-11 object-contain shrink-0" />
+            <div className="min-w-0 flex-1">
+              <strong className="text-sm font-extrabold text-emerald-800 tracking-tight block truncate">VitaCare Clinic</strong>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate">{roleTitle}</p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setMenu(false)}
+            className="p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 lg:hidden cursor-pointer shrink-0 ml-1"
+            aria-label="Đóng menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-3.5">
@@ -570,7 +581,7 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
         </div>
       </aside>
 
-      {menu && <button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-slate-900/20 lg:hidden" onClick={() => setMenu(false)} />}
+      {menu && <button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-slate-900/40 backdrop-blur-xs lg:hidden" onClick={() => setMenu(false)} />}
 
       <div className="lg:pl-[264px]">
         <div className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
@@ -627,12 +638,22 @@ export default function RolePortal({ section = 'dashboard' }: { section?: string
   return (
     <div className="min-h-screen bg-[#f5f8f5] text-slate-800">
       <aside className={`fixed inset-y-0 left-0 z-30 flex w-[244px] flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex h-[76px] items-center gap-3 border-b border-slate-100 px-4 cursor-pointer hover:bg-slate-50/60" onClick={() => { navigate('/dashboard'); setMenu(false) }}>
-          <img src="/imgs/logo/logo2.png" alt="VitaCare Clinic" className="h-12 w-12 object-contain shrink-0" />
-          <div className="min-w-0 flex-1">
-            <strong className="text-sm font-extrabold text-emerald-800 tracking-tight block truncate">VitaCare Clinic</strong>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate">{ROLE_LABELS[role]}</p>
+        <div className="flex h-[76px] items-center justify-between border-b border-slate-100 px-4">
+          <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-50/60 flex-1 min-w-0" onClick={() => { navigate('/dashboard'); setMenu(false) }}>
+            <img src="/imgs/logo/logo2.png" alt="VitaCare Clinic" className="h-11 w-11 object-contain shrink-0" />
+            <div className="min-w-0 flex-1">
+              <strong className="text-sm font-extrabold text-emerald-800 tracking-tight block truncate">VitaCare Clinic</strong>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate">{ROLE_LABELS[role]}</p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setMenu(false)}
+            className="p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 lg:hidden cursor-pointer shrink-0 ml-1"
+            aria-label="Đóng menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           <p className="px-3 pb-2 pt-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">Không gian làm việc</p>
@@ -660,8 +681,15 @@ export default function RolePortal({ section = 'dashboard' }: { section?: string
           </button>
         </div>
       </aside>
-      {menu && <button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-slate-900/20 lg:hidden" onClick={() => setMenu(false)} />}
+      {menu && <button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-slate-900/40 backdrop-blur-xs lg:hidden" onClick={() => setMenu(false)} />}
       <div className="lg:pl-[244px]">
+        <div className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
+          <div className="flex items-center gap-2.5">
+            <button onClick={() => setMenu(true)} className="rounded border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 cursor-pointer" aria-label="Mở menu"><Menu className="h-5 w-5" /></button>
+            <span className="text-sm font-bold text-slate-800">VitaCare Clinic</span>
+          </div>
+          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">{ROLE_LABELS[role] || 'Nhân viên'}</span>
+        </div>
         <main className="mx-auto max-w-[1440px] p-4 sm:p-6 lg:p-7">{content}</main>
       </div>
     </div>

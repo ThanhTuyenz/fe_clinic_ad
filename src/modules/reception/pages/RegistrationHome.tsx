@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import RoleSidebar from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
 import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
 import { useStaffLogout } from '@/common/hooks/useStaffLogout'
 import {
@@ -71,6 +71,7 @@ export default function RegistrationHome() {
   const hasPatientFromAppointment = !isFreshNew && Boolean(payload?.patient && payload?.ticket)
   const fromAppointment = !isFreshNew && !createNew && Boolean(payload?.appointmentId || payload?.ticket || hasPatientFromAppointment)
   const p = fromAppointment ? payload?.patient : null
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const [specialtyId, setSpecialtyId] = useState('')
   const [specialties, setSpecialties] = useState<any[]>([])
@@ -988,10 +989,19 @@ export default function RegistrationHome() {
   if (!token || !user) return null
 
   return (
-    <div className="min-h-screen bg-slate-100/60 flex flex-col pl-0 md:pl-[232px] transition-all">
-      <RoleSidebar role="receptionist" active="registration" user={user} onLogout={performLogout} />
+    <div className="min-h-screen bg-slate-100/60 flex flex-col lg:pl-[244px] transition-all">
+      <RoleSidebar
+        role="receptionist"
+        active="registration"
+        user={user}
+        onLogout={performLogout}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
 
-      <div className="flex-1 p-5 md:p-6 max-w-[1400px] w-full mx-auto flex flex-col space-y-5">
+      <StaffMobileHeader onOpenMenu={() => setMobileMenuOpen(true)} roleTitle="Lễ tân & Tiếp nhận" />
+
+      <div className="flex-1 p-3.5 sm:p-5 md:p-6 max-w-[1400px] w-full mx-auto flex flex-col space-y-5">
         {/* Header trang */}
         <div className="flex items-center justify-between gap-4 flex-wrap pb-2 border-b border-slate-200">
           <div>

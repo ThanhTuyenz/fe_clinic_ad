@@ -176,9 +176,9 @@ export default function CatalogTable({
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
         {resource === 'service-packages' ? (
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <tr>
                 <th className="px-5 py-3 w-[36%]">Gói dịch vụ & Mã</th>

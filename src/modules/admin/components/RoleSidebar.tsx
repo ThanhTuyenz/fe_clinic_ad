@@ -1,5 +1,6 @@
 'use client'
 
+import React, { useState } from 'react'
 import { useNavigate } from '@/common/hooks/useNextNavigation'
 
 import {
@@ -13,6 +14,8 @@ import {
   UserPlus,
   Users,
   LogOut,
+  X,
+  Menu,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -28,8 +31,65 @@ const ICON_MAP: Record<string, LucideIcon> = {
   patients: Users,
 }
 
-export default function RoleSidebar({ role = 'doctor', active = 'dashboard', user, onLogout, hideTopBar = false }: any) {
+export interface StaffMobileHeaderProps {
+  onOpenMenu: () => void
+  roleTitle?: string
+  title?: string
+}
+
+export function StaffMobileHeader({
+  onOpenMenu,
+  roleTitle,
+  title = 'VitaCare Clinic',
+}: StaffMobileHeaderProps) {
+  return (
+    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden shrink-0 shadow-2xs">
+      <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={onOpenMenu}
+          className="rounded border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 cursor-pointer"
+          aria-label="Mở menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="flex items-center gap-2">
+          <img src="/imgs/logo/logo2.png" alt="VitaCare Clinic" className="h-7 w-7 object-contain" />
+          <span className="text-sm font-extrabold text-emerald-800 tracking-tight">{title}</span>
+        </div>
+      </div>
+      {roleTitle && (
+        <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded">
+          {roleTitle}
+        </span>
+      )}
+    </header>
+  )
+}
+
+export interface RoleSidebarProps {
+  role?: string
+  active?: string
+  user?: any
+  onLogout?: () => void
+  hideTopBar?: boolean
+  isOpen?: boolean
+  onClose?: () => void
+}
+
+export default function RoleSidebar({
+  role = 'doctor',
+  active = 'dashboard',
+  user,
+  onLogout,
+  isOpen,
+  onClose,
+}: RoleSidebarProps) {
   const navigate = useNavigate()
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = isOpen !== undefined ? isOpen : internalOpen
+  const handleClose = onClose || (() => setInternalOpen(false))
+
   const doctor = role === 'doctor'
   const links = doctor
     ? [
@@ -48,29 +108,57 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
 
   const name = String(user?.fullName || user?.displayName || user?.email || (doctor ? 'Bác sĩ' : 'Nhân viên'))
   const avatar = name.split(/\s+/).slice(-2).map((x) => x[0]).join('').toUpperCase() || 'NV'
-  const roleLabel = doctor ? 'Bác sĩ' : 'Lễ tân & Tiếp nhận'
+
+  const handleNav = (href: string, state?: any) => {
+    handleClose()
+    navigate(href, state)
+  }
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-30 flex w-[244px] flex-col border-r border-slate-200 bg-white transition-transform">
-        {/* Logo thương hiệu */}
+      {/* Mobile Backdrop */}
+      {open && (
         <div
-          className="flex h-[76px] items-center gap-3 border-b border-slate-100 px-4 cursor-pointer hover:bg-slate-50/60 transition-colors"
-          onClick={() => navigate('/dashboard')}
-        >
-          <img
-            src="/imgs/logo/logo2.png"
-            alt="VitaCare Clinic"
-            className="h-12 w-12 object-contain shrink-0"
-          />
-          <div className="min-w-0 flex-1">
-            <b className="text-sm font-extrabold text-emerald-800 tracking-tight block truncate">
-              VitaCare Clinic
-            </b>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate">
-              {doctor ? 'Bác sĩ' : 'Lễ tân & Tiếp nhận'}
-            </p>
+          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs lg:hidden transition-opacity"
+          onClick={handleClose}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar container */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-[244px] flex-col border-r border-slate-200 bg-white transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {/* Logo thương hiệu & nút đóng trên mobile */}
+        <div className="flex h-[76px] items-center justify-between border-b border-slate-100 px-4">
+          <div
+            className="flex items-center gap-3 cursor-pointer hover:bg-slate-50/60 transition-colors flex-1 min-w-0"
+            onClick={() => handleNav('/dashboard')}
+          >
+            <img
+              src="/imgs/logo/logo2.png"
+              alt="VitaCare Clinic"
+              className="h-11 w-11 object-contain shrink-0"
+            />
+            <div className="min-w-0 flex-1">
+              <b className="text-sm font-extrabold text-emerald-800 tracking-tight block truncate">
+                VitaCare Clinic
+              </b>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate">
+                {doctor ? 'Bác sĩ' : 'Lễ tân & Tiếp nhận'}
+              </p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 lg:hidden cursor-pointer shrink-0 ml-1"
+            aria-label="Đóng menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Phân hệ làm việc */}
@@ -96,7 +184,7 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
                     ? 'bg-emerald-50 font-bold text-emerald-800'
                     : 'font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
-                onClick={() => navigate(href, id === 'registration' ? { state: { createNew: true } } : undefined)}
+                onClick={() => handleNav(href, id === 'registration' ? { state: { createNew: true } } : undefined)}
               >
                 <IconComp className="w-[18px] h-[18px] shrink-0" strokeWidth={1.8} aria-hidden="true" />
                 <span>{label}</span>
@@ -105,7 +193,7 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
           })}
         </nav>
 
-        {/* Góc menu dưới bên trái: Thông tin phòng khám/nhân viên & nút Đăng xuất */}
+        {/* Góc menu dưới: Thông tin phòng khám/nhân viên & nút Đăng xuất */}
         <div className="border-t border-slate-100 p-3 bg-white space-y-2">
           <div className="flex items-center gap-3 rounded bg-slate-50 p-2.5 border border-slate-200/80">
             <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800 shrink-0">
@@ -137,3 +225,4 @@ export default function RoleSidebar({ role = 'doctor', active = 'dashboard', use
     </>
   )
 }
+

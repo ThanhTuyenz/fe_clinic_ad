@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useAuth } from '@/common/hooks/useAuth'
 import { useStaffLogout } from '@/common/hooks/useStaffLogout'
-import RoleSidebar from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
 import { staffRole } from '@/modules/admin/utils/staffSession'
 import {
   completeClinicalOrderMock,
@@ -32,6 +32,7 @@ export default function ClinicalQueuePage() {
   const [error, setError] = useState('')
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState('')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const processing = useRef(false)
 
   const refresh = async (id = roomId, status = view) => {
@@ -125,13 +126,21 @@ export default function ClinicalQueuePage() {
   }, {})
 
   return (
-    <div className="min-h-screen bg-slate-50 relative pl-0 md:pl-[232px]">
-      <RoleSidebar role={sidebarRole} active={sidebarActive} user={user} onLogout={performLogout} />
-      <main className="min-h-screen bg-[#f3faef] p-6 text-slate-900">
+    <div className="min-h-screen bg-slate-50 relative lg:pl-[244px]">
+      <RoleSidebar
+        role={sidebarRole}
+        active={sidebarActive}
+        user={user}
+        onLogout={performLogout}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
+      <StaffMobileHeader onOpenMenu={() => setMobileMenuOpen(true)} roleTitle={role === 'doctor' ? 'Bác sĩ' : 'Lễ tân'} />
+      <main className="min-h-screen bg-[#f3faef] p-3.5 sm:p-5 md:p-6 text-slate-900">
         <div className="mx-auto max-w-6xl">
           <header className="mb-6">
-            <h1 className="text-3xl font-black">Hàng đợi cận lâm sàng</h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <h1 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight">Hàng đợi cận lâm sàng</h1>
+            <p className="mt-1 text-xs sm:text-sm text-slate-500">
               Quét QR phiếu chỉ định, cấp số theo phòng và xử lý kết quả.
             </p>
           </header>

@@ -39,27 +39,27 @@ export function AdminModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       onClick={() => {
         if (!loading) onClose()
       }}
     >
       <div
-        className={`my-6 w-full ${MAX_WIDTH_CLASSES[maxWidth]} rounded bg-white shadow-2xl overflow-hidden border border-slate-100 transition-all flex flex-col max-h-[90vh]`}
+        className={`my-auto w-full ${MAX_WIDTH_CLASSES[maxWidth]} rounded bg-white shadow-2xl overflow-hidden border border-slate-100 transition-all flex flex-col max-h-[92vh] sm:max-h-[90vh]`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-3.5 shrink-0">
-          <div>
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 sm:px-6 py-3 sm:py-3.5 shrink-0">
+          <div className="min-w-0 pr-2 flex-1">
             {eyebrow && (
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-emerald-700">
                 {eyebrow}
               </p>
             )}
-            <h3 className="text-base font-bold text-slate-900 mt-0.5">
+            <h3 className="text-sm sm:text-base font-bold text-slate-900 mt-0.5 truncate">
               {title}
             </h3>
             {description && (
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">
                 {description}
               </p>
             )}
@@ -68,16 +68,17 @@ export function AdminModal({
             type="button"
             disabled={loading}
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors cursor-pointer disabled:opacity-40"
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded transition-colors cursor-pointer disabled:opacity-40 shrink-0"
+            aria-label="Đóng"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-5 md:px-6 md:py-5 overflow-y-auto flex-1 no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">{children}</div>
+        <div className="p-3.5 sm:p-5 md:px-6 md:py-5 overflow-y-auto flex-1 no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">{children}</div>
 
         {footer && (
-          <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-3.5 bg-slate-50/50 shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 px-4 sm:px-6 py-3 sm:py-3.5 bg-slate-50/50 shrink-0">
             {footer}
           </div>
         )}

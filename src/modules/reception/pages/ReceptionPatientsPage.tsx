@@ -5,7 +5,7 @@ import { useNavigate } from '@/common/hooks/useNextNavigation'
 import { useAuth } from '@/common/hooks/useAuth'
 import { listPatientHistoryReception, listPatientsReception } from '@/modules/admin/services/appointments'
 import { formatDateVi, genderLabelVi, patientDobValue, patientListDisplayName, receptionStatusMeta, toRegistrationPatient } from '../components/receptionHelpers'
-import RoleSidebar from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
 import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   AdminButton,
@@ -37,6 +37,7 @@ export default function ReceptionPatientsPage() {
   const [rows, setRows] = useState<any[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -111,10 +112,19 @@ export default function ReceptionPatientsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
-    <div className="min-h-screen bg-slate-100/60 flex flex-col pl-0 md:pl-[232px] transition-all">
-      <RoleSidebar role="receptionist" active="patients" user={user} onLogout={performLogout} />
+    <div className="min-h-screen bg-slate-100/60 flex flex-col lg:pl-[244px] transition-all">
+      <RoleSidebar
+        role="receptionist"
+        active="patients"
+        user={user}
+        onLogout={performLogout}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
 
-      <div className="flex-1 p-5 md:p-6 max-w-[1600px] w-full mx-auto flex flex-col">
+      <StaffMobileHeader onOpenMenu={() => setMobileMenuOpen(true)} roleTitle="Lễ tân & Tiếp nhận" />
+
+      <div className="flex-1 p-3.5 sm:p-5 md:p-6 max-w-[1600px] w-full mx-auto flex flex-col">
         <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Quầy tiếp nhận</p>

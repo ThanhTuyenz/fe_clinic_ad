@@ -24,7 +24,7 @@ export function FilterTabs({
   const pad = size === 'xs' ? 'px-2.5 py-1 text-xs' : size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'
 
   return (
-    <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+    <div className={`flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${className}`}>
       {tabs.map((tab) => {
         const isSelected = active === tab.id
         return (
@@ -32,7 +32,7 @@ export function FilterTabs({
             key={tab.id}
             type="button"
             onClick={() => onChange(tab.id)}
-            className={`flex items-center gap-1.5 font-semibold rounded border transition-all cursor-pointer ${pad} ${
+            className={`flex items-center gap-1.5 font-semibold rounded border transition-all cursor-pointer shrink-0 whitespace-nowrap ${pad} ${
               isSelected
                 ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
                 : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'

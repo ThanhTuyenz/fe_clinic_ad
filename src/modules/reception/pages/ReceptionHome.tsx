@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import RoleSidebar from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
 import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
 import { useStaffLogout } from '@/common/hooks/useStaffLogout'
 import {
@@ -58,6 +58,7 @@ export default function ReceptionHome() {
   const [dashFilter, setDashFilter] = useState(navInit.dashFilter)
   const [listSearch, setListSearch] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(navInit.filtersOpen)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const [list, setList] = useState<any[]>([])
   const [listLoading, setListLoading] = useState(false)
@@ -717,10 +718,19 @@ export default function ReceptionHome() {
   if (!token || !user || staffRole(user) !== 'receptionist') return null
 
   return (
-    <div className="min-h-screen bg-slate-100/60 flex flex-col pl-0 md:pl-[232px] transition-all">
-      <RoleSidebar role="receptionist" active="reception" user={user} onLogout={performLogout} />
+    <div className="min-h-screen bg-slate-100/60 flex flex-col lg:pl-[244px] transition-all">
+      <RoleSidebar
+        role="receptionist"
+        active="reception"
+        user={user}
+        onLogout={performLogout}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
 
-      <div className="flex-1 p-5 md:p-6 max-w-[1600px] w-full mx-auto flex flex-col">
+      <StaffMobileHeader onOpenMenu={() => setMobileMenuOpen(true)} roleTitle="Lễ tân & Tiếp nhận" />
+
+      <div className="flex-1 p-3.5 sm:p-5 md:p-6 max-w-[1600px] w-full mx-auto flex flex-col">
         {flashOk && (
           <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded shadow-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" />

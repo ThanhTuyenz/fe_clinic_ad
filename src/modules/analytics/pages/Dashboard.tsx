@@ -9,7 +9,7 @@ import {
   fetchDoctorQueueSummary,
 } from '../services/analyticsService'
 import DoctorAppHeader from '@/modules/doctor/components/DoctorAppHeader'
-import RoleSidebar from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
 import { getStaffSession, isReceptionStaff, staffRole } from '@/modules/admin/utils/staffSession'
 import { UserPlus, Calendar, ArrowRight, RefreshCw, Users, QrCode } from 'lucide-react'
 
@@ -141,6 +141,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const fetchGenRef = useRef(0)
 
   const loadStats = useCallback(async ({ silent = false } = {}) => {
@@ -246,7 +247,7 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-slate-50">
         <DoctorAppHeader activeTab="stats" user={user} onLogout={performLogout} examBadge={waitingToday} onExamNavigate={() => goDoctor(waitingToday > 0 ? 'confirmed' : 'all')} />
-        <main className="max-w-[1400px] mx-auto p-5 lg:p-7">
+        <main className="max-w-[1400px] mx-auto p-3.5 sm:p-5 lg:p-7 lg:pl-[256px]">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Tổng quan Bác sĩ</p>
@@ -322,10 +323,18 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 relative pl-0 md:pl-[232px]">
-      <RoleSidebar role="receptionist" active="dashboard" user={user} onLogout={performLogout} />
+    <div className="min-h-screen bg-slate-50 relative lg:pl-[244px]">
+      <RoleSidebar
+        role="receptionist"
+        active="dashboard"
+        user={user}
+        onLogout={performLogout}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
+      <StaffMobileHeader onOpenMenu={() => setMobileMenuOpen(true)} roleTitle={ROLE_LABEL[role] || 'Tiếp đón'} />
 
-      <main className="p-5 md:p-7 max-w-[1500px] w-full mx-auto">
+      <main className="p-3.5 sm:p-5 md:p-7 max-w-[1500px] w-full mx-auto">
         <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">{ROLE_LABEL[role] || 'Tiếp đón'}</p>

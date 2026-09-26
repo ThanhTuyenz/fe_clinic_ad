@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/common/hooks/useAuth'
 import { useStaffLogout } from '@/common/hooks/useStaffLogout'
-import RoleSidebar from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
 import { listDoctorPrescriptions } from '../services/doctorService'
 import { printPrescription } from '@/modules/admin/utils/printPrescription'
 import { Printer, Search } from 'lucide-react'
@@ -33,6 +33,7 @@ export default function DoctorPrescriptionsPage() {
   const [selectedId, setSelectedId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const selected = useMemo(
     () => items.find((item) => item.id === selectedId) || items[0] || null,
@@ -97,9 +98,17 @@ export default function DoctorPrescriptionsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 relative pl-0 md:pl-[232px]">
-      <RoleSidebar role="doctor" active="prescription" user={user} onLogout={performLogout} />
-      <main className="p-6 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-slate-50 relative lg:pl-[244px]">
+      <RoleSidebar
+        role="doctor"
+        active="prescription"
+        user={user}
+        onLogout={performLogout}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
+      <StaffMobileHeader onOpenMenu={() => setMobileMenuOpen(true)} roleTitle="Bác sĩ" />
+      <main className="p-3.5 sm:p-5 md:p-6 max-w-7xl mx-auto">
         <AdminPageHeader
           title="Đơn thuốc đã kê"
           description="Tra cứu, xem chi tiết và in lại đơn thuốc của bác sĩ."
