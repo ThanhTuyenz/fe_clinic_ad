@@ -711,7 +711,7 @@ export default function DoctorWorkSchedulesPage() {
 
                   return (
                     <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-5 py-3 font-semibold text-slate-900">
+                      <td className="px-5 py-3 text-xs font-semibold text-slate-900">
                         {row.doctor?.academicRank ? `${row.doctor.academicRank} ` : ''}
                         {row.doctor?.fullName || '—'}
                       </td>

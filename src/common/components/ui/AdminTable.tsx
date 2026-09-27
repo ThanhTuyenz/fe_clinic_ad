@@ -23,7 +23,7 @@ export interface AdminTableProps extends TableHTMLAttributes<HTMLTableElement> {
 export function AdminTable({ children, className = '', minWidth = 'min-w-[650px]', ...props }: AdminTableProps) {
   return (
     <div className="w-full overflow-x-auto [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
-      <table className={`w-full text-left text-xs sm:text-sm ${minWidth} ${className}`} {...props}>
+      <table className={`w-full text-left text-xs ${minWidth} ${className}`} {...props}>
         {children}
       </table>
     </div>

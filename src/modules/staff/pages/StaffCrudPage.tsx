@@ -197,13 +197,13 @@ export default function StaffCrudPage({ role = 'doctor' }: { role?: 'doctor' | '
               filtered.map((row, index) => (
                 <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
                   <td className="px-5 py-3">
-                    <strong className="text-slate-900 block">{row.fullName || 'Chưa cập nhật'}</strong>
+                    <strong className="text-xs font-semibold text-slate-900 block">{row.fullName || 'Chưa cập nhật'}</strong>
                     <p className="text-[11px] text-slate-400">{row.email}</p>
                   </td>
-                  <td className="px-5 py-3 font-mono text-emerald-700 font-bold">
+                  <td className="px-5 py-3 font-mono text-emerald-700 font-bold text-xs">
                     {meta.code}-{String(index + 1).padStart(3, '0')}
                   </td>
-                  <td className="px-5 py-3 font-medium text-slate-600">{meta.label}</td>
+                  <td className="px-5 py-3 text-xs font-medium text-slate-600">{meta.label}</td>
                   <td className="px-5 py-3">
                     <StatusBadge
                       status={row.isBlocked ? 'blocked' : row.status === 'inactive' ? 'inactive' : 'active'}

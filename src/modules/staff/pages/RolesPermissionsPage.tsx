@@ -31,6 +31,7 @@ import {
 } from '@/common/components/ui'
 import { listUsers, updateUser } from '../services/staffService'
 import { staffRole } from '@/modules/admin/utils/staffSession'
+import { CustomPermissionsModal } from '../components/CustomPermissionsModal'
 
 type StaffUser = {
   id: string
@@ -39,6 +40,8 @@ type StaffUser = {
   phoneNumber?: string
   role?: string
   isBlocked?: boolean
+  customPermissions?: any
+  effectivePermissions?: string[]
   branchAssignments?: Array<{
     isPrimary?: boolean
     branch?: { id: string; code?: string; name?: string }
@@ -158,6 +161,7 @@ export default function RolesPermissionsPage() {
   const [savingId, setSavingId] = useState('')
 
   const [inspectRole, setInspectRole] = useState<RoleDef | null>(null)
+  const [customPermTargetUser, setCustomPermTargetUser] = useState<StaffUser | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -227,6 +231,29 @@ export default function RolesPermissionsPage() {
       setTimeout(() => setSuccessMsg(''), 3500)
     } catch (e) {
       setError(apiErrorMessage(e, 'Không cập nhật được vai trò người dùng.'))
+    } finally {
+      setSavingId('')
+    }
+  }
+
+  const handleSaveCustomPermissions = async (payload: { granted: string[]; revoked: string[] }) => {
+    if (!customPermTargetUser) return
+    setSavingId(customPermTargetUser.id)
+    setError('')
+    try {
+      await updateUser(customPermTargetUser.id, { customPermissions: payload })
+      setRows((items) =>
+        items.map((it) =>
+          it.id === customPermTargetUser.id ? { ...it, customPermissions: payload } : it,
+        ),
+      )
+      setSuccessMsg(
+        `Đã cập nhật phân quyền chi tiết cho ${customPermTargetUser.fullName || customPermTargetUser.email}.`,
+      )
+      setTimeout(() => setSuccessMsg(''), 3500)
+      setCustomPermTargetUser(null)
+    } catch (e) {
+      setError(apiErrorMessage(e, 'Không cập nhật được quyền hạn nhân sự.'))
     } finally {
       setSavingId('')
     }
@@ -394,7 +421,7 @@ export default function RolesPermissionsPage() {
                           )}
                         </div>
                         <div>
-                          <strong className="font-semibold text-slate-900 block leading-tight">
+                          <strong className="text-xs font-semibold text-slate-900 block leading-tight">
                             {row.fullName || 'Chưa cập nhật tên'}
                           </strong>
                           <p className="text-xs text-slate-400 mt-0.5">
@@ -430,25 +457,49 @@ export default function RolesPermissionsPage() {
 
                     {/* Cột 3: Vai trò hiện tại */}
                     <td className="px-5 py-3.5">
-                      <StatusBadge tone={roleDef?.badgeTone || 'slate'}>
-                        {roleDef?.label || cur.toUpperCase()}
-                      </StatusBadge>
+                      <div className="flex flex-col gap-1 items-start">
+                        <StatusBadge tone={roleDef?.badgeTone || 'slate'}>
+                          {roleDef?.label || cur.toUpperCase()}
+                        </StatusBadge>
+                        {Boolean(
+                          row.customPermissions &&
+                            (row.customPermissions.granted?.length > 0 ||
+                              row.customPermissions.revoked?.length > 0 ||
+                              (Array.isArray(row.customPermissions) && row.customPermissions.length > 0)),
+                        ) && (
+                          <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                            Đã tùy biến quyền
+                          </span>
+                        )}
+                      </div>
                     </td>
 
-                    {/* Cột 4: Dropdown Phân quyền vai trò (RBAC) */}
+                    {/* Cột 4: Dropdown Phân quyền vai trò (RBAC) & Tùy biến quyền */}
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                      <select
-                        value={cur}
-                        disabled={savingId === row.id}
-                        onChange={(e) => void changeRole(row, e.target.value)}
-                        className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:border-slate-300 focus:outline-none focus:border-emerald-600 disabled:opacity-50 cursor-pointer"
-                      >
-                        {assignableRoles.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="inline-flex items-center gap-2">
+                        <select
+                          value={cur}
+                          disabled={savingId === row.id}
+                          onChange={(e) => void changeRole(row, e.target.value)}
+                          className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:border-slate-300 focus:outline-none focus:border-emerald-600 disabled:opacity-50 cursor-pointer"
+                        >
+                          {assignableRoles.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => setCustomPermTargetUser(row)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer shadow-2xs"
+                          title="Tùy biến quyền hạn chi tiết (Cấp thêm / Tước quyền)"
+                        >
+                          <Shield className="w-3.5 h-3.5 text-emerald-700" />
+                          <span className="hidden md:inline">Tùy biến quyền</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -508,6 +559,17 @@ export default function RolesPermissionsPage() {
           </div>
         )}
       </AdminModal>
+
+      {/* Modal Tùy biến quyền hạn chi tiết (RBAC Granular Permissions) */}
+      {customPermTargetUser && (
+        <CustomPermissionsModal
+          user={customPermTargetUser}
+          isOpen={Boolean(customPermTargetUser)}
+          onClose={() => setCustomPermTargetUser(null)}
+          onSave={handleSaveCustomPermissions}
+          saving={savingId === customPermTargetUser.id}
+        />
+      )}
     </div>
   )
 }

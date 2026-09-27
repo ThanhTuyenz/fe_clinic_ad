@@ -356,7 +356,7 @@ export default function AdminPatientsPage() {
                 return (
                   <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
                     <td className="px-5 py-3.5">
-                      <strong className="font-semibold text-slate-900 block">
+                      <strong className="text-xs font-semibold text-slate-900 block">
                         {row.fullName || mainP?.fullName || 'Chưa cập nhật'}
                       </strong>
                       <p className="text-xs text-slate-400">{row.email || '—'}</p>

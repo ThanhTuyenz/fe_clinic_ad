@@ -258,7 +258,7 @@ export default function BillingPage() {
                       {getInvoiceCode(it)}
                     </td>
                     <td className="px-5 py-3.5">
-                      <strong className="text-slate-900 font-semibold block">
+                      <strong className="text-xs font-semibold text-slate-900 block">
                         {getPatientName(it)}
                       </strong>
                       <p className="text-xs text-slate-400 font-mono">{getPatientPhone(it)}</p>

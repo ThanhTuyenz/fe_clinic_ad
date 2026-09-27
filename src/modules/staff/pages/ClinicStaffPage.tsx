@@ -335,7 +335,7 @@ export default function ClinicStaffPage() {
                           </div>
                         )}
                         <div>
-                          <strong className="text-slate-900 font-semibold block">
+                          <strong className="text-xs text-slate-900 font-semibold block">
                             {row.fullName || 'Chưa cập nhật'}
                           </strong>
                           <p className="text-xs text-slate-400">

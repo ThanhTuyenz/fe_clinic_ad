@@ -178,7 +178,7 @@ export default function CatalogTable({
 
       <div className="overflow-x-auto [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
         {resource === 'service-packages' ? (
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[760px] text-left text-xs">
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <tr>
                 <th className="px-5 py-3 w-[36%]">Gói dịch vụ & Mã</th>
@@ -205,7 +205,7 @@ export default function CatalogTable({
                 filtered.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/70 transition">
                     <td className="px-5 py-3.5 align-top">
-                      <div className="font-bold text-slate-900 text-sm">{row.name}</div>
+                      <div className="font-semibold text-slate-900 text-xs">{row.name}</div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
                           {row.code}
@@ -311,7 +311,7 @@ export default function CatalogTable({
             </tbody>
           </table>
         ) : (
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[760px] text-left text-xs">
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <tr>
                 {cfg.columns.map(([key, label]) => {
@@ -367,8 +367,8 @@ export default function CatalogTable({
                         key={key}
                         className={
                           key === 'name'
-                            ? 'max-w-xs px-5 py-3 font-bold text-slate-900'
-                            : 'max-w-xs px-5 py-3 text-slate-600'
+                            ? 'max-w-xs px-5 py-3 font-semibold text-slate-900 text-xs'
+                            : 'max-w-xs px-5 py-3 text-slate-600 text-xs'
                         }
                       >
                         {display(key, at(row, key))}

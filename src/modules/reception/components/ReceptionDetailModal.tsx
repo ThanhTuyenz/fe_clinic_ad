@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react'
 import { CheckCircle2, X, Printer, Pencil, Loader2, AlertCircle, Copy, Check, QrCode, Smartphone } from 'lucide-react'
+import { Can } from '@/common/components/auth/Can'
+import { AppPermission } from '@/common/constants/permissions.constant'
 import {
   appointmentSourceLabel,
   appointmentSourceTitle,
@@ -573,14 +575,16 @@ export default function ReceptionDetailModal({
                   >
                     Phiếu đăng ký
                   </button>
-                  <button
-                    type="button"
-                    className="py-2 px-3 bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded transition cursor-pointer disabled:opacity-40"
-                    disabled={saving}
-                    onClick={handleCancelAppointment}
-                  >
-                    Hủy lịch
-                  </button>
+                  <Can permission={AppPermission.APPOINTMENT_CANCEL}>
+                    <button
+                      type="button"
+                      className="py-2 px-3 bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded transition cursor-pointer disabled:opacity-40"
+                      disabled={saving}
+                      onClick={handleCancelAppointment}
+                    >
+                      Hủy lịch
+                    </button>
+                  </Can>
                 </>
               ) : (
                 <>
@@ -592,14 +596,16 @@ export default function ReceptionDetailModal({
                   >
                     {saving ? 'Đang lưu…' : 'Hoàn tất xác nhận'}
                   </button>
-                  <button
-                    type="button"
-                    className="py-2 px-3 bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded transition cursor-pointer disabled:opacity-40"
-                    disabled={!canEditStatus || saving}
-                    onClick={handleCancelAppointment}
-                  >
-                    Từ chối / Hủy
-                  </button>
+                  <Can permission={AppPermission.APPOINTMENT_CANCEL}>
+                    <button
+                      type="button"
+                      className="py-2 px-3 bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded transition cursor-pointer disabled:opacity-40"
+                      disabled={!canEditStatus || saving}
+                      onClick={handleCancelAppointment}
+                    >
+                      Từ chối / Hủy
+                    </button>
+                  </Can>
                   <button
                     type="button"
                     className="py-2 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold rounded transition cursor-pointer"

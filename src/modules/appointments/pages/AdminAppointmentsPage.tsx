@@ -463,7 +463,7 @@ export default function AdminAppointmentsPage() {
                       </p>
                     </td>
                     <td className="px-5 py-3.5">
-                      <strong className="font-semibold text-slate-900 block">
+                      <strong className="text-xs font-semibold text-slate-900 block">
                         {patientListDisplayName(row.patient)}
                       </strong>
                       <p className="text-xs text-slate-400 font-mono">
