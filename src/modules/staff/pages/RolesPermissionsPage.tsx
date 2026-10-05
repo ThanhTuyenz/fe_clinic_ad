@@ -140,8 +140,7 @@ const SYSTEM_STAFF_ROLES: RoleDef[] = [
 const TABLE_COLUMNS = [
   'Nhân viên',
   'Cơ sở & Chuyên môn',
-  'Vai trò hiện tại',
-  { label: 'Phân vai trò (RBAC)', align: 'right' as const },
+  { label: 'Vai trò & Phân quyền (RBAC)', align: 'right' as const },
 ]
 
 const roleOf = (row: StaffUser) => String(row.role || '').toLowerCase()
@@ -301,85 +300,19 @@ export default function RolesPermissionsPage() {
         </div>
       )}
 
-      {/* 4 Thẻ Vai trò cốt lõi - Tối giản, mỏng nhẹ, thanh lịch */}
-      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        {SYSTEM_STAFF_ROLES.map((r) => {
-          const IconComp = r.icon
-          const isSelected = filter === r.id
-          const count = counts[r.id] ?? 0
-          return (
-            <div
-              key={r.id}
-              onClick={() => setFilter(filter === r.id ? 'all' : r.id)}
-              className={`rounded border p-4 transition-all duration-150 cursor-pointer shadow-2xs relative flex flex-col justify-between ${
-                isSelected
-                  ? 'border-emerald-600 bg-emerald-50/50 ring-1 ring-emerald-600'
-                  : 'border-slate-200/90 bg-slate-50/50 hover:bg-slate-100/60 hover:border-slate-300'
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`grid h-8 w-8 place-items-center rounded ${
-                      isSelected
-                        ? 'bg-emerald-700 text-white'
-                        : 'bg-white border border-slate-200/80 text-emerald-700 shadow-2xs'
-                    }`}
-                  >
-                    <IconComp className="w-4 h-4" />
-                  </span>
 
-                  <span className="text-xs font-bold text-slate-700 bg-white border border-slate-200/80 px-2 py-0.5 rounded shadow-2xs tabular-nums">
-                    {count} <span className="font-normal text-slate-400">người</span>
-                  </span>
-                </div>
-
-                <div className="mt-3">
-                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
-                    {r.label}
-                  </h3>
-                  <p className="text-[11px] font-medium text-emerald-700 mt-0.5">
-                    {r.scope}
-                  </p>
-                </div>
-
-                <p className="mt-1.5 text-xs text-slate-500 leading-relaxed line-clamp-2">
-                  {r.summary}
-                </p>
-              </div>
-
-              <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-medium">
-                  {isSelected ? 'Đang lọc' : 'Bấm để lọc'}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setInspectRole(r)
-                  }}
-                  className="font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
-                >
-                  <Info className="w-3 h-3" />
-                  <span>Quyền hạn</span>
-                </button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
 
       {/* Bảng Nhân sự & Gán vai trò (RBAC Role Assignment Table) */}
       <AdminTableCard>
-        <div className="border-b border-slate-100 p-4 space-y-3">
-          <FilterTabs tabs={filterTabs} active={filter} onChange={(id) => setFilter(id)} />
-          <div className="relative max-w-md">
+        <div className="border-b border-slate-100 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <FilterTabs tabs={filterTabs} active={filter} onChange={(id) => setFilter(id)} tone="dark" />
+          <div className="relative w-full sm:w-72 md:w-80 shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Tìm theo họ tên, email, số điện thoại..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded border border-slate-200 focus:outline-none focus:border-emerald-600 bg-white"
+              placeholder="Tìm theo họ tên, email, SĐT..."
+              className="w-full pl-9 pr-3 py-1.5 text-xs rounded border border-slate-200 focus:outline-none focus:border-slate-800 bg-white"
             />
           </div>
         </div>
@@ -388,9 +321,9 @@ export default function RolesPermissionsPage() {
           <AdminTableHead columns={TABLE_COLUMNS} />
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <AdminTableLoading colSpan={4} message="Đang tải dữ liệu nhân sự…" />
+              <AdminTableLoading colSpan={3} message="Đang tải dữ liệu nhân sự…" />
             ) : filtered.length === 0 ? (
-              <AdminTableEmpty colSpan={4} message="Không có nhân viên phù hợp." />
+              <AdminTableEmpty colSpan={3} message="Không có nhân viên phù hợp." />
             ) : (
               filtered.map((row) => {
                 const cur = roleOf(row)
@@ -455,28 +388,20 @@ export default function RolesPermissionsPage() {
                       </div>
                     </td>
 
-                    {/* Cột 3: Vai trò hiện tại */}
-                    <td className="px-5 py-3.5">
-                      <div className="flex flex-col gap-1 items-start">
-                        <StatusBadge tone={roleDef?.badgeTone || 'slate'}>
-                          {roleDef?.label || cur.toUpperCase()}
-                        </StatusBadge>
+                    {/* Cột 3: Dropdown Phân quyền vai trò (RBAC) & Tùy biến quyền */}
+                    <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center gap-2">
                         {Boolean(
                           row.customPermissions &&
                             (row.customPermissions.granted?.length > 0 ||
                               row.customPermissions.revoked?.length > 0 ||
                               (Array.isArray(row.customPermissions) && row.customPermissions.length > 0)),
                         ) && (
-                          <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                          <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-1 rounded border border-emerald-200">
                             Đã tùy biến quyền
                           </span>
                         )}
-                      </div>
-                    </td>
 
-                    {/* Cột 4: Dropdown Phân quyền vai trò (RBAC) & Tùy biến quyền */}
-                    <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-2">
                         <select
                           value={cur}
                           disabled={savingId === row.id}

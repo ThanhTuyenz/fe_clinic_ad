@@ -261,7 +261,7 @@ export default function ReceptionAppointmentTable({
               const isPaid = String(row.payment?.status || '').toLowerCase() === 'paid' || row.payment?.paid === true
               const isOnlinePaid = isPaid && (
                 String(row.payment?.method || '').toLowerCase() === 'online' ||
-                String(row.payment?.method || '').toLowerCase() === 'momo' ||
+                String(row.payment?.method || '').toLowerCase() === 'payos' ||
                 row.source === 'online' ||
                 row.bookingSource === 'online'
               )

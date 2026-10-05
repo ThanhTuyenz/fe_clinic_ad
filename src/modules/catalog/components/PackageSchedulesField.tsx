@@ -31,7 +31,7 @@ export default function PackageSchedulesField({ form, setForm }: PackageSchedule
               onClick={() => setForm({ ...form, activeDaysOfWeek: [1, 2, 3, 4, 5, 6, 0] })}
               className={`rounded border px-2.5 py-1 text-xs transition-colors cursor-pointer ${
                 isAll
-                  ? 'border-slate-500 bg-slate-100 font-bold text-slate-900 shadow-2xs'
+                  ? 'border-slate-400 bg-slate-100 text-slate-900 font-semibold shadow-2xs'
                   : 'border-slate-200 bg-white font-medium text-slate-600 hover:bg-slate-50'
               }`}
             >
@@ -42,7 +42,7 @@ export default function PackageSchedulesField({ form, setForm }: PackageSchedule
               onClick={() => setForm({ ...form, activeDaysOfWeek: [1, 2, 3, 4, 5] })}
               className={`rounded border px-2.5 py-1 text-xs transition-colors cursor-pointer ${
                 isWeekdays
-                  ? 'border-slate-500 bg-slate-100 font-bold text-slate-900 shadow-2xs'
+                  ? 'border-slate-400 bg-slate-100 text-slate-900 font-semibold shadow-2xs'
                   : 'border-slate-200 bg-white font-medium text-slate-600 hover:bg-slate-50'
               }`}
             >
@@ -53,7 +53,7 @@ export default function PackageSchedulesField({ form, setForm }: PackageSchedule
               onClick={() => setForm({ ...form, activeDaysOfWeek: [6, 0] })}
               className={`rounded border px-2.5 py-1 text-xs transition-colors cursor-pointer ${
                 isWeekends
-                  ? 'border-slate-500 bg-slate-100 font-bold text-slate-900 shadow-2xs'
+                  ? 'border-slate-400 bg-slate-100 text-slate-900 font-semibold shadow-2xs'
                   : 'border-slate-200 bg-white font-medium text-slate-600 hover:bg-slate-50'
               }`}
             >
@@ -62,7 +62,8 @@ export default function PackageSchedulesField({ form, setForm }: PackageSchedule
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 pt-1">
+        {/* Khung chọn ngày dùng chung border mỏng nhẹ liền mạch */}
+        <div className="flex items-stretch rounded border border-slate-200 divide-x divide-slate-200 overflow-hidden bg-white shadow-2xs mt-2">
           {DAYS_OF_WEEK.map((day) => {
             const isChecked = activeList.includes(day.id)
             return (
@@ -76,16 +77,16 @@ export default function PackageSchedulesField({ form, setForm }: PackageSchedule
                   if (next.length === 0) return
                   setForm({ ...form, activeDaysOfWeek: next })
                 }}
-                className={`flex flex-col items-center justify-center rounded border py-2.5 text-xs transition-all cursor-pointer ${
+                className={`flex-1 flex flex-col items-center justify-center py-2 px-1 text-xs transition-colors cursor-pointer ${
                   isChecked
-                    ? 'border-slate-400 bg-white text-slate-900 font-bold shadow-xs ring-1 ring-slate-400/40'
-                    : 'border-slate-200 bg-slate-50/70 text-slate-400 font-normal hover:bg-white hover:text-slate-600'
+                    ? 'bg-slate-100/90 text-slate-900 font-bold'
+                    : 'bg-white text-slate-400 font-normal hover:bg-slate-50 hover:text-slate-600'
                 }`}
               >
-                <span className="text-xs">{day.label}</span>
+                <span className="text-xs leading-tight">{day.label}</span>
                 <span
-                  className={`mt-1 text-[10px] ${
-                    isChecked ? 'font-semibold text-slate-700' : 'text-slate-400'
+                  className={`mt-0.5 text-[10px] leading-none ${
+                    isChecked ? 'text-emerald-700 font-semibold' : 'text-slate-400'
                   }`}
                 >
                   {isChecked ? 'Mở' : 'Nghỉ'}
@@ -111,8 +112,8 @@ export default function PackageSchedulesField({ form, setForm }: PackageSchedule
           <label
             className={`flex flex-col gap-1 rounded border p-3 cursor-pointer transition-colors ${
               (form.sessionType || 'MORNING') === 'MORNING'
-                ? 'border-slate-800 bg-white shadow-xs'
-                : 'border-slate-200 bg-white/70 hover:bg-white'
+                ? 'border-slate-400 bg-slate-50 shadow-2xs'
+                : 'border-slate-200 bg-white hover:bg-slate-50/60'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -134,8 +135,8 @@ export default function PackageSchedulesField({ form, setForm }: PackageSchedule
           <label
             className={`flex flex-col gap-1 rounded border p-3 cursor-pointer transition-colors ${
               form.sessionType === 'AFTERNOON'
-                ? 'border-slate-800 bg-white shadow-xs'
-                : 'border-slate-200 bg-white/70 hover:bg-white'
+                ? 'border-slate-400 bg-slate-50 shadow-2xs'
+                : 'border-slate-200 bg-white hover:bg-slate-50/60'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -157,8 +158,8 @@ export default function PackageSchedulesField({ form, setForm }: PackageSchedule
           <label
             className={`flex flex-col gap-1 rounded border p-3 cursor-pointer transition-colors ${
               form.sessionType === 'EVENING'
-                ? 'border-slate-800 bg-white shadow-xs'
-                : 'border-slate-200 bg-white/70 hover:bg-white'
+                ? 'border-slate-400 bg-slate-50 shadow-2xs'
+                : 'border-slate-200 bg-white hover:bg-slate-50/60'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -180,8 +181,8 @@ export default function PackageSchedulesField({ form, setForm }: PackageSchedule
           <label
             className={`flex flex-col gap-1 rounded border p-3 cursor-pointer transition-colors ${
               form.sessionType === 'OFFICE_HOURS'
-                ? 'border-slate-800 bg-white shadow-xs'
-                : 'border-slate-200 bg-white/70 hover:bg-white'
+                ? 'border-slate-400 bg-slate-50 shadow-2xs'
+                : 'border-slate-200 bg-white hover:bg-slate-50/60'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -203,8 +204,8 @@ export default function PackageSchedulesField({ form, setForm }: PackageSchedule
           <label
             className={`flex flex-col gap-1 rounded border p-3 cursor-pointer transition-colors ${
               form.sessionType === 'ALL_DAY'
-                ? 'border-slate-800 bg-white shadow-xs'
-                : 'border-slate-200 bg-white/70 hover:bg-white'
+                ? 'border-slate-400 bg-slate-50 shadow-2xs'
+                : 'border-slate-200 bg-white hover:bg-slate-50/60'
             }`}
           >
             <div className="flex items-center gap-2">

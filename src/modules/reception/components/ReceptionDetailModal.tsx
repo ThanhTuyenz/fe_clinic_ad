@@ -145,8 +145,7 @@ export default function ReceptionDetailModal({
   const ticketCode = activeDetail?.ticket || activeDetail?.bookingCode || activeDetail?.id?.slice(0, 8) || 'VITACARE'
   const transferNote = `TT LK ${ticketCode}`
   const feeAmount = Math.round(consultationFee || 0)
-  const momoPayload = `2|99|0901234567|PHÒNG KHÁM ĐA KHOA VITACARE|hotro@vitacare.vn|0|0|${feeAmount}|${transferNote}|transfer_p2p`
-  const momoQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(momoPayload)}`
+  const qrUrl = `https://img.vietqr.io/image/MB-0987654321-compact2.png?amount=${feeAmount}&addInfo=${encodeURIComponent(transferNote)}&accountName=PHONG%20KHAM%20DA%20KHOA%20VITACARE`
 
   const handleCopyNote = (text: string) => {
     if (navigator?.clipboard?.writeText) {
@@ -393,52 +392,45 @@ export default function ReceptionDetailModal({
                       onChange={(e) => setPaymentMethod(e.target.value)}
                     >
                       <option value="cash">Tiền mặt</option>
-                      <option value="momo">Ví MoMo</option>
+                      <option value="vietqr">Chuyển khoản VietQR</option>
                     </select>
                   </div>
 
-                  {/* MoMo QR Display */}
-                  {paymentMethod === 'momo' && (
-                    <div className="p-3 bg-pink-50/80 border border-pink-200 rounded space-y-2.5">
+                  {/* VietQR Display */}
+                  {paymentMethod === 'vietqr' && (
+                    <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded space-y-2.5">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
-                          <span className="w-5 h-5 rounded bg-[#a50064] text-white flex items-center justify-center font-black text-[10px]">
-                            M
-                          </span>
-                          <span className="text-xs font-bold text-[#a50064]">Thanh toán Ví MoMo</span>
+                          <QrCode className="w-4 h-4 text-emerald-700" />
+                          <span className="text-xs font-bold text-emerald-800">Chuyển khoản VietQR</span>
                         </div>
-                        <span className="text-[10px] font-semibold text-pink-700 bg-pink-100/90 px-2 py-0.5 rounded border border-pink-200">
-                          Quét mã MoMo
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-200">
+                          Quét mã ngân hàng
                         </span>
                       </div>
 
-                      <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-2.5 rounded border border-pink-100 shadow-2xs">
-                        <div className="relative shrink-0 p-1.5 bg-white border border-pink-200 rounded shadow-xs">
+                      <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-2.5 rounded border border-emerald-100 shadow-2xs">
+                        <div className="relative shrink-0 p-1.5 bg-white border border-emerald-200 rounded shadow-xs">
                           <img
-                            src={momoQrUrl}
-                            alt="Mã QR MoMo"
+                            src={qrUrl}
+                            alt="Mã QR VietQR"
                             className="w-28 h-28 object-contain rounded"
                             loading="eager"
                           />
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <div className="w-6 h-6 bg-white rounded-full p-0.5 shadow-sm border border-pink-200 flex items-center justify-center">
-                              <span className="text-[9px] font-black text-[#a50064]">M</span>
-                            </div>
-                          </div>
                         </div>
 
                         <div className="flex-1 min-w-0 space-y-1 text-xs">
                           <div>
                             <span className="text-[10px] text-slate-500 block">Số tiền phí khám:</span>
-                            <strong className="text-sm font-extrabold text-[#a50064]">{formatVnd(consultationFee)}</strong>
+                            <strong className="text-sm font-extrabold text-emerald-800">{formatVnd(consultationFee)}</strong>
                           </div>
                           <div>
-                            <span className="text-[10px] text-slate-500 block">Người nhận:</span>
-                            <span className="font-semibold text-slate-800 text-[11px] truncate block">PHÒNG KHÁM ĐA KHOA VITACARE</span>
+                            <span className="text-[10px] text-slate-500 block">Ngân hàng & Chủ TK:</span>
+                            <span className="font-semibold text-slate-800 text-[11px] truncate block">MB Bank - PHÒNG KHÁM VITACARE</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-slate-500 block">Số MoMo:</span>
-                            <span className="font-mono font-bold text-slate-800 text-[11px]">0901 234 567</span>
+                            <span className="text-[10px] text-slate-500 block">Số tài khoản:</span>
+                            <span className="font-mono font-bold text-slate-800 text-[11px]">0987654321</span>
                           </div>
                           <div>
                             <span className="text-[10px] text-slate-500 block">Nội dung chuyển:</span>
@@ -449,7 +441,7 @@ export default function ReceptionDetailModal({
                               <button
                                 type="button"
                                 onClick={() => handleCopyNote(transferNote)}
-                                className="p-1 rounded hover:bg-pink-100 text-pink-700 transition cursor-pointer"
+                                className="p-1 rounded hover:bg-emerald-100 text-emerald-700 transition cursor-pointer"
                                 title="Sao chép nội dung"
                               >
                                 {copiedNote ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -459,9 +451,9 @@ export default function ReceptionDetailModal({
                         </div>
                       </div>
 
-                      <div className="text-[10px] text-pink-800 bg-pink-100/60 p-2 rounded border border-pink-200/50 flex items-start gap-1.5 leading-tight">
-                        <Smartphone className="w-3.5 h-3.5 text-[#a50064] shrink-0 mt-0.5" />
-                        <span>Bệnh nhân mở ứng dụng <strong>MoMo</strong> &gt; chọn <strong>Quét Mã</strong> để hoàn tất thanh toán.</span>
+                      <div className="text-[10px] text-emerald-800 bg-emerald-100/60 p-2 rounded border border-emerald-200/50 flex items-start gap-1.5 leading-tight">
+                        <Smartphone className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
+                        <span>Bệnh nhân mở ứng dụng <strong>Ngân hàng bất kỳ</strong> &gt; chọn <strong>Quét mã QR</strong> để hoàn tất chuyển khoản.</span>
                       </div>
                     </div>
                   )}
@@ -481,8 +473,8 @@ export default function ReceptionDetailModal({
                     {paymentSaving ? (
                       <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang xử lý…</>
                     ) : (
-                      paymentMethod === 'momo'
-                        ? 'Xác nhận đã nhận tiền MoMo & Tiếp đón'
+                      paymentMethod === 'vietqr'
+                        ? 'Xác nhận đã nhận tiền chuyển khoản & Tiếp đón'
                         : 'Thu tiền mặt & Tự động xác nhận'
                     )}
                   </button>

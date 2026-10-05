@@ -49,6 +49,52 @@ export async function fetchAnalyticsData({
   }
 }
 
+export async function fetchDemandInsights({
+  token,
+  timeFilter = '30days',
+  branchId,
+}: {
+  token?: string
+  timeFilter?: 'today' | '7days' | '30days'
+  branchId?: string
+} = {}) {
+  try {
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+    const params: Record<string, any> = { timeFilter }
+    if (branchId && branchId !== 'all') params.branchId = branchId
+
+    return await apiRequest({ method: 'GET', url: '/stats/demand-insights', headers, params })
+  } catch (error) {
+    throw new Error(apiErrorMessage(error, 'Không lấy được dữ liệu phân tích nhu cầu khám bệnh.'))
+  }
+}
+
+export async function fetchAiExecutiveReport({
+  token,
+  timeFilter = '30days',
+  branchId,
+  forceRefresh,
+}: {
+  token?: string
+  timeFilter?: 'today' | '7days' | '30days' | string
+  branchId?: string
+  forceRefresh?: boolean
+} = {}) {
+  try {
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+    const params: Record<string, any> = { timeFilter }
+    if (branchId && branchId !== 'all') params.branchId = branchId
+    if (forceRefresh) params.forceRefresh = true
+
+    return await apiRequest({ method: 'GET', url: '/stats/ai-executive-report', headers, params })
+  } catch (error) {
+    throw new Error(apiErrorMessage(error, 'Không tạo được Báo cáo Chiến lược AI.'))
+  }
+}
+
+
 // ─────────────────────────────────────────────────────────────
 // PHÂN HỆ TIẾP ĐÓN & THU NGÂN QUẦY (RECEPTION DESK)
 // ─────────────────────────────────────────────────────────────
@@ -69,7 +115,7 @@ export async function fetchReceptionSummary({
     if (date) params.date = date
     if (branchId && branchId !== 'all') params.branchId = branchId
 
-    return await apiRequest({ method: 'GET', url: '/reception/summary', headers, params })
+    return await apiRequest({ method: 'GET', url: '/appointments/reception-summary', headers, params })
   } catch (error) {
     throw new Error(apiErrorMessage(error, 'Không tải được báo cáo ca trực tiếp đón.'))
   }
@@ -91,7 +137,7 @@ export async function fetchReceptionRoomsStatus({
     if (date) params.date = date
     if (branchId && branchId !== 'all') params.branchId = branchId
 
-    return await apiRequest({ method: 'GET', url: '/reception/rooms-status', headers, params })
+    return await apiRequest({ method: 'GET', url: '/clinic-rooms/rooms-status', headers, params })
   } catch (error) {
     throw new Error(apiErrorMessage(error, 'Không tải được tình trạng tải phòng khám.'))
   }
@@ -111,11 +157,10 @@ export async function fetchReceptionUpcoming({
   try {
     const headers: Record<string, string> = {}
     if (token) headers.Authorization = `Bearer ${token}`
-    const params: Record<string, any> = { limit }
-    if (date) params.date = date
+    const params: Record<string, any> = { limit, from: date, to: date, status: 'confirmed' }
     if (branchId && branchId !== 'all') params.branchId = branchId
 
-    return await apiRequest({ method: 'GET', url: '/reception/upcoming', headers, params })
+    return await apiRequest({ method: 'GET', url: '/appointments/reception', headers, params })
   } catch (error) {
     throw new Error(apiErrorMessage(error, 'Không tải được danh sách ca khám sắp tới.'))
   }
@@ -138,7 +183,7 @@ export async function fetchDoctorQueueSummary({
     const params: Record<string, any> = {}
     if (date) params.date = date
 
-    return await apiRequest({ method: 'GET', url: '/doctor/queue-summary', headers, params })
+    return await apiRequest({ method: 'GET', url: '/doctors/queue-summary', headers, params })
   } catch (error) {
     throw new Error(apiErrorMessage(error, 'Không tải được tiến độ khám của Bác sĩ.'))
   }

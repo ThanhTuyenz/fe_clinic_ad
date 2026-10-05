@@ -11,6 +11,7 @@ export interface FilterTabsProps {
   active: string
   onChange: (id: string) => void
   size?: 'xs' | 'sm' | 'md'
+  tone?: 'emerald' | 'dark' | 'slate'
   className?: string
 }
 
@@ -19,6 +20,7 @@ export function FilterTabs({
   active,
   onChange,
   size = 'sm',
+  tone = 'dark',
   className = '',
 }: FilterTabsProps) {
   const pad = size === 'xs' ? 'px-2.5 py-1 text-xs' : size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'
@@ -34,15 +36,21 @@ export function FilterTabs({
             onClick={() => onChange(tab.id)}
             className={`flex items-center gap-1.5 font-semibold rounded border transition-all cursor-pointer shrink-0 whitespace-nowrap ${pad} ${
               isSelected
-                ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                ? tone === 'emerald'
+                  ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                  : 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
             }`}
           >
             <span>{tab.label}</span>
             {tab.count !== undefined && (
               <span
                 className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                  isSelected ? 'bg-emerald-800 text-white' : 'bg-slate-100 text-slate-500'
+                  isSelected
+                    ? tone === 'emerald'
+                      ? 'bg-emerald-800 text-white'
+                      : 'bg-slate-800 text-slate-200'
+                    : 'bg-slate-100 text-slate-500'
                 }`}
               >
                 {tab.count}

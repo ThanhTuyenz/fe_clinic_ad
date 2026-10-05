@@ -71,9 +71,9 @@ export function formatVnd(amount: number | string): string {
 export function paymentMethodLabel(method: string): string {
   const m = String(method || '').trim().toLowerCase()
   if (m === 'cash') return 'Tiền mặt'
-  if (m === 'transfer') return 'Chuyển khoản'
-  if (['online', 'wallet', 'momo'].includes(m)) return 'MoMo / Trực tuyến'
-  if (['card', 'credit_card'].includes(m)) return 'Thẻ thanh toán'
+  if (m === 'transfer' || m === 'vietqr') return 'Chuyển khoản (VietQR)'
+  if (['online', 'wallet', 'payos', 'momo'].includes(m)) return 'PayOS / Trực tuyến'
+  if (['card', 'credit_card', 'pos_card'].includes(m)) return 'Thẻ thanh toán (POS)'
   return '—'
 }
 

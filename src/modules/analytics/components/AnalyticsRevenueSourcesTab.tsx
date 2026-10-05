@@ -108,7 +108,7 @@ export default function AnalyticsRevenueSourcesTab({ revenueSources }: Analytics
             <div className="lg:col-span-7 space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Xếp hạng Tỷ trọng Doanh thu (Horizontal Bar Chart)
+                  Tỷ trọng Doanh thu
                 </h4>
                 <span className="text-[11px] text-slate-400 font-medium">Theo doanh thu thực thu</span>
               </div>
@@ -234,11 +234,10 @@ export default function AnalyticsRevenueSourcesTab({ revenueSources }: Analytics
                   </td>
                   <td className="py-3.5 px-4 whitespace-nowrap">
                     <span
-                      className={`inline-block rounded px-2 py-0.5 text-[10px] font-bold ${
-                        s.category === 'Gói khám bệnh' || s.category?.includes('Gói')
+                      className={`inline-block rounded px-2 py-0.5 text-[10px] font-bold ${s.category === 'Gói khám bệnh' || s.category?.includes('Gói')
                           ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                           : 'bg-slate-100 text-slate-700'
-                      }`}
+                        }`}
                     >
                       {s.category}
                     </span>

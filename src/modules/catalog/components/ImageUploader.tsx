@@ -9,7 +9,7 @@ interface ImageUploaderProps {
   onChange: (url: string) => void
   label?: string
   placeholder?: string
-  aspectRatio?: 'square' | 'wide' | 'avatar'
+  aspectRatio?: 'square' | 'wide' | 'avatar' | 'icon'
   className?: string
   disabled?: boolean
 }
@@ -69,22 +69,32 @@ export default function ImageUploader({
   const fullUrl = resolveMediaUrl(value)
 
   return (
-    <div className={`space-y-1.5 ${className}`}>
+    <div className={label ? `space-y-1.5 ${className}` : className}>
       {label && <label htmlFor={inputId} className="block text-xs font-semibold text-slate-700">{label}</label>}
 
       {fullUrl ? (
-        <div className={`relative overflow-hidden rounded border border-slate-200 bg-slate-50 group ${aspectRatio === 'avatar' ? 'h-20 w-20' : aspectRatio === 'square' ? 'h-32 w-32' : 'h-40 w-full max-w-md'}`}>
+        <div
+          className={`relative overflow-hidden rounded border border-slate-200 bg-slate-50 group ${
+            aspectRatio === 'icon'
+              ? 'h-[30px] w-[30px] shrink-0'
+              : aspectRatio === 'avatar'
+              ? 'h-20 w-20'
+              : aspectRatio === 'square'
+              ? 'h-28 w-28'
+              : 'h-28 w-full'
+          }`}
+        >
           <img
             src={fullUrl}
             alt="Preview"
-            className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+            className={`h-full w-full ${aspectRatio === 'icon' ? 'object-contain p-1' : 'object-cover'} transition duration-200 group-hover:scale-105`}
           />
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
             <button
               type="button"
               disabled={disabled || uploading}
               onClick={() => inputRef.current?.click()}
-              className="p-1.5 bg-white/90 hover:bg-white text-slate-700 rounded shadow-sm text-xs font-semibold flex items-center gap-1 cursor-pointer"
+              className="p-1 bg-white/90 hover:bg-white text-slate-700 rounded shadow-xs text-xs font-semibold flex items-center justify-center cursor-pointer"
               title="Thay đổi ảnh"
             >
               <Upload className="w-3 h-3" />
@@ -93,7 +103,7 @@ export default function ImageUploader({
               type="button"
               disabled={disabled || uploading}
               onClick={() => onChange('')}
-              className="p-1.5 bg-rose-600/90 hover:bg-rose-600 text-white rounded shadow-sm text-xs font-semibold flex items-center gap-1 cursor-pointer"
+              className="p-1 bg-rose-600/90 hover:bg-rose-600 text-white rounded shadow-xs text-xs font-semibold flex items-center justify-center cursor-pointer"
               title="Xóa ảnh"
             >
               <Trash2 className="w-3 h-3" />
@@ -101,7 +111,7 @@ export default function ImageUploader({
           </div>
           {uploading && (
             <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-              <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+              <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
             </div>
           )}
         </div>
@@ -110,12 +120,25 @@ export default function ImageUploader({
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onClick={() => !disabled && !uploading && inputRef.current?.click()}
-          className={`relative border-2 border-dashed border-slate-200 hover:border-emerald-500 bg-slate-50/50 hover:bg-emerald-50/20 rounded transition flex flex-col items-center justify-center p-2 cursor-pointer text-center ${aspectRatio === 'avatar' ? 'h-20 w-20' : aspectRatio === 'square' ? 'h-32 w-32' : 'h-36 w-full max-w-md'}`}
+          className={`relative border-2 border-dashed border-slate-200 hover:border-emerald-500 bg-slate-50/50 hover:bg-emerald-50/20 rounded transition flex flex-col items-center justify-center p-1.5 cursor-pointer text-center ${
+            aspectRatio === 'icon'
+              ? 'h-[30px] w-[30px] shrink-0'
+              : aspectRatio === 'avatar'
+              ? 'h-20 w-20'
+              : aspectRatio === 'square'
+              ? 'h-28 w-28'
+              : 'h-28 w-full'
+          }`}
+          title={aspectRatio === 'icon' ? 'Tải icon lên' : undefined}
         >
           {uploading ? (
             <div className="flex flex-col items-center gap-1">
-              <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
-              <span className="text-[10px] text-slate-500">Đang tải…</span>
+              <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+              {aspectRatio !== 'icon' && <span className="text-[10px] text-slate-500">Đang tải…</span>}
+            </div>
+          ) : aspectRatio === 'icon' ? (
+            <div className="flex flex-col items-center justify-center text-slate-400 hover:text-emerald-700">
+              <span className="text-sm font-bold leading-none text-slate-400">+</span>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-1 pointer-events-none">
@@ -126,7 +149,7 @@ export default function ImageUploader({
                 <span className="text-emerald-700 font-semibold">{aspectRatio === 'avatar' ? 'Tải ảnh' : 'Tải ảnh lên'}</span>
               </p>
               {aspectRatio === 'wide' && (
-                <p className="text-[11px] text-slate-400 max-w-[200px] leading-tight">
+                <p className="text-[10px] text-slate-400 max-w-[240px] leading-tight">
                   {placeholder}
                 </p>
               )}

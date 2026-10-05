@@ -52,7 +52,7 @@ export default function PackageSymptomsField({
       </div>
 
       {/* Khung nhập tag clean tích hợp */}
-      <div className="rounded border border-slate-200 bg-white p-2 focus-within:border-slate-400 focus-within:ring-1 focus-within:ring-slate-300 transition">
+      <div className="rounded border border-slate-200 bg-white p-2 hover:border-slate-300 focus-within:border-emerald-600 transition-colors">
         <div className="flex flex-wrap items-center gap-1.5 min-h-[32px]">
           {(form.symptomTags || []).map((tag: string) => (
             <span

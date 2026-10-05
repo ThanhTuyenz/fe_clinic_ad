@@ -178,14 +178,14 @@ export default function CatalogTable({
 
       <div className="overflow-x-auto [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
         {resource === 'service-packages' ? (
-          <table className="w-full min-w-[760px] text-left text-xs">
+          <table className="w-full min-w-[960px] text-left text-xs">
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <tr>
-                <th className="px-5 py-3 w-[36%]">Gói dịch vụ & Mã</th>
-                <th className="px-5 py-3 w-[26%]">Cơ sở & Hình thức</th>
-                <th className="px-5 py-3 w-[18%]">Thời gian tiếp nhận</th>
-                <th className="px-5 py-3 w-[10%]">Giá gói</th>
-                <th className="px-5 py-3 w-[10%] text-right">Thao tác</th>
+                <th className="whitespace-nowrap px-4 py-3 w-[34%]">Gói dịch vụ & Mã</th>
+                <th className="whitespace-nowrap px-4 py-3 w-[26%]">Cơ sở & Hình thức</th>
+                <th className="whitespace-nowrap px-4 py-3 w-[18%]">Thời gian tiếp nhận</th>
+                <th className="whitespace-nowrap px-4 py-3 w-[10%]">Giá gói</th>
+                <th className="whitespace-nowrap px-4 py-3 w-[12%] text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -311,7 +311,7 @@ export default function CatalogTable({
             </tbody>
           </table>
         ) : (
-          <table className="w-full min-w-[760px] text-left text-xs">
+          <table className="w-full min-w-[960px] text-left text-xs">
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <tr>
                 {cfg.columns.map(([key, label]) => {
@@ -327,10 +327,10 @@ export default function CatalogTable({
                           setSortDir('asc')
                         }
                       }}
-                      className="px-5 py-3 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                      className="whitespace-nowrap px-4 py-3 cursor-pointer select-none hover:bg-slate-100 transition-colors"
                       title={`Bấm để sắp xếp theo ${label}`}
                     >
-                      <div className="inline-flex items-center gap-1.5">
+                      <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
                         <span>{label}</span>
                         <span
                           className={`text-[10px] ${
@@ -343,54 +343,75 @@ export default function CatalogTable({
                     </th>
                   )
                 })}
-                <th className="px-5 py-3 text-right">Thao tác</th>
+                <th className="whitespace-nowrap px-4 py-3 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={cfg.columns.length + 1} className="px-5 py-16 text-center text-slate-400">
+                  <td colSpan={cfg.columns.length + 1} className="px-4 py-16 text-center text-slate-400">
                     Đang tải dữ liệu…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={cfg.columns.length + 1} className="px-5 py-16 text-center text-slate-400">
+                  <td colSpan={cfg.columns.length + 1} className="px-4 py-16 text-center text-slate-400">
                     Chưa có dữ liệu.
                   </td>
                 </tr>
               ) : (
                 filtered.map((row) => (
-                  <tr key={row.id} className="border-t hover:bg-slate-50/70 transition">
-                    {cfg.columns.map(([key]) => (
-                      <td
-                        key={key}
-                        className={
-                          key === 'name'
-                            ? 'max-w-xs px-5 py-3 font-semibold text-slate-900 text-xs'
-                            : 'max-w-xs px-5 py-3 text-slate-600 text-xs'
-                        }
-                      >
-                        {display(key, at(row, key))}
-                      </td>
-                    ))}
-                    <td className="whitespace-nowrap px-5 py-3 text-right">
+                  <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50/70 transition">
+                    {cfg.columns.map(([key]) => {
+                      const isCode = key === 'code' || key === 'id'
+                      const isName = key === 'name' || key.endsWith('.name')
+                      const isSingleLine =
+                        isCode ||
+                        isName ||
+                        key === 'phoneNumber' ||
+                        key === 'operatingHours' ||
+                        key === 'price' ||
+                        key === 'isActive' ||
+                        key === 'province' ||
+                        key === 'district' ||
+                        key === 'priority'
+
+                      return (
+                        <td
+                          key={key}
+                          className={`px-4 py-3 text-xs ${
+                            isCode
+                              ? 'font-mono text-slate-700 whitespace-nowrap font-medium'
+                              : isName
+                              ? 'font-semibold text-slate-900 whitespace-nowrap'
+                              : isSingleLine
+                              ? 'text-slate-600 whitespace-nowrap'
+                              : 'text-slate-600 min-w-[200px]'
+                          }`}
+                        >
+                          {display(key, at(row, key))}
+                        </td>
+                      )
+                    })}
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
                       <button
                         type="button"
                         onClick={() => onDetail(row)}
-                        className="mr-2 rounded border px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        className="mr-1.5 rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 cursor-pointer"
                       >
                         Chi tiết
                       </button>
                       <button
+                        type="button"
                         onClick={() => onEdit(row)}
-                        className="mr-2 rounded border px-3 py-1.5 text-xs cursor-pointer hover:bg-slate-50"
+                        className="mr-1.5 rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 cursor-pointer"
                       >
                         Sửa
                       </button>
                       <button
+                        type="button"
                         onClick={() => onRemove(row)}
-                        className="rounded border border-rose-200 px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-50 cursor-pointer"
+                        className="rounded border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:border-rose-300 cursor-pointer"
                       >
                         Ngừng dùng
                       </button>
@@ -402,7 +423,7 @@ export default function CatalogTable({
           </table>
         )}
       </div>
-      <footer className="border-t px-5 py-3 text-xs text-slate-400">Tổng cộng {filtered.length} bản ghi</footer>
+      <footer className="border-t border-slate-100 px-4 py-3 text-xs text-slate-400">Tổng cộng {filtered.length} bản ghi</footer>
     </section>
   )
 }

@@ -10,6 +10,7 @@ import {
   AnalyticsRevenueSourcesTab,
   AnalyticsOperationsTab,
   AnalyticsDoctorsTab,
+  AnalyticsDemandAiTab,
 } from '../components'
 
 interface AdminAnalyticsPageProps {
@@ -17,7 +18,7 @@ interface AdminAnalyticsPageProps {
   loading?: boolean
 }
 
-type TabType = 'revenue_timeline' | 'revenue_sources' | 'operations' | 'doctors'
+type TabType = 'revenue_timeline' | 'revenue_sources' | 'operations' | 'doctors' | 'demand_ai'
 
 export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPageProps) {
   const { token } = useAuth()
@@ -35,7 +36,7 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
   useEffect(() => {
     listCatalog('branches')
       .then((res: any) => setBranches(Array.isArray(res) ? res : res?.items || []))
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   const loadAnalytics = useCallback(async () => {
@@ -89,7 +90,7 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
       chartLabel: 'Doanh thu theo thời gian',
       bars: [],
       payments: [
-        { name: 'Trực tuyến (Cổng MoMo / Thẻ ATM)', pct: 0, amount: '0 đ' },
+        { name: 'Trực tuyến (PayOS / VietQR)', pct: 0, amount: '0 đ' },
         { name: 'Tại quầy (Tiền mặt / Trực tiếp)', pct: 0, amount: '0 đ' },
       ],
     }
@@ -100,6 +101,7 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
     { id: 'revenue_sources' as TabType, label: 'Nguồn thu Chuyên khoa & Gói khám' },
     { id: 'operations' as TabType, label: 'Lượt khám & Vận hành' },
     { id: 'doctors' as TabType, label: 'Hiệu suất Bác sĩ' },
+    { id: 'demand_ai' as TabType, label: 'Nhu cầu Khám & AI Insights' },
   ]
 
   return (
@@ -229,11 +231,10 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
                   key={filter}
                   type="button"
                   onClick={() => setTimeFilter(filter)}
-                  className={`rounded px-3 py-1.5 font-semibold transition-colors cursor-pointer ${
-                    isActive
+                  className={`rounded px-3 py-1.5 font-semibold transition-colors cursor-pointer ${isActive
                       ? 'bg-slate-900 text-white font-bold'
                       : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                    }`}
                 >
                   {labels[filter]}
                 </button>
@@ -266,11 +267,10 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`rounded px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                isActive
+              className={`rounded px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${isActive
                   ? 'bg-slate-100 text-slate-900 font-bold border border-slate-200'
                   : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -297,6 +297,13 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
       {activeTab === 'doctors' && (
         <AnalyticsDoctorsTab
           doctorsPerformance={analyticsData?.doctorsPerformance || []}
+        />
+      )}
+
+      {activeTab === 'demand_ai' && (
+        <AnalyticsDemandAiTab
+          branchFilter={branchFilter}
+          branches={branches}
         />
       )}
     </div>

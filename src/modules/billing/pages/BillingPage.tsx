@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Search, CreditCard, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { RefreshCw, Search, CreditCard, CheckCircle, Clock, AlertCircle, RotateCcw, QrCode } from 'lucide-react'
 import { useAuth } from '@/common/hooks/useAuth'
 import {
   AdminButton,
@@ -281,6 +281,11 @@ export default function BillingPage() {
                       >
                         {paid ? 'Đã thu' : pending ? 'Chờ thu' : canc ? 'Đã hủy' : it.workflowStatus}
                       </StatusBadge>
+                      {it.payment?.refundBank && (
+                        <span className="block mt-1 text-[10px] font-bold text-amber-800 bg-amber-50 rounded px-1.5 py-0.5 border border-amber-200">
+                          Có STK hoàn
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
                       <AdminButton
@@ -349,6 +354,52 @@ export default function BillingPage() {
                 </strong>
               </div>
             </div>
+
+            {/* THÔNG TIN VÀ MÃ VIETQR HOÀN TIỀN NẾU ĐƠN CÓ THÔNG TIN TÀI KHOẢN */}
+            {selectedItem.payment?.refundBank && (
+              <div className="rounded border border-amber-200 bg-amber-50/70 p-3.5 space-y-3">
+                <div className="flex items-center gap-1.5 text-amber-900 font-bold text-xs uppercase tracking-wide">
+                  <RotateCcw className="w-4 h-4 text-amber-700" />
+                  <span>Thông tin nhận hoàn tiền của bệnh nhân</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-slate-500">Ngân hàng:</span>
+                    <p className="font-semibold text-slate-800">
+                      {selectedItem.payment.refundBank.bankName || selectedItem.payment.refundBank.bankCode}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Số tài khoản:</span>
+                    <p className="font-mono font-bold text-slate-900 text-sm">
+                      {selectedItem.payment.refundBank.accountNumber}
+                    </p>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-slate-500">Chủ tài khoản thụ hưởng:</span>
+                    <p className="font-extrabold text-emerald-800 text-sm">
+                      {selectedItem.payment.refundBank.accountName}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Mã QR VietQR để quét chuyển khoản hoàn tiền ngay lập tức */}
+                <div className="pt-2.5 border-t border-amber-200/80 flex flex-col items-center">
+                  <p className="text-[11px] font-medium text-slate-700 mb-2">
+                    Mở App Ngân hàng quét mã VietQR để hoàn tiền nhanh:
+                  </p>
+                  <img
+                    src={`https://img.vietqr.io/image/${selectedItem.payment.refundBank.bankBin || selectedItem.payment.refundBank.bankCode}-${selectedItem.payment.refundBank.accountNumber}-compact2.png?amount=${getAmount(selectedItem)}&addInfo=${encodeURIComponent(`HOAN TIEN ${selectedItem.bookingCode || selectedItem.id.slice(0, 8).toUpperCase()}`)}&accountName=${encodeURIComponent(selectedItem.payment.refundBank.accountName || '')}`}
+                    alt="VietQR Refund"
+                    className="w-44 h-44 rounded border border-slate-200 shadow-xs bg-white p-1.5"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1.5 text-center">
+                    Đã điền sẵn STK, Tên chủ thẻ và Số tiền hoàn: <strong className="text-rose-700">{money(getAmount(selectedItem))}</strong>
+                  </span>
+                </div>
+              </div>
+            )}
 
             {isPending(selectedItem) && isStaff && (
               <form onSubmit={handleConfirmPayment} className="space-y-3 pt-3 border-t border-slate-100">
