@@ -2,12 +2,12 @@
 
 import { useAuth } from '@/common/hooks/useAuth'
 import AuthGuard from '@/modules/auth/common/guards/AuthGuard'
-import Dashboard from '@/modules/admin/pages/Dashboard'
-import RolePortal from '@/modules/admin/pages/RolePortal'
+import { Dashboard } from '@/modules/analytics'
+import { RolePortal } from '@/modules/portal'
 
 function DashboardByRole() {
   const { role } = useAuth()
-  return ['admin', 'branch_manager', 'pharmacist', 'cashier'].includes(role)
+  return ['admin', 'branch_manager'].includes(role)
     ? <RolePortal />
     : <Dashboard />
 }

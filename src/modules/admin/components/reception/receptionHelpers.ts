@@ -27,8 +27,19 @@ export function displayName(user: any): string {
 }
 
 export function sourceCreatorLabel(appointment: any): string {
-  if (appointmentSourceValue(appointment) !== 'clinic') return '—'
-  return appointmentCreatorName(appointment) || 'Nhân viên phòng khám'
+  if (!appointment) return '—'
+  const src = appointmentSourceValue(appointment)
+  if (src === 'online') {
+    return 'Bệnh nhân (Đặt online)'
+  }
+  const creator = appointmentCreatorName(appointment)
+  if (creator) {
+    return `${creator} (Tại quầy)`
+  }
+  if (src === 'clinic') {
+    return 'Lễ tân (Tại quầy)'
+  }
+  return 'Bệnh nhân (Đặt online)'
 }
 
 export function pad2(n: number | string): string {
@@ -60,9 +71,9 @@ export function formatVnd(amount: number | string): string {
 export function paymentMethodLabel(method: string): string {
   const m = String(method || '').trim().toLowerCase()
   if (m === 'cash') return 'Tiền mặt'
-  if (m === 'transfer') return 'Chuyển khoản'
-  if (['online', 'wallet', 'momo'].includes(m)) return 'MoMo / Trực tuyến'
-  if (['card', 'credit_card'].includes(m)) return 'Thẻ thanh toán'
+  if (m === 'transfer' || m === 'vietqr') return 'Chuyển khoản (VietQR)'
+  if (['online', 'wallet', 'payos', 'momo'].includes(m)) return 'PayOS / Trực tuyến'
+  if (['card', 'credit_card', 'pos_card'].includes(m)) return 'Thẻ thanh toán (POS)'
   return '—'
 }
 
@@ -218,6 +229,38 @@ export function patientListDisplayName(p: any): string {
   return en || '—'
 }
 
+export function genderLabelVi(value: unknown): string {
+  const raw = String(value || '').trim().toUpperCase()
+  if (raw === 'MALE' || raw === 'NAM' || raw === 'M') return 'Nam'
+  if (raw === 'FEMALE' || raw === 'NỮ' || raw === 'NU' || raw === 'F') return 'Nữ'
+  return value ? String(value) : '—'
+}
+
+export function patientDobValue(p: any) {
+  return p?.dob || p?.dateOfBirth || ''
+}
+
+export function toRegistrationPatient(row: any) {
+  if (!row) return null
+  const dob = patientDobValue(row)
+  const phone = String(row.phone || row.phoneNumber || row.account?.phoneNumber || '').trim()
+  return {
+    ...row,
+    id: row.id || row._id,
+    patientCode: row.patientCode || row.nationalId || row.id,
+    displayName: patientListDisplayName(row),
+    fullName: row.fullName || patientListDisplayName(row),
+    dob,
+    dateOfBirth: dob,
+    phone,
+    phoneNumber: phone,
+    gender: row.gender,
+    address: row.address || '',
+    email: row.email || row.account?.email || '',
+    nationalId: row.nationalId || '',
+  }
+}
+
 export function ageFromDobField(dob: any): string {
   if (dob == null || dob === '') return ''
   const d = dob instanceof Date ? dob : new Date(dob)
@@ -239,13 +282,12 @@ export function statusLabelVi(st: string): string {
 
 export function receptionStatusMeta(row: any): { label: string; tone: string } {
   const workflow = String(row?.workflowStatus || '').toUpperCase()
-  if (workflow === 'PENDING_PAYMENT') return { label: 'Chờ thanh toán', tone: 'pending' }
-  if (workflow === 'BOOKED') return { label: 'Chờ check-in', tone: 'booked' }
+  if (workflow === 'HOLD') return { label: 'Chờ thanh toán', tone: 'pending' }
+  if (workflow === 'CONFIRMED') return { label: 'Chờ check-in', tone: 'booked' }
   if (workflow === 'CHECKED_IN') return { label: 'Đã check-in', tone: 'checked-in' }
-  if (workflow === 'IN_EXAMINATION') return { label: 'Đang khám', tone: 'examining' }
   if (workflow === 'COMPLETED') return { label: 'Đã khám', tone: 'completed' }
   if (workflow === 'CANCELLED') return { label: 'Đã hủy', tone: 'cancelled' }
-  if (workflow === 'EXPIRED') return { label: 'Hết hạn', tone: 'cancelled' }
+  if (workflow === 'NO_SHOW') return { label: 'Vắng mặt', tone: 'cancelled' }
   const status = normalizeStatus(row?.status)
   if (status === 'confirmed') return { label: 'Đã xác nhận', tone: 'booked' }
   if (status === 'examined') return { label: 'Đã khám', tone: 'completed' }
@@ -276,26 +318,89 @@ export function readReceptionNavState(location: any) {
 }
 
 export function dashFilterLabelVi(key: string): string {
-  if (key === 'unpaid') return 'Chưa thu phí'
+  if (key === 'pending_checkin') return 'Chờ tiếp đón (Check-in)'
+  if (key === 'unpaid') return 'Chờ đóng phí'
+  if (key === 'checked_in') return 'Đã check-in (Chờ khám)'
+  if (key === 'completed') return 'Đang / Đã khám'
+  if (key === 'cancelled') return 'Đã hủy / Quá giờ'
+  if (key === 'expiring') return 'Quá giờ hẹn'
   if (key === 'noRoom') return 'Chưa chọn phòng'
   if (key === 'ready') return 'Sẵn sàng xác nhận'
-  if (key === 'expiring') return 'Quá giờ — sắp tự hủy'
   return ''
+}
+
+export function isPaidAppointment(r: any): boolean {
+  if (!r) return false
+  const pStatus = String(r?.payment?.status || '').toLowerCase()
+  if (pStatus === 'paid') return true
+  if (r?.payment?.paid === true) return true
+  const invStatus = String(r?.invoice?.status || '').toUpperCase()
+  if (invStatus === 'PAID') return true
+  return false
+}
+
+export function isReceptionPending(r: any): boolean {
+  if (!r) return false
+  const wf = String(r?.workflowStatus || '').toUpperCase()
+  if (wf === 'HOLD' || wf === 'CONFIRMED') return true
+  const st = normalizeStatus(r?.status)
+  return st === 'pending'
+}
+
+export function getAppointmentWorkflowBucket(r: any): 'cancelled' | 'completed' | 'checked_in' | 'unpaid' | 'pending_checkin' {
+  if (!r) return 'pending_checkin'
+  const wf = String(r?.workflowStatus || '').toUpperCase()
+  const st = normalizeStatus(r?.status)
+  const paid = isPaidAppointment(r)
+  const isExp = isPendingAppointmentPastSlot(r)
+
+  // 1. Đã hủy / Hết hạn / Quá giờ slot
+  if (wf === 'CANCELLED' || st === 'cancelled' || (isReceptionPending(r) && isExp)) {
+    return 'cancelled'
+  }
+
+  // 2. Đã khám xong
+  if (wf === 'COMPLETED' || st === 'examined') {
+    return 'completed'
+  }
+
+  // 3. Đã check-in vào phòng (Đang chờ bác sĩ gọi khám)
+  if (wf === 'CHECKED_IN' || (st === 'confirmed' && wf !== 'CONFIRMED')) {
+    return 'checked_in'
+  }
+
+  // 4. Chờ đóng phí khám
+  if (wf === 'HOLD' || !paid) {
+    return 'unpaid'
+  }
+
+  // 5. Chờ tiếp đón / check-in
+  return 'pending_checkin'
 }
 
 export function matchesDashFilter(row: any, dashFilter: string): boolean {
   const f = String(dashFilter || '').trim()
-  if (!f) return true
-  if (normalizeStatus(row?.status) !== 'pending') return false
-  const isPaid = String(row?.payment?.status || '').toLowerCase() === 'paid'
-  const room = String(row?.clinicRoom || '').trim()
-  const expiring = isPendingAppointmentPastSlot(row)
-  if (f === 'expiring') return expiring
-  if (expiring) return false
-  if (f === 'unpaid') return !isPaid
-  if (f === 'noRoom') return isPaid && !room
-  if (f === 'ready') return isPaid && Boolean(room)
-  return true
+  if (!f || f === 'all') return true
+
+  // Tương thích ngược với link từ Dashboard
+  if (f === 'noRoom') {
+    const paid = isPaidAppointment(row)
+    const room = String(row?.clinicRoom || '').trim()
+    const isExp = isPendingAppointmentPastSlot(row)
+    return isReceptionPending(row) && paid && !room && !isExp
+  }
+  if (f === 'ready') {
+    const paid = isPaidAppointment(row)
+    const room = String(row?.clinicRoom || '').trim()
+    const isExp = isPendingAppointmentPastSlot(row)
+    return isReceptionPending(row) && paid && Boolean(room) && !isExp
+  }
+  if (f === 'expiring') {
+    return isPendingAppointmentPastSlot(row)
+  }
+
+  const bucket = getAppointmentWorkflowBucket(row)
+  return bucket === f
 }
 
 export function normalizeLookup(raw: any) {

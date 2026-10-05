@@ -14,8 +14,21 @@ export async function lookupPatientByCode({ code }) {
   return appointmentRequest({ method: 'GET', url: '/appointments/patient-by-code', params: { code: String(code || '').trim() } }, 'Không tìm thấy bệnh nhân.')
 }
 
-export async function listPatientsReception({ page = 1, pageSize = 10, patientCode, name, phone, account }) {
-  return appointmentRequest({ method: 'GET', url: '/appointments/patients', params: { page, pageSize, patientCode, name, phone, account } }, 'Không lấy được danh sách bệnh nhân.')
+export async function listPatientsReception({ page = 1, pageSize = 50, q, patientCode, name, phone, account }: any = {}) {
+  const params: Record<string, any> = { page, pageSize }
+  const searchTerm = q || patientCode || name || phone || account
+  if (searchTerm) params.q = searchTerm
+
+  const data = await appointmentRequest({ method: 'GET', url: '/appointments/patients', params }, 'Không lấy được danh sách bệnh nhân.')
+  const patients = Array.isArray(data?.patients) ? data.patients : Array.isArray(data?.rows) ? data.rows : []
+  return {
+    ...data,
+    patients,
+    rows: patients,
+    total: Number(data?.total || 0),
+    page: Number(data?.page || page),
+    pageSize: Number(data?.pageSize || pageSize),
+  }
 }
 
 export async function listPatientHistoryReception({ patientId }) {
@@ -63,6 +76,14 @@ export async function finishExamAppointment({ appointmentId }) {
   return appointmentRequest({ method: 'PATCH', url: `/appointments/${encodeURIComponent(id)}/finish-visit` }, 'Không kết thúc khám được.')
 }
 
-export async function createAppointmentReception({ patientEmailOrPhone, patient, createdByStaff, doctorId, appointmentDate, startTime, note }) {
+export async function createAppointmentReception({ patientEmailOrPhone, patient, createdByStaff, doctorId, appointmentDate, startTime, note }: any) {
   return appointmentRequest({ method: 'POST', url: '/appointments/reception', data: { source: 'clinic', bookingSource: 'clinic', createdByStaff: createdByStaff || null, patientEmailOrPhone: String(patientEmailOrPhone || '').trim(), patient: patient || null, doctorId, appointmentDate, startTime, note: note || '' } }, 'Đặt lịch thất bại.')
 }
+
+export async function rescheduleAppointment({ appointmentId, newSlotId, note }: { appointmentId: string; newSlotId: string; note?: string }) {
+  return appointmentRequest(
+    { method: 'POST', url: `/appointments/${encodeURIComponent(appointmentId)}/reschedule`, data: { newSlotId, note } },
+    'Đổi lịch khám thất bại.',
+  )
+}
+

@@ -1,0 +1,2552 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
+import { useStaffLogout } from '@/common/hooks/useStaffLogout'
+import { Html5Qrcode } from 'html5-qrcode'
+import { finishExamAppointment, listDoctorAppointments, listPatientHistory, updateAppointmentStatus } from '@/modules/admin/services/appointments'
+import { listClinicRooms } from '@/modules/admin/services/clinicRooms'
+import { getClinicalOrderPass, getMedicalVisitByAppointment, listClinicalServices, saveMedicalVisit } from '@/modules/admin/services/medicalVisits'
+import { searchMedicines } from '@/modules/admin/services/medicines'
+import DoctorAppHeader from '../components/DoctorAppHeader'
+import IcdDiagnosisField, { formatIcdLabel, parseIcdFromMedicalVisit } from '../components/IcdDiagnosisField'
+import { runDoctorShortcut } from '@/modules/admin/utils/doctorShortcuts'
+import { buildPrescriptionPrintViewFromExam, printPrescription } from '@/modules/admin/utils/printPrescription'
+import {
+  RX_FREQUENCY_OPTIONS,
+  formatRxDosageLabel,
+  formatRxDurationLabel,
+  formatRxFrequencyLabel,
+  emptyRxLine,
+  normalizeRxLines,
+  patchRxLine,
+  rxLineToApiPayload,
+  rxLineToLegacyPrescriptionItem,
+  sanitizeDosageAmountInput,
+  sanitizeDurationDaysInput,
+  sanitizeQuantityInput,
+  filterFilledRxLines,
+  prescriptionHasMedicines,
+  validateRxCatalogPick,
+  validateRxLinesForFinish,
+} from '@/modules/admin/utils/prescriptionLine'
+import { formatMedicineLabel, rxLineMedicineName } from '@/modules/admin/utils/medicineLabel'
+import { appointmentSourceLabel, appointmentSourceTitle, appointmentSourceValue } from '@/modules/admin/utils/appointmentSource'
+import { getStaffSession, staffRole } from '@/modules/admin/utils/staffSession'
+import { ticketFromQrPayload } from '@/modules/admin/utils/ticketQr'
+import { useAppointmentsSocket } from '@/modules/admin/hooks/useAppointmentsSocket'
+
+const DR_QR_READER_ELEMENT_ID = 'dr-ticket-qr-reader'
+
+function getSession() {
+  return getStaffSession()
+}
+
+function displayName(user) {
+  const first = String(user?.firstName || '').trim()
+  const last = String(user?.lastName || '').trim()
+  const full = `${last} ${first}`.trim()
+  return full || String(user?.displayName || user?.fullName || '').trim() || user?.email || 'Bác sĩ'
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0')
+}
+
+function toDatetimeLocalValue(d) {
+  const dt = d instanceof Date ? d : new Date(d)
+  if (Number.isNaN(dt.getTime())) return ''
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}T${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`
+}
+
+function ymd(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+/** Bộ lọc từ trang Thống kê (Dashboard). */
+function readDoctorNavState(location) {
+  const today = ymd(new Date())
+  const from = String(location?.state?.fromDate || '').trim()
+  const to = String(location?.state?.toDate || '').trim()
+  const st = String(location?.state?.statusFilter || '').trim()
+  return {
+    fromDate: from || today,
+    toDate: to || today,
+    statusFilter: st || 'confirmed',
+    filtersOpen: Boolean(location?.state?.dashNavAt),
+  }
+}
+
+function dateKeyFromAppointmentDate(value) {
+  if (!value) return ''
+  if (typeof value === 'string') {
+    return value.includes('T') ? value.slice(0, 10) : value.slice(0, 10)
+  }
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  return ymd(d)
+}
+
+function timeLabel(v) {
+  const s = String(v || '').trim()
+  return s.length >= 5 ? s.slice(0, 5) : s
+}
+
+function patientLabel(a) {
+  const p = a?.patient
+  const fromParts = [p?.lastName, p?.firstName].filter(Boolean).join(' ').trim()
+  return (
+    String(p?.displayName || '').trim() ||
+    String(p?.fullName || p?.name || '').trim() ||
+    fromParts ||
+    String(p?.email || '').trim() ||
+    'Bệnh nhân'
+  )
+}
+
+function formatGenderShort(gender) {
+  const g = String(gender || '').trim()
+  if (!g) return ''
+  if (/^(male|nam)$/i.test(g)) return 'Nam'
+  if (/^(female|nữ|nu)$/i.test(g)) return 'Nữ'
+  return g
+}
+
+function formatPatientAgeShort(dob) {
+  if (!dob) return ''
+  const d = dob instanceof Date ? dob : new Date(dob)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  let age = now.getFullYear() - d.getFullYear()
+  const md = now.getMonth() - d.getMonth()
+  if (md < 0 || (md === 0 && now.getDate() < d.getDate())) age -= 1
+  if (age >= 0 && age <= 120) return `${age} tuổi`
+  return String(d.getFullYear())
+}
+
+function patientDemographicLine(a) {
+  const parts = [
+    formatGenderShort(a?.patient?.gender),
+    formatPatientAgeShort(a?.patient?.dob || a?.patient?.dateOfBirth),
+    timeLabel(a?.startTime),
+  ].filter(Boolean)
+  return parts.length ? parts.join(' · ') : '—'
+}
+
+function patientIdsLine(a) {
+  const ticket = String(a?.ticket || a?.id || '').trim()
+  const code = String(a?.patient?.patientCode || '').trim()
+  if (code && ticket) return `${code} · ${ticket}`
+  return code || ticket || '—'
+}
+
+function clinicRoomLabel(roomId, rooms) {
+  const id = String(roomId || '').trim()
+  if (!id) return ''
+  const hit = (rooms || []).find((r) => String(r.roomID) === id)
+  return hit?.name ? String(hit.name).trim() : id
+}
+
+function isAppointmentExamined(st) {
+  const s = String(st || '').toLowerCase()
+  return s === 'examined' || s === 'completed' || s === 'done'
+}
+
+function isAppointmentPaymentPaid(a) {
+  return String(a?.payment?.status || '').toLowerCase() === 'paid'
+}
+
+/** Chỉ cho sửa phiên khám khi lễ tân đã xác nhận lịch và thu phí. */
+function canDoctorEditExamAppt(a) {
+  if (!a) return false
+  const st = String(a?.status || '').toLowerCase()
+  if (st === 'cancelled' || isAppointmentExamined(st)) return false
+  if (st !== 'confirmed') return false
+  return isAppointmentPaymentPaid(a)
+}
+
+function doctorExamLockMessage(a) {
+  if (!a) return 'Chọn một lịch trong danh sách.'
+  const st = String(a?.status || '').toLowerCase()
+  if (st === 'cancelled') return 'Lịch đã hủy — chỉ xem thông tin.'
+  if (isAppointmentExamined(st)) return 'Đã kết thúc khám — chỉ xem, không chỉnh sửa.'
+  if (st === 'pending') {
+    return 'Lễ tân chưa xác nhận lịch. Chờ tiếp nhận thu phí và xác nhận trước khi khám.'
+  }
+  if (!isAppointmentPaymentPaid(a)) {
+    return 'Chưa thu phí tại quầy. Nhờ lễ tân xác nhận thanh toán trước khi khám.'
+  }
+  if (st !== 'confirmed') {
+    return 'Lịch chưa sẵn sàng khám. Cần trạng thái đã xác nhận sau khi lễ tân thu phí.'
+  }
+  return ''
+}
+
+function statusLabelVi(st) {
+  const s = String(st || '').toLowerCase()
+  if (s === 'cancelled') return 'Đã hủy'
+  if (isAppointmentExamined(s)) return 'Đã khám'
+  if (s === 'confirmed') return 'Chờ khám'
+  if (s === 'pending') return 'Chờ xác nhận'
+  return 'Chờ'
+}
+
+function formatCancelledByLine(cancelledBy) {
+  if (!cancelledBy || typeof cancelledBy !== 'object') return '—'
+  const ut = String(cancelledBy.userType || '').toLowerCase()
+  const role = String(cancelledBy.role || '').toLowerCase()
+  if (role === 'system' || ut === 'system') return 'Hệ thống'
+  const isPatient = role === 'patient' || ut === 'patient'
+  const label = isPatient ? 'Bệnh nhân' : 'Phòng khám'
+  const name = String(cancelledBy.displayName || '').trim() || String(cancelledBy.email || '').trim()
+  return name ? `${label}: ${name}` : label
+}
+
+function formatDateTimeVi(iso) {
+  if (iso == null || iso === '') return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+
+/** Nhân viên tiếp nhận xác nhận lịch (từ API `confirmedBy`). */
+function formatConfirmedByLine(confirmedBy) {
+  if (!confirmedBy || typeof confirmedBy !== 'object') return '—'
+  const name = String(confirmedBy.displayName || '').trim() || String(confirmedBy.email || '').trim()
+  return name || '—'
+}
+
+function formatDobVi(iso) {
+  if (!iso) return '—'
+  const d = iso instanceof Date ? iso : new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`
+}
+
+function formatApptDateVi(value) {
+  if (!value) return '—'
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`
+}
+
+function historySortKey(appt) {
+  const dk = dateKeyFromAppointmentDate(appt?.appointmentDate) || '0000-00-00'
+  const t = timeLabel(appt?.startTime) || '00:00'
+  return `${dk}T${t}`
+}
+
+function doctorLabelFromAppt(appt) {
+  const d = appt?.doctor
+  if (d && typeof d === 'object') {
+    const fromParts = [d.lastName, d.firstName].filter(Boolean).join(' ').trim()
+    return String(d.displayName || '').trim() || fromParts || String(appt?.doctorName || '').trim() || '—'
+  }
+  return String(appt?.doctorName || '').trim() || '—'
+}
+
+function specialtyLabelFromAppt(appt) {
+  return String(appt?.doctor?.specialtyName || appt?.doctor?.specialty || '').trim()
+}
+
+function historyDiagnosisLabel(ex) {
+  if (!ex) return ''
+  const code = String(ex.diagnosisCode || ex.icdCode || '').trim()
+  const name = String(ex.diagnosisName || '').trim()
+  if (code && name) return `${code} – ${name}`
+  return String(ex.diagnosis || '').trim()
+}
+
+function historyMedicineNames(ex) {
+  if (!ex) return []
+  const names = []
+  const seen = new Set()
+  const push = (raw) => {
+    const n = String(raw || '').trim()
+    if (!n) return
+    const key = n.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    names.push(n)
+  }
+  for (const line of Array.isArray(ex.prescriptionLines) ? ex.prescriptionLines : []) {
+    push(rxLineMedicineName(line))
+  }
+  if (!names.length) {
+    for (const row of Array.isArray(ex.prescription) ? ex.prescription : []) {
+      push(row?.name)
+    }
+  }
+  return names
+}
+
+function isHistoryVisit(appt) {
+  const st = String(appt?.status || '').toLowerCase()
+  if (isAppointmentExamined(st)) return true
+  const ex = appt?.medicalVisit
+  return Boolean(historyDiagnosisLabel(ex) || String(ex?.symptoms || '').trim())
+}
+
+const VITAL_PLACEHOLDER = '--'
+
+/** Khoảng giá trị hợp lệ cho sinh hiệu (để trống = không bắt buộc). */
+const VITAL_RULES = {
+  temp: { min: 30, max: 45, label: 'Nhiệt độ (°C)' },
+  breath: { min: 10, max: 250, label: 'Nhịp thở', integer: true },
+  bp: { min: 60, max: 250, label: 'Huyết áp (tâm thu)', type: 'bp' },
+  pulse: { min: 10, max: 250, label: 'Mạch', integer: true },
+  spo2: { min: 50, max: 100, label: 'SpO₂ (%)', integer: true },
+  height: { min: 30, max: 250, label: 'Chiều cao (cm)' },
+  weight: { min: 1, max: 300, label: 'Cân nặng (kg)' },
+  bmi: { min: 10, max: 60, label: 'BMI' },
+}
+
+const VITAL_FIELD_UI = [
+  { key: 'temp', label: 'Nhiệt độ (°C)', inputMode: 'decimal' },
+  { key: 'breath', label: 'Nhịp thở (L/P)', inputMode: 'numeric' },
+  { key: 'bp', label: 'Huyết áp (mmHg)', inputMode: 'text', placeholder: '-- (vd: 120/80)' },
+  { key: 'pulse', label: 'Mạch (L/P)', inputMode: 'numeric' },
+  { key: 'height', label: 'Chiều cao (cm)', inputMode: 'numeric' },
+  { key: 'weight', label: 'Cân nặng (kg)', inputMode: 'decimal' },
+  { key: 'bmi', label: 'BMI (kg/m²)', inputMode: 'decimal' },
+  { key: 'spo2', label: 'SpO₂ (%)', inputMode: 'numeric' },
+]
+
+function parseVitalNumber(raw) {
+  const s = String(raw ?? '').trim()
+  if (!s || s === VITAL_PLACEHOLDER) return null
+  const n = Number(s.replace(',', '.'))
+  return Number.isFinite(n) ? n : NaN
+}
+
+function parseBpSystolic(raw) {
+  const s = String(raw ?? '').trim()
+  if (!s || s === VITAL_PLACEHOLDER) return null
+  const head = s.split('/')[0].trim()
+  const n = Number(head.replace(',', '.'))
+  return Number.isFinite(n) ? n : NaN
+}
+
+function validateVitalField(key, value) {
+  const rule = VITAL_RULES[key]
+  if (!rule) return ''
+  const s = String(value ?? '').trim()
+  if (!s || s === VITAL_PLACEHOLDER) return ''
+
+  if (rule.type === 'bp') {
+    const sys = parseBpSystolic(s)
+    if (Number.isNaN(sys)) return `${rule.label}: nhập số hợp lệ (vd: 120 hoặc 120/80).`
+    if (sys < rule.min || sys > rule.max) {
+      return `${rule.label}: chỉ cho phép tâm thu ${rule.min}–${rule.max} mmHg.`
+    }
+    return ''
+  }
+
+  const n = parseVitalNumber(s)
+  if (Number.isNaN(n)) return `${rule.label}: nhập số hợp lệ.`
+  if (rule.integer && !Number.isInteger(n)) return `${rule.label}: nhập số nguyên.`
+  if (n < rule.min || n > rule.max) {
+    return `${rule.label}: chỉ cho phép ${rule.min}–${rule.max}.`
+  }
+  return ''
+}
+
+function validateAllVitals(vitals) {
+  const errors = {}
+  for (const key of Object.keys(VITAL_RULES)) {
+    const msg = validateVitalField(key, vitals[key])
+    if (msg) errors[key] = msg
+  }
+  return errors
+}
+
+function vitalsHasEntry(vitals) {
+  return Object.keys(VITAL_RULES).some((key) => {
+    const v = String(vitals?.[key] ?? '').trim()
+    return v && v !== VITAL_PLACEHOLDER
+  })
+}
+
+const VITALS_MISSING_MSG =
+  'Vui lòng nhập ít nhất một chỉ số sinh hiệu (ví dụ: nhiệt độ, mạch…), hoặc tick “Bỏ qua sinh hiệu”.'
+
+function getVitalsFinishIssue(vitals, vitalsSkipConfirmed) {
+  if (vitalsSkipConfirmed) return { ok: true, errors: {}, missing: false }
+  const errors = validateAllVitals(vitals)
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors, missing: false, message: Object.values(errors).join(' ') }
+  }
+  if (!vitalsHasEntry(vitals)) {
+    return { ok: false, errors: {}, missing: true, message: VITALS_MISSING_MSG }
+  }
+  return { ok: true, errors: {}, missing: false }
+}
+
+function vitalsReadyForFinish(vitals, vitalsSkipConfirmed) {
+  return getVitalsFinishIssue(vitals, vitalsSkipConfirmed).ok
+}
+
+function sanitizeVitalInput(key, raw) {
+  const s = String(raw ?? '')
+  if (key === 'bp') return s.replace(/[^\d/.,\s]/g, '').slice(0, 14)
+  if (VITAL_RULES[key]) return s.replace(/[^\d.,]/g, '').slice(0, 10)
+  return s
+}
+
+export default function DoctorHome() {
+  const { performLogout } = useStaffLogout()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const navInit = useMemo(() => readDoctorNavState(location), [])
+  const { token, user } = getSession()
+  const currentStaffRole = staffRole(user)
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const [startingAppointmentId, setStartingAppointmentId] = useState('')
+
+  // Bác sĩ chỉ thấy lịch sau khi tiếp nhận xác nhận (confirmed/examined), không hiển thị pending/cancelled.
+  const [filterStatus, setFilterStatus] = useState(navInit.statusFilter)
+  const [filterFrom, setFilterFrom] = useState(navInit.fromDate)
+  const [filterTo, setFilterTo] = useState(navInit.toDate)
+  /** Tìm nhanh trong danh sách đã tải: mã lịch hẹn, mã BN hoặc tên. */
+  const [listSearch, setListSearch] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(navInit.filtersOpen)
+  const [qrListFocusTicket, setQrListFocusTicket] = useState('')
+  const [page, setPage] = useState(1)
+  const pageSize = 10
+
+  const [selectedApptId, setSelectedApptId] = useState(null)
+  const [examSubTab, setExamSubTab] = useState('info')
+  const [contextCollapsed, setContextCollapsed] = useState(false)
+
+  const [vitals, setVitals] = useState({
+    examAt: '',
+    clinicRoom: '',
+    temp: '',
+    breath: '',
+    bp: '',
+    pulse: '',
+    height: '',
+    weight: '',
+    bmi: '',
+    spo2: '',
+    symptoms: '',
+    diagnosis: '',
+    treatment: '',
+    notes: '',
+  })
+
+  const [prescriptionLines, setPrescriptionLines] = useState([emptyRxLine()])
+  const [clinicalOrders, setClinicalOrders] = useState([])
+  const [clinicalServices, setClinicalServices] = useState([])
+  const [clinicalBusy, setClinicalBusy] = useState('')
+  const [clinicalPass, setClinicalPass] = useState(null)
+  const [rxPickOpen, setRxPickOpen] = useState(false)
+  const [rxPickRow, setRxPickRow] = useState(0)
+  const [medicineQuery, setMedicineQuery] = useState('')
+  const [medicineResults, setMedicineResults] = useState([])
+  const [medicineSearchLoading, setMedicineSearchLoading] = useState(false)
+  const [medicineSearchErr, setMedicineSearchErr] = useState('')
+  const medicineCacheRef = useRef(new Map())
+  const medicineRequestKeyRef = useRef('')
+  const medicineRequestSeqRef = useRef(0)
+
+  const [clinicRooms, setClinicRooms] = useState([])
+  const [patientHistory, setPatientHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyErr, setHistoryErr] = useState('')
+
+  const [vitalsErrors, setVitalsErrors] = useState({})
+  const [vitalsFormError, setVitalsFormError] = useState('')
+  const [vitalsSkipConfirmed, setVitalsSkipConfirmed] = useState(false)
+  const [vitalsOpen, setVitalsOpen] = useState(false)
+  const [diagnosisIcd, setDiagnosisIcd] = useState(null)
+  const [diagnosisError, setDiagnosisError] = useState('')
+
+  const [examSaving, setExamSaving] = useState(false)
+  const [awaitingPrintLock, setAwaitingPrintLock] = useState(false)
+  const [emptyRxConfirmOpen, setEmptyRxConfirmOpen] = useState(false)
+  const [examSaveOk, setExamSaveOk] = useState('')
+  const [examSaveErr, setExamSaveErr] = useState('')
+  const [finishAttempted, setFinishAttempted] = useState(false)
+  const flashTimerRef = useRef(null)
+  const examLoadSeqRef = useRef(0)
+  const itemsRef = useRef([])
+  const skipNextActiveVisitRestoreRef = useRef(false)
+  const qrScanDoneRef = useRef(false)
+  const listSearchRef = useRef(null)
+
+  const [qrOpen, setQrOpen] = useState(false)
+  const [qrErr, setQrErr] = useState('')
+
+  function clearFlashTimer() {
+    if (flashTimerRef.current) {
+      clearTimeout(flashTimerRef.current)
+      flashTimerRef.current = null
+    }
+  }
+
+  function flashOk(msg) {
+    clearFlashTimer()
+    setExamSaveErr('')
+    setExamSaveOk(msg)
+    flashTimerRef.current = setTimeout(() => {
+      setExamSaveOk('')
+      flashTimerRef.current = null
+    }, 5000)
+  }
+
+  function flashErr(msg) {
+    clearFlashTimer()
+    setExamSaveOk('')
+    setExamSaveErr(msg)
+    flashTimerRef.current = setTimeout(() => {
+      setExamSaveErr('')
+      flashTimerRef.current = null
+    }, 5000)
+  }
+
+  useEffect(() => {
+    return () => clearFlashTimer()
+  }, [])
+
+  useEffect(() => {
+    itemsRef.current = items
+  }, [items])
+
+  const applyTicketFromQr = useCallback((raw) => {
+    const code = ticketFromQrPayload(raw)
+    if (!code) return
+    setListSearch(code)
+    setQrListFocusTicket(code)
+    setPage(1)
+    const hit = (itemsRef.current || []).find(
+      (a) => String(a?.ticket || '').trim().toLowerCase() === code.toLowerCase(),
+    )
+    if (hit) {
+      setSelectedApptId(String(hit?.id || hit?._id || ''))
+      flashOk(`Đã mở lịch ${code}`)
+    } else {
+      flashErr(`Không thấy lịch ${code} trong danh sách của bạn. Kiểm tra ngày khám hoặc bộ lọc.`)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!qrOpen) return undefined
+    setQrErr('')
+    qrScanDoneRef.current = false
+    const html5 = new Html5Qrcode(DR_QR_READER_ELEMENT_ID, { verbose: false })
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } }
+
+    const onScan = async (decodedText) => {
+      if (qrScanDoneRef.current) return
+      const code = ticketFromQrPayload(decodedText)
+      if (!code) return
+      qrScanDoneRef.current = true
+      try {
+        await html5.stop()
+      } catch {
+        /* ignore */
+      }
+      try {
+        html5.clear()
+      } catch {
+        /* ignore */
+      }
+      setQrOpen(false)
+      applyTicketFromQr(code)
+    }
+
+    const onFail = () => {}
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        await html5.start({ facingMode: 'environment' }, config, onScan, onFail)
+      } catch {
+        if (cancelled) return
+        try {
+          await html5.start({ facingMode: 'user' }, config, onScan, onFail)
+        } catch (e2) {
+          if (!cancelled) setQrErr(e2?.message || 'Không mở được camera.')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      let stopPromise
+      try {
+        stopPromise = html5.stop()
+      } catch {
+        stopPromise = Promise.resolve()
+      }
+      void stopPromise
+        .catch(() => {})
+        .finally(() => {
+          try {
+            html5.clear()
+          } catch {
+            /* ignore */
+          }
+        })
+    }
+  }, [qrOpen, applyTicketFromQr])
+
+  useEffect(() => {
+    if (!token || !user) {
+      navigate('/login', { replace: true })
+    } else if (currentStaffRole === 'receptionist' || currentStaffRole === 'registration') {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [token, user, currentStaffRole, navigate])
+
+  useEffect(() => {
+    void listClinicRooms()
+      .then((rows) => setClinicRooms(Array.isArray(rows) ? rows : []))
+      .catch(() => setClinicRooms([]))
+  }, [])
+
+  // Bộ lọc từ Thống kê — mỗi lần bấm thẻ KPI áp dụng lại
+  useEffect(() => {
+    const navAt = location.state?.dashNavAt
+    if (navAt == null || navAt === '') return
+    const n = readDoctorNavState(location)
+    setFilterFrom(n.fromDate)
+    setFilterTo(n.toDate)
+    setFilterStatus(n.statusFilter)
+    setFiltersOpen(n.filtersOpen)
+    setListSearch('')
+    setQrListFocusTicket('')
+    setPage(1)
+  }, [location.state?.dashNavAt])
+
+  useEffect(() => {
+    void listClinicRooms()
+      .then((rows) => setClinicRooms(Array.isArray(rows) ? rows : []))
+      .catch(() => setClinicRooms([]))
+  }, [])
+
+  // Bộ lọc từ Thống kê — mỗi lần bấm thẻ KPI áp dụng lại
+  useEffect(() => {
+    const navAt = location.state?.dashNavAt
+    if (navAt == null || navAt === '') return
+    const n = readDoctorNavState(location)
+    setFilterFrom(n.fromDate)
+    setFilterTo(n.toDate)
+    setFilterStatus(n.statusFilter)
+    setFiltersOpen(n.filtersOpen)
+    setListSearch('')
+    setQrListFocusTicket('')
+    setPage(1)
+  }, [location.state?.dashNavAt])
+
+  const loadAppointments = useMemo(() => {
+    return async ({ silent } = { silent: false }) => {
+      if (!token) return
+      if (currentStaffRole !== 'doctor') {
+        queueMicrotask(() => setLoading(false))
+        return
+      }
+      if (!silent) setLoading(true)
+      if (silent) setRefreshing(true)
+      try {
+        const rows = await listDoctorAppointments({ token })
+        setError('')
+        setItems(rows || [])
+      } catch (err) {
+        setError(err?.message || 'Không lấy được lịch khám.')
+        setItems([])
+      } finally {
+        if (!silent) setLoading(false)
+        setRefreshing(false)
+      }
+    }
+  }, [token, currentStaffRole])
+
+  useEffect(() => {
+    let mounted = true
+    void (async () => {
+      if (!mounted) return
+      await loadAppointments({ silent: false })
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [loadAppointments])
+
+  // Lắng nghe sự kiện Realtime cập nhật danh sách khám của Bác sĩ
+  useAppointmentsSocket({
+    enabled: Boolean(token && currentStaffRole === 'doctor'),
+    onAppointmentBooked: useCallback((event) => {
+      console.log('[DoctorHome] Realtime appointment:booked received:', event)
+      void loadAppointments({ silent: true })
+      if (event.doctorId && user?.doctor?.id && event.doctorId === user.doctor.id) {
+        flashOk(`🔔 Có bệnh nhân vừa đặt lịch: ${event.patientName || 'Bệnh nhân'} (#${event.bookingCode})`)
+      }
+    }, [loadAppointments, user?.doctor?.id]),
+    onStatusChanged: useCallback(() => {
+      console.log('[DoctorHome] Realtime appointment:status_changed received, refreshing list...')
+      void loadAppointments({ silent: true })
+    }, [loadAppointments]),
+  })
+
+  // After F5, React state is lost. Restore by finding the currently active (CHECKED_IN) appointment.
+  useEffect(() => {
+    if (!items.length) return
+    const selectedStillExists = selectedApptId && items.some((item) => String(item?.id || item?._id) === String(selectedApptId))
+    if (selectedStillExists) return
+    if (skipNextActiveVisitRestoreRef.current) {
+      skipNextActiveVisitRestoreRef.current = false
+      return
+    }
+    const activeVisit = items.find((item) => String(item?.workflowStatus || '').toUpperCase() === 'CHECKED_IN')
+    if (activeVisit) setSelectedApptId(String(activeVisit.id || activeVisit._id || ''))
+  }, [items, selectedApptId])
+
+  const filteredQueue = useMemo(() => {
+    let rows = [...(items || [])]
+    rows.sort((a, b) => {
+      const da = dateKeyFromAppointmentDate(a?.appointmentDate)
+      const db = dateKeyFromAppointmentDate(b?.appointmentDate)
+      if (da !== db) return String(da).localeCompare(String(db))
+      return String(a?.startTime || '').localeCompare(String(b?.startTime || ''))
+    })
+
+    // Chỉ hiển thị lịch lễ tân đã xác nhận + thu phí, hoặc đã khám xong (xem lại).
+    rows = rows.filter((a) => {
+      const st = String(a?.status || '').toLowerCase()
+      const workflow = String(a?.workflowStatus || '').toUpperCase()
+      const paid = isAppointmentPaymentPaid(a)
+      if (st === 'cancelled' || st === 'pending') return false
+      if (st === 'confirmed' && !paid) return false
+      if (workflow && !['CHECKED_IN', 'COMPLETED'].includes(workflow)) return false
+      if (!(st === 'confirmed' || isAppointmentExamined(st))) return false
+      return true
+    })
+
+    if (filterStatus !== 'all') {
+      rows = rows.filter((a) => String(a?.status || '').toLowerCase() === filterStatus)
+    }
+
+    const focus = qrListFocusTicket.trim().toLowerCase()
+    if (focus) {
+      const hits = rows.filter((a) => String(a?.ticket || '').toLowerCase() === focus)
+      return hits.length ? hits : []
+    }
+
+    const q = listSearch.trim().toLowerCase()
+    if (q) {
+      rows = rows.filter((a) => {
+        const ticket = String(a?.ticket || a?.id || '').toLowerCase()
+        const code = String(a?.patient?.patientCode || '').toLowerCase()
+        const name = patientLabel(a).toLowerCase()
+        return ticket.includes(q) || code.includes(q) || name.includes(q)
+      })
+    }
+    return rows
+  }, [items, filterFrom, filterTo, filterStatus, listSearch, qrListFocusTicket])
+
+  const waitingQueue = useMemo(() => {
+    return filteredQueue.filter((appointment) => {
+      const workflowStatus = String(appointment?.workflowStatus || '').toUpperCase()
+      return workflowStatus ? workflowStatus === 'CHECKED_IN' : String(appointment?.status || '').toLowerCase() === 'confirmed'
+    })
+  }, [filteredQueue])
+
+  const inExaminationQueue = useMemo(() => filteredQueue.filter((appointment) =>
+    String(appointment?.workflowStatus || '').toUpperCase() === 'CHECKED_IN'
+  ), [filteredQueue])
+
+  async function startMedicalVisit(appointment) {
+    const id = String(appointment?.id || appointment?._id || '')
+    if (!id || startingAppointmentId) return false
+    setStartingAppointmentId(id)
+    setExamSaveErr('')
+    try {
+      const result = await updateAppointmentStatus({ token, appointmentId: id, status: 'in_examination' })
+      const updated = result?.appointment
+      setItems((rows) => rows.map((row) => String(row?.id || row?._id) === id ? { ...row, ...(updated || {}), status: 'confirmed', workflowStatus: 'CHECKED_IN' } : row))
+      setSelectedApptId(id)
+      flashOk(`Đã bắt đầu khám cho ${patientLabel(appointment)}.`)
+      return true
+    } catch (startError) {
+      flashErr(startError?.message || 'Không bắt đầu khám được.')
+      return false
+    } finally {
+      setStartingAppointmentId('')
+    }
+  }
+
+  async function openClinicalOrdering() {
+    if (!selectedAppt) {
+      flashErr('Vui lòng chọn bệnh nhân trước khi thêm chỉ định.')
+      return
+    }
+    const workflow = String(selectedAppt.workflowStatus || '').toUpperCase()
+    if (workflow === 'CHECKED_IN') {
+      const started = await startMedicalVisit(selectedAppt)
+      if (!started) return
+    } else if (workflow !== 'CHECKED_IN') {
+      flashErr(doctorExamLockMessage(selectedAppt))
+      return
+    }
+    setExamSubTab('clinical')
+  }
+
+  const totalFiltered = filteredQueue.length
+  const pageCount = Math.max(1, Math.ceil(totalFiltered / pageSize))
+  const safePage = Math.min(page, pageCount)
+  const pagedRows = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return filteredQueue.slice(start, start + pageSize)
+  }, [filteredQueue, safePage])
+
+  useEffect(() => {
+    setPage(1)
+  }, [filterFrom, filterTo, filterStatus, listSearch, qrListFocusTicket])
+
+  const selectedAppt = useMemo(() => {
+    if (!selectedApptId) return null
+    return items.find((a) => String(a?.id || a?._id) === String(selectedApptId)) || null
+  }, [items, selectedApptId])
+
+  const clinicalRoomsForSelectedBranch = useMemo(() => {
+    const branchId = String(selectedAppt?.branch?.id || selectedAppt?.branchId || '').trim()
+    if (!branchId) return []
+    return clinicRooms.filter((room) => String(room?.branchId || room?.branch?.id || '').trim() === branchId)
+  }, [clinicRooms, selectedAppt])
+
+  useEffect(() => {
+    if (!selectedAppt || clinicRooms.length === 0) return
+    const allowed = new Set(clinicalRoomsForSelectedBranch.map((room) => String(room.id)))
+    setClinicalOrders((orders) => orders.map((order) => order.status === 'ORDERED' && order.assignedRoomId && !allowed.has(String(order.assignedRoomId)) ? { ...order, assignedRoomId: '' } : order))
+  }, [selectedAppt?.id, clinicRooms, clinicalRoomsForSelectedBranch])
+
+  const receptionClinicRoomId = useMemo(
+    () => String(selectedAppt?.clinicRoom || '').trim(),
+    [selectedAppt?.clinicRoom],
+  )
+
+  const receptionClinicRoomDisplay = useMemo(() => {
+    if (!receptionClinicRoomId) {
+      return { label: '—', hint: 'Lễ tân chưa chọn phòng tiếp nhận' }
+    }
+    return {
+      label: clinicRoomLabel(receptionClinicRoomId, clinicRooms) || receptionClinicRoomId,
+      hint: 'Phòng do lễ tân gán khi xác nhận lịch',
+    }
+  }, [receptionClinicRoomId, clinicRooms])
+
+  const examLocked = useMemo(() => {
+    if (!selectedAppt) return true
+    if (awaitingPrintLock) return true
+    return !canDoctorEditExamAppt(selectedAppt)
+  }, [selectedAppt, awaitingPrintLock])
+
+  const examLockMessage = useMemo(() => doctorExamLockMessage(selectedAppt), [selectedAppt])
+
+  const rxHasMedicines = prescriptionHasMedicines(prescriptionLines)
+  const rxDisplayLines = useMemo(() => {
+    if (!examLocked) return prescriptionLines
+    return filterFilledRxLines(prescriptionLines)
+  }, [examLocked, prescriptionLines])
+  const showRxEmptyReadonly = examLocked && !rxHasMedicines
+
+  const historyTimeline = useMemo(() => {
+    return [...patientHistory]
+      .filter(isHistoryVisit)
+      .sort((a, b) => historySortKey(b).localeCompare(historySortKey(a)))
+  }, [patientHistory])
+
+  const finishExamCheck = useMemo(() => {
+    const reasons = []
+    if (!diagnosisIcd?.code) {
+      reasons.push('Chọn chẩn đoán ICD-10 từ danh sách gợi ý.')
+    }
+    const vitalIssue = getVitalsFinishIssue(vitals, vitalsSkipConfirmed)
+    if (!vitalIssue.ok && vitalIssue.message) {
+      reasons.push(vitalIssue.message)
+    }
+    if (prescriptionHasMedicines(prescriptionLines)) {
+      const rxCheck = validateRxLinesForFinish(prescriptionLines)
+      if (!rxCheck.ok) reasons.push(rxCheck.message)
+      const rxCatalog = validateRxCatalogPick(prescriptionLines)
+      if (!rxCatalog.ok) reasons.push(rxCatalog.message)
+    }
+    return { ok: reasons.length === 0, reasons }
+  }, [diagnosisIcd?.code, vitals, vitalsSkipConfirmed, prescriptionLines])
+
+  const canFinishExam = finishExamCheck.ok
+
+  /** Gợi ý vàng theo tab — tab Đơn thuốc không nhắc sinh hiệu (checkbox ở tab Thông tin). */
+  const finishHintsForTab = useMemo(() => {
+    if (examSubTab === 'info') return finishExamCheck.reasons
+    return finishExamCheck.reasons.filter((r) => {
+      const s = String(r).toLowerCase()
+      if (s.includes('sinh hiệu') || s.includes('bỏ qua sinh hiệu')) return false
+      return true
+    })
+  }, [finishExamCheck.reasons, examSubTab])
+
+  const finishDisabledTitle = finishHintsForTab[0] || finishExamCheck.reasons[0] || undefined
+
+  function applyVitalsFinishFeedback(issue) {
+    if (!issue || issue.ok) {
+      setVitalsFormError('')
+      setVitalsErrors({})
+      return
+    }
+    if (issue.missing) {
+      setVitalsFormError(issue.message || VITALS_MISSING_MSG)
+      setVitalsErrors({})
+    } else {
+      setVitalsFormError('')
+      setVitalsErrors(issue.errors || {})
+    }
+    setVitalsOpen(true)
+  }
+
+  function setVitalField(key, raw) {
+    const value = sanitizeVitalInput(key, raw)
+    setVitals((s) => ({ ...s, [key]: value }))
+    setVitalsErrors((errs) => ({ ...errs, [key]: validateVitalField(key, value) }))
+    if (value && value !== VITAL_PLACEHOLDER) {
+      setVitalsSkipConfirmed(false)
+      setVitalsFormError('')
+    }
+  }
+
+  function blurVitalField(key) {
+    const value = String(vitals[key] ?? '').trim()
+    if (value === VITAL_PLACEHOLDER) {
+      setVitals((s) => ({ ...s, [key]: '' }))
+      setVitalsErrors((errs) => ({ ...errs, [key]: '' }))
+      return
+    }
+    setVitalsErrors((errs) => ({ ...errs, [key]: validateVitalField(key, value) }))
+  }
+
+  function buildExamPayload() {
+    const icdCode = String(diagnosisIcd?.code || '').trim()
+    const icdName = String(diagnosisIcd?.name || '').trim()
+    const roomFromReception = receptionClinicRoomId
+    return {
+      examAt: vitals.examAt,
+      clinicRoom: roomFromReception,
+      temp: vitals.temp,
+      breath: vitals.breath,
+      bp: vitals.bp,
+      pulse: vitals.pulse,
+      height: vitals.height,
+      weight: vitals.weight,
+      bmi: vitals.bmi,
+      spo2: vitals.spo2,
+      symptoms: vitals.symptoms,
+      diagnosis: icdCode && icdName ? formatIcdLabel(icdCode, icdName) : '',
+      diagnosisCode: icdCode,
+      diagnosisName: icdName,
+      treatment: vitals.treatment,
+      notes: vitals.notes,
+      treat: vitals.treatment,
+      vitalsSkipped: vitalsSkipConfirmed,
+      prescriptionLines: prescriptionLines.map(rxLineToApiPayload).filter(Boolean),
+      prescription: prescriptionLines.map(rxLineToLegacyPrescriptionItem).filter(Boolean),
+      clinicalOrders: clinicalOrders.map((order) => ({ serviceId: order.serviceId, assignedRoomId: order.assignedRoomId || '', note: order.note || '' })),
+    }
+  }
+
+  async function handleSaveMedicalVisit({ clinicalOnly = false, draftOnly = false } = {}) {
+    if (!token || examLocked || examSaving) return
+    const appointmentId = String(selectedAppt?.id || selectedAppt?._id || '').trim()
+    if (!appointmentId) {
+      flashErr('Chưa chọn lịch khám.')
+      return
+    }
+    if (clinicalOnly && clinicalOrders.length === 0) {
+      flashErr('Vui lòng chọn ít nhất một dịch vụ cận lâm sàng.')
+      return
+    }
+    if (clinicalOnly && clinicalOrders.some((order) => !order.assignedRoomId)) {
+      flashErr('Vui lòng chọn phòng thực hiện cho tất cả chỉ định.')
+      return
+    }
+
+    if (!clinicalOnly && !draftOnly) {
+      const vitalIssue = getVitalsFinishIssue(vitals, vitalsSkipConfirmed)
+      if (!vitalIssue.ok) {
+        applyVitalsFinishFeedback(vitalIssue)
+        flashErr(vitalIssue.message || 'Sinh hiệu không hợp lệ.')
+        return
+      }
+
+      if (!diagnosisIcd?.code) {
+        setDiagnosisError('Vui lòng chọn chẩn đoán ICD-10 từ danh sách gợi ý.')
+        flashErr('Vui lòng chọn chẩn đoán ICD-10 từ danh sách gợi ý.')
+        return
+      }
+      setDiagnosisError('')
+    }
+
+    setExamSaving(true)
+    clearFlashTimer()
+    setExamSaveOk('')
+    setExamSaveErr('')
+    try {
+      const payload = buildExamPayload()
+      if (draftOnly) payload.draftOnly = true
+      if (clinicalOnly) {
+        payload.clinicalOnly = true
+        delete payload.prescriptionLines
+        delete payload.prescription
+      }
+      const saved = await saveMedicalVisit({ token, appointmentId, payload })
+      setClinicalOrders(Array.isArray(saved?.medicalVisit?.clinicalOrders) ? saved.medicalVisit.clinicalOrders : clinicalOrders)
+      if (clinicalOnly) {
+        setExamSubTab('clinical')
+        try {
+          setClinicalPass(await getClinicalOrderPass(appointmentId))
+          flashOk('Đã lưu chỉ định và tạo QR thành công.')
+        } catch (passError) {
+          setClinicalPass(null)
+          flashErr(`Đã lưu chỉ định nhưng chưa tạo được QR: ${passError?.message || 'Lỗi không xác định.'}`)
+        }
+      } else {
+        flashOk(draftOnly ? 'Đã lưu nháp hồ sơ khám.' : 'Đã lưu phiên khám.')
+      }
+    } catch (e) {
+      flashErr(e?.message || 'Không lưu được.')
+    } finally {
+      setExamSaving(false)
+    }
+  }
+
+  function openPrescriptionPrint() {
+    if (!selectedAppt) return false
+    const view = buildPrescriptionPrintViewFromExam({
+      selectedAppt,
+      vitals,
+      diagnosisIcd,
+      prescriptionLines,
+      doctorUser: user,
+    })
+    const ok = printPrescription(view)
+    if (!ok) flashErr('Không mở được hộp thoại in. Cho phép popup/in trên trình duyệt.')
+    return ok
+  }
+
+  function flashFinishBlockers() {
+    if (finishExamCheck.ok) return true
+    if (!diagnosisIcd?.code) {
+      setDiagnosisError('Bắt buộc chọn chẩn đoán ICD-10 (tab Thông tin khám bệnh).')
+    }
+    applyVitalsFinishFeedback(getVitalsFinishIssue(vitals, vitalsSkipConfirmed))
+    const msg = finishExamCheck.reasons.join(' ')
+    flashErr(msg || 'Chưa đủ điều kiện kết thúc khám.')
+    return false
+  }
+
+  function requestFinishExam() {
+    if (examLocked || examSaving) return
+    setFinishAttempted(true)
+    if (!flashFinishBlockers()) return
+    if (!prescriptionHasMedicines(prescriptionLines)) {
+      setEmptyRxConfirmOpen(true)
+      return
+    }
+    void handleFinishExam({ withPrint: false })
+  }
+
+  async function handleFinishExam({ withPrint = false, skipEmptyRxConfirm = false } = {}) {
+    if (!token || !selectedAppt || examLocked || examSaving) return
+    const appointmentId = String(selectedAppt?.id || selectedAppt?._id || '').trim()
+    if (!appointmentId) return
+
+    if (withPrint && !skipEmptyRxConfirm && !prescriptionHasMedicines(prescriptionLines)) {
+      setEmptyRxConfirmOpen(true)
+      return
+    }
+
+    if (!finishExamCheck.ok) {
+      const msg = finishExamCheck.reasons[0] || 'Chưa đủ điều kiện kết thúc khám.'
+      if (!diagnosisIcd?.code) {
+        setDiagnosisError('Bắt buộc chọn chẩn đoán ICD-10 trước khi kết thúc khám.')
+      }
+      applyVitalsFinishFeedback(getVitalsFinishIssue(vitals, vitalsSkipConfirmed))
+      flashErr(msg)
+      return
+    }
+    setDiagnosisError('')
+    setVitalsFormError('')
+
+    const printView = withPrint
+      ? buildPrescriptionPrintViewFromExam({
+          selectedAppt,
+          vitals,
+          diagnosisIcd,
+          prescriptionLines,
+          doctorUser: user,
+        })
+      : null
+
+    setExamSaving(true)
+    clearFlashTimer()
+    setExamSaveOk('')
+    setExamSaveErr('')
+    try {
+      await saveMedicalVisit({ token, appointmentId, payload: buildExamPayload() })
+
+      if (withPrint && printView) {
+        setAwaitingPrintLock(true)
+        flashOk(
+          printView.hasMedicines
+            ? 'Đã lưu. Đang mở in đơn thuốc (02 bản) — sau khi in hồ sơ sẽ khóa.'
+            : 'Đã lưu. Đang mở phiếu khám bệnh (02 bản) — sau khi in hồ sơ sẽ khóa.',
+        )
+        window.setTimeout(() => {
+          const ok = printPrescription(printView, {
+            onPrintInvoked: async () => {
+              try {
+                await finishExamAppointment({ token, appointmentId })
+                await loadAppointments({ silent: true })
+                flashOk(
+                  printView.hasMedicines
+                    ? 'Đã in đơn và kết thúc khám — hồ sơ chỉ xem.'
+                    : 'Đã in phiếu khám và kết thúc — hồ sơ chỉ xem.',
+                )
+              } catch (e) {
+                flashErr(e?.message || 'Đã in nhưng không khóa hồ sơ được. Liên hệ IT.')
+              } finally {
+                setAwaitingPrintLock(false)
+                setExamSaving(false)
+              }
+            },
+          })
+          if (!ok) {
+            setAwaitingPrintLock(false)
+            setExamSaving(false)
+            flashErr('Không mở được hộp thoại in. Hồ sơ chưa kết thúc — thử lại hoặc kiểm tra popup.')
+          }
+        }, 300)
+        return
+      }
+
+      await finishExamAppointment({ token, appointmentId })
+      skipNextActiveVisitRestoreRef.current = true
+      await loadAppointments({ silent: true })
+      setSelectedApptId(null)
+      setExamSubTab('info')
+      setFinishAttempted(false)
+      flashOk('Đã kết thúc khám.')
+    } catch (e) {
+      flashErr(e?.message || 'Không kết thúc khám được.')
+      setAwaitingPrintLock(false)
+      setExamSaving(false)
+    } finally {
+      if (!withPrint) setExamSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    setAwaitingPrintLock(false)
+    setExamSaving(false)
+    setFinishAttempted(false)
+  }, [selectedApptId])
+
+  useEffect(() => {
+    if (!token || !selectedAppt) return undefined
+    const appointmentId = String(selectedAppt?.id || selectedAppt?._id || '').trim()
+    if (!appointmentId) return undefined
+
+    const d = dateKeyFromAppointmentDate(selectedAppt?.appointmentDate)
+    const t = timeLabel(selectedAppt?.startTime)
+    const fallbackExamAt =
+      d && t
+        ? `${formatDobVi(`${d}T12:00:00`)} ${t}`
+        : formatDobVi(new Date()) + ` ${pad2(new Date().getHours())}:${pad2(new Date().getMinutes())}`
+
+    const seq = ++examLoadSeqRef.current
+
+    void (async () => {
+      try {
+        const data = await getMedicalVisitByAppointment({ token, appointmentId })
+        if (seq !== examLoadSeqRef.current) return
+        const ex = data?.medicalVisit
+        setVitals((s) => ({
+          ...s,
+          examAt: String(ex?.examAt || '').trim() || fallbackExamAt,
+          clinicRoom: receptionClinicRoomId || String(ex?.clinicRoom || '').trim() || s.clinicRoom,
+          temp: String(ex?.temp || '').trim() || '',
+          breath: String(ex?.breath || '').trim() || '',
+          bp: String(ex?.bp || '').trim() || '',
+          pulse: String(ex?.pulse || '').trim() || '',
+          height: String(ex?.height || '').trim() || '',
+          weight: String(ex?.weight || '').trim() || '',
+          bmi: String(ex?.bmi || '').trim() || '',
+          spo2: String(ex?.spo2 || '').trim() || '',
+          symptoms: String(ex?.symptoms || '').trim() || String(selectedAppt?.note || '').trim() || '',
+          diagnosis: String(ex?.diagnosis || '').trim() || '',
+          treatment: String(ex?.treatment || '').trim() || '',
+          notes: String(ex?.notes ?? ex?.note ?? '').trim() || '',
+        }))
+        const icd = parseIcdFromMedicalVisit(ex)
+        setDiagnosisIcd(icd ? { code: icd.code, name: icd.name } : null)
+        setDiagnosisError('')
+        setPrescriptionLines(normalizeRxLines(ex?.prescriptionLines, ex?.prescription))
+        const loadedClinicalOrders = Array.isArray(ex?.clinicalOrders) ? ex.clinicalOrders : []
+        setClinicalOrders(loadedClinicalOrders)
+        if (loadedClinicalOrders.length > 0) {
+          try {
+            const pass = await getClinicalOrderPass(appointmentId)
+            if (seq !== examLoadSeqRef.current) return
+            setClinicalPass(pass)
+            setExamSubTab('clinical')
+          } catch {
+            if (seq !== examLoadSeqRef.current) return
+            setClinicalPass(null)
+          }
+        } else {
+          setClinicalPass(null)
+        }
+        setVitalsSkipConfirmed(Boolean(ex?.vitalsSkipped))
+        setVitalsErrors({})
+        setVitalsFormError('')
+      } catch {
+        if (seq !== examLoadSeqRef.current) return
+        setVitals((s) => ({
+          ...s,
+          examAt: s.examAt || fallbackExamAt,
+          symptoms: String(selectedAppt?.note || '').trim() || s.symptoms,
+        }))
+        setDiagnosisIcd(null)
+        setDiagnosisError('')
+        setPrescriptionLines([emptyRxLine()])
+        setClinicalOrders([])
+        setVitalsSkipConfirmed(false)
+        setVitalsErrors({})
+        setVitalsFormError('')
+      }
+    })()
+
+    return () => {
+      // invalidates in-flight response
+      examLoadSeqRef.current += 1
+    }
+  }, [token, selectedApptId, receptionClinicRoomId])
+
+  useEffect(() => {
+    if (!token) return
+    void listClinicalServices()
+      .then((data) => setClinicalServices(Array.isArray(data?.items) ? data.items.filter((item) => ['LAB_TEST', 'IMAGING'].includes(item.category)) : []))
+      .catch(() => setClinicalServices([]))
+  }, [token])
+
+  useEffect(() => {
+    setVitalsSkipConfirmed(false)
+    setVitalsFormError('')
+  }, [selectedApptId])
+
+  useEffect(() => {
+    if (!token || examSubTab !== 'history' || !selectedAppt) {
+      setPatientHistory([])
+      setHistoryErr('')
+      return undefined
+    }
+    const patientId = String(selectedAppt?.patient?.id || selectedAppt?.patientId || '').trim()
+    if (!patientId) {
+      setPatientHistory([])
+      setHistoryErr('Lịch này thiếu mã bệnh nhân.')
+      return undefined
+    }
+
+    let cancelled = false
+    setHistoryLoading(true)
+    setHistoryErr('')
+    void listPatientHistory({ token, patientId })
+      .then((rows) => {
+        if (cancelled) return
+        setPatientHistory(Array.isArray(rows) ? rows : [])
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setPatientHistory([])
+        setHistoryErr(e?.message || 'Không tải được lịch sử.')
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [token, examSubTab, selectedApptId])
+
+  useEffect(() => {
+    if (!rxPickOpen || !token) return undefined
+
+    const q = String(medicineQuery || '').trim()
+    const requestKey = `${token}:${q.toLocaleLowerCase('vi')}`
+    const cached = medicineCacheRef.current.get(requestKey)
+    if (cached) {
+      setMedicineResults(cached)
+      setMedicineSearchLoading(false)
+      setMedicineSearchErr('')
+      return undefined
+    }
+
+    // React Strict Mode hoặc một render lặp không được tạo lại cùng request đang chạy.
+    if (medicineRequestKeyRef.current === requestKey) return undefined
+    medicineRequestKeyRef.current = requestKey
+    const requestSeq = ++medicineRequestSeqRef.current
+    const delay = q.length > 0 ? 280 : 0
+
+    const timer = setTimeout(() => {
+      setMedicineSearchLoading(true)
+      setMedicineSearchErr('')
+      void searchMedicines({ token, q, limit: q ? 30 : 50 })
+        .then((rows) => {
+          if (requestSeq !== medicineRequestSeqRef.current) return
+          const nextRows = Array.isArray(rows) ? rows : []
+          medicineCacheRef.current.set(requestKey, nextRows)
+          setMedicineResults(nextRows)
+        })
+        .catch((e) => {
+          if (requestSeq !== medicineRequestSeqRef.current) return
+          setMedicineResults([])
+          setMedicineSearchErr(e?.message || 'Không tải được danh mục thuốc. Kiểm tra API be_clinic đang chạy.')
+        })
+        .finally(() => {
+          if (medicineRequestKeyRef.current === requestKey) medicineRequestKeyRef.current = ''
+          if (requestSeq === medicineRequestSeqRef.current) setMedicineSearchLoading(false)
+        })
+    }, delay)
+
+    return () => {
+      clearTimeout(timer)
+      if (medicineRequestSeqRef.current === requestSeq) medicineRequestSeqRef.current += 1
+      if (medicineRequestKeyRef.current === requestKey) medicineRequestKeyRef.current = ''
+    }
+  }, [rxPickOpen, medicineQuery, token])
+
+  function openMedicinePicker(rowIndex) {
+    setRxPickRow(rowIndex)
+    setMedicineQuery('')
+    setMedicineResults([])
+    setMedicineSearchErr('')
+    setRxPickOpen(true)
+  }
+
+  function applyMedicineToRow(med) {
+    const row = Number(rxPickRow)
+    if (!Number.isFinite(row) || row < 0) return
+    setPrescriptionLines((lines) =>
+      lines.map((line, i) =>
+        i === row
+          ? patchRxLine(
+              {
+                ...line,
+                medicineId: String(med?.id || '').trim(),
+                medicineCode: String(med?.code || '').trim(),
+                medicineName: formatMedicineLabel(med),
+                medicineDisplayName: formatMedicineLabel(med),
+                medicineGeneric: String(
+                  med?.genericName ?? med?.activeIngredient ?? med?.hoatChat ?? med?.notes ?? '',
+                ).trim(),
+                medicineBrand: String(med?.brandName ?? med?.brand ?? med?.name ?? '').trim(),
+                unit: String(med?.unit || '').trim(),
+              },
+              {},
+            )
+          : line,
+      ),
+    )
+    setRxPickOpen(false)
+  }
+
+  function updateRxLine(index, patch) {
+    setPrescriptionLines((lines) => lines.map((line, i) => (i === index ? patchRxLine(line, patch) : line)))
+  }
+
+  function addRxLine() {
+    setPrescriptionLines((lines) => [...lines, emptyRxLine()])
+  }
+
+  function removeRxLine(index) {
+    setPrescriptionLines((lines) => {
+      if (lines.length <= 1) return lines
+      return lines.filter((_, i) => i !== index)
+    })
+  }
+
+  const selectRelativePatient = useCallback(
+    (delta) => {
+      const ids = filteredQueue
+        .map((a) => String(a?.id || a?._id || '').trim())
+        .filter(Boolean)
+      if (!ids.length) return
+      const cur = String(selectedApptId || '')
+      let idx = ids.indexOf(cur)
+      if (idx < 0) {
+        const pick = delta > 0 ? 0 : ids.length - 1
+        setSelectedApptId(ids[pick])
+        setPage(Math.floor(pick / pageSize) + 1)
+        return
+      }
+      const next = Math.max(0, Math.min(ids.length - 1, idx + delta))
+      setSelectedApptId(ids[next])
+      setPage(Math.floor(next / pageSize) + 1)
+    },
+    [filteredQueue, selectedApptId, pageSize],
+  )
+
+  const shortcutActionsRef = useRef({})
+  shortcutActionsRef.current = {
+    save: () => {
+      if (!examLocked && !examSaving) void handleSaveMedicalVisit()
+    },
+    finishAndPrint: () => {
+      if (!examLocked && !examSaving) requestFinishExam()
+    },
+    focusSearch: () => {
+      listSearchRef.current?.focus()
+      listSearchRef.current?.select?.()
+    },
+    qr: () => {
+      setQrErr('')
+      setQrOpen(true)
+    },
+    refresh: () => {
+      if (!refreshing) void loadAppointments({ silent: true })
+    },
+    tab: (tabId) => setExamSubTab(tabId),
+    prevPatient: () => selectRelativePatient(-1),
+    nextPatient: () => selectRelativePatient(1),
+    escape: () => {
+      if (emptyRxConfirmOpen) setEmptyRxConfirmOpen(false)
+      else if (rxPickOpen) setRxPickOpen(false)
+      else if (qrOpen) setQrOpen(false)
+    },
+    modalOpen: rxPickOpen || qrOpen || emptyRxConfirmOpen,
+    canFinishExam,
+  }
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const a = shortcutActionsRef.current
+      runDoctorShortcut(
+        e,
+        {
+          onSave: () => a.save?.(),
+          onFinish: () => {
+            if (!examLocked && !examSaving) a.finishAndPrint?.()
+          },
+          onFocusSearch: () => a.focusSearch?.(),
+          onQr: () => a.qr?.(),
+          onRefresh: () => a.refresh?.(),
+          onTab: (tabId) => a.tab?.(tabId),
+          onPrevPatient: () => a.prevPatient?.(),
+          onNextPatient: () => a.nextPatient?.(),
+          onEscape: () => a.escape?.(),
+        },
+        { modalOpen: a.modalOpen },
+      )
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  function logout() {
+    void performLogout()
+  }
+
+  function addClinicalOrder(serviceId) {
+    const service = clinicalServices.find((item) => String(item.id) === String(serviceId))
+    if (!service || clinicalOrders.some((item) => String(item.serviceId) === String(service.id))) return
+    setClinicalOrders((items) => [...items, { serviceId: service.id, serviceCode: service.code, serviceName: service.name, category: service.category, price: service.price, status: 'ORDERED', assignedRoomId: '', note: '' }])
+  }
+
+  if (!token || !user) return null
+
+  return (
+    <div className="min-h-screen bg-slate-50 relative">
+      {examSaveOk ? <div className="fixed top-16 right-3 left-3 sm:left-auto sm:right-6 z-[100] sm:max-w-md border border-emerald-300 bg-emerald-50 px-4 sm:px-5 py-3 sm:py-4 font-bold text-emerald-800 shadow-lg rounded" role="status">✓ {examSaveOk}</div> : null}
+      {examSaveErr ? <div className="fixed top-16 right-3 left-3 sm:left-auto sm:right-6 z-[100] sm:max-w-md border border-red-300 bg-red-50 px-4 sm:px-5 py-3 sm:py-4 font-bold text-red-700 shadow-lg rounded" role="alert">{examSaveErr}</div> : null}
+      <DoctorAppHeader activeTab="exam" user={user} onLogout={logout} />
+
+      <main className="p-3.5 sm:p-5 md:p-6 max-w-[1680px] mx-auto w-full space-y-6 lg:pl-[256px]" role="main">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded border border-slate-200/90 shadow-xs">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Quản lý khám bệnh</h1>
+            <p className="text-xs text-slate-500 mt-0.5">{selectedAppt ? `Bệnh nhân hiện tại: ${patientLabel(selectedAppt)}` : 'Chọn bệnh nhân trong lịch khám để bắt đầu.'}</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => navigate('/dashboard')}>Lịch sử khám</button>
+            <button type="button" className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer" disabled={!selectedAppt || examLocked || examSaving} title={finishDisabledTitle} onClick={() => requestFinishExam()}>{examSaving ? 'Đang hoàn thành…' : '✓ Hoàn thành khám'}</button>
+          </div>
+        </div>
+        {finishAttempted && selectedAppt && !examLocked && !canFinishExam ? <div className="p-4 rounded border border-amber-300 bg-amber-50 text-amber-900 text-xs shadow-2xs font-medium" role="status"><b>Chưa thể hoàn thành khám:</b> {finishExamCheck.reasons.join(' ')}</div> : null}
+        {error ? (
+          <div className="p-4 rounded border border-rose-200 bg-rose-50 text-rose-700 text-xs shadow-2xs font-medium" role="alert">
+            {error}
+          </div>
+        ) : null}
+        <div className={`grid grid-cols-1 ${contextCollapsed ? 'lg:grid-cols-1' : 'lg:grid-cols-[340px_1fr]'} gap-6 items-start transition-all`}>
+          <aside className="space-y-4">
+            <button type="button" className="px-3 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-600 mb-2 cursor-pointer inline-block" onClick={() => setContextCollapsed((value) => !value)} aria-expanded={!contextCollapsed} aria-label={contextCollapsed ? 'Mở thông tin bệnh nhân' : 'Thu gọn thông tin bệnh nhân'} title={contextCollapsed ? 'Mở thông tin bệnh nhân' : 'Thu gọn cột bên trái'}>{contextCollapsed ? '›' : '‹'}</button>
+            {!contextCollapsed ? <>
+            <section className="bg-white rounded border border-slate-200/90 p-5 shadow-xs space-y-3">
+              {selectedAppt ? (
+                <>
+                  <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                    <span className="w-12 h-12 rounded bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm shrink-0">
+                      {patientLabel(selectedAppt).split(/\s+/).slice(-2).map((word) => word[0]).join('').toUpperCase()}
+                    </span>
+                    <div><h2>{patientLabel(selectedAppt)}</h2><p>{patientDemographicLine(selectedAppt)}</p></div>
+                  </div>
+                  <dl className="mt-3 space-y-1.5 text-xs text-slate-600 divide-y divide-slate-100">
+                    <div><dt>Mã BN:</dt><dd>{selectedAppt?.patient?.patientCode || '—'}</dd></div>
+                    <div><dt>Lý do khám:</dt><dd>{selectedAppt?.reason || selectedAppt?.symptoms || 'Khám theo lịch hẹn'}</dd></div>
+                    <div><dt>Sinh hiệu:</dt><dd>{vitals.bp ? `HA: ${vitals.bp}` : 'Chưa cập nhật'}</dd></div>
+                  </dl>
+                  <div className="mt-3 flex gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" disabled>▣ Chat</button><button type="button" disabled>▣ Video</button>
+                  </div>
+                </>
+              ) : <div className="py-8 text-center text-slate-400 text-xs space-y-1"><span>✚</span><b>Chưa chọn bệnh nhân</b><p>Chọn một lịch khám bên dưới.</p></div>}
+            </section>
+
+            <section className="bg-emerald-50/50 rounded border border-emerald-200/60 p-4 text-xs space-y-2 text-emerald-900">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2"><span>✦</span> AI Tóm tắt bệnh án</div>
+              {selectedAppt ? <>
+                <p>– {vitals.symptoms ? `Triệu chứng: ${vitals.symptoms}` : 'Chưa ghi nhận triệu chứng lâm sàng.'}</p>
+                <p>– {vitals.diagnosis ? `Chẩn đoán: ${vitals.diagnosis}` : 'Chưa có chẩn đoán ICD-10.'}</p>
+                <p>– {prescriptionHasMedicines(prescriptionLines) ? `Đơn thuốc hiện có ${filterFilledRxLines(prescriptionLines).length} thuốc.` : 'Chưa kê đơn thuốc.'}</p>
+              </> : <p>Thông tin tóm tắt xuất hiện sau khi chọn bệnh nhân.</p>}
+            </section>
+
+            <section className="bg-white rounded border border-slate-200/90 p-4 shadow-xs space-y-3">
+              <header><b>Hồ sơ đang khám</b><span>{inExaminationQueue.length} bệnh nhân</span></header>
+              <div className="space-y-2">
+                {inExaminationQueue.map((appointment) => (
+                  <div key={appointment.id || appointment._id} className={`p-2.5 rounded border flex items-center justify-between gap-2 text-xs transition-colors ${String(appointment.id || appointment._id) === String(selectedApptId) ? 'border-emerald-500 bg-emerald-50/70' : 'border-slate-200 bg-slate-50 hover:bg-slate-100/80'}`}>
+                    <button type="button" className="text-left flex-1 min-w-0" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>
+                      <span><b>{appointment?.startTime || '—'}</b> · {patientLabel(appointment)}</span>
+                      <small>STT {appointment?.visitQueueNumber || '—'} · Đang khám / đã lưu nháp</small>
+                    </button>
+                    <button type="button" className="px-2.5 py-1 text-xs font-bold rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shrink-0 cursor-pointer" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>{String(appointment.id || appointment._id) === String(selectedApptId) ? 'Đang mở' : 'Mở lại'}</button>
+                  </div>
+                ))}
+                {!inExaminationQueue.length ? <div className="py-6 text-center text-xs text-slate-400"><b>Không có hồ sơ đang khám</b></div> : null}
+              </div>
+            </section>
+
+            <section className="bg-white rounded border border-slate-200/90 p-4 shadow-xs space-y-3">
+              <header><b>Bệnh nhân đang đợi</b><span>{waitingQueue.length} bệnh nhân</span></header>
+              <div className="space-y-2">
+                {waitingQueue.slice(0, 5).map((appointment) => (
+                  <div key={appointment.id || appointment._id} className={`p-2.5 rounded border flex items-center justify-between gap-2 text-xs transition-colors ${String(appointment.id || appointment._id) === String(selectedApptId) ? 'border-emerald-500 bg-emerald-50/70' : 'border-slate-200 bg-slate-50 hover:bg-slate-100/80'}`}>
+                    <button type="button" className="text-left flex-1 min-w-0" onClick={() => setSelectedApptId(String(appointment.id || appointment._id || ''))}>
+                      <span><b>{appointment?.startTime || '—'}</b> · {patientLabel(appointment)}</span>
+                      <small>STT {appointment?.visitQueueNumber || '—'} · {appointment?.symptoms || 'Khám theo lịch hẹn'}</small>
+                    </button>
+                    <button type="button" className="px-3 py-1.5 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white transition-colors cursor-pointer shrink-0 disabled:opacity-50" disabled={Boolean(startingAppointmentId)} onClick={() => void startMedicalVisit(appointment)}>{startingAppointmentId === String(appointment.id || appointment._id) ? 'Đang mở…' : 'Bắt đầu khám'}</button>
+                  </div>
+                ))}
+                {!waitingQueue.length ? <div className="py-6 text-center text-xs text-slate-400"><b>Chưa có bệnh nhân đang đợi</b><p>Danh sách sẽ cập nhật khi lễ tân check-in.</p></div> : null}
+              </div>
+            </section>
+            </> : null}
+          </aside>
+
+          <section className="space-y-6">
+            <article className="bg-white rounded border border-slate-200/90 p-5 shadow-xs space-y-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2"><span>≡</span> Khám bệnh và Ghi hồ sơ</div>
+              <label className="block space-y-1.5 text-xs font-bold text-slate-700">
+                <span>Lâm sàng / Triệu chứng</span>
+                <textarea rows={4} placeholder="Nhập ghi chú lâm sàng..." value={vitals.symptoms} onChange={(e) => setVitals((state) => ({ ...state, symptoms: e.target.value }))} disabled={examLocked || !selectedAppt} />
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                <IcdDiagnosisField token={token} value={diagnosisIcd} onChange={(pick) => { setDiagnosisIcd(pick); setDiagnosisError(''); setVitals((state) => ({ ...state, diagnosis: pick ? formatIcdLabel(pick.code, pick.name) : '' })) }} disabled={examLocked || !selectedAppt} error={diagnosisError} />
+                <label className="block space-y-1.5 text-xs font-bold text-slate-700"><span>Chỉ định cận lâm sàng</span><button type="button" className="w-full py-2.5 px-3 border border-dashed border-emerald-400 bg-emerald-50/50 hover:bg-emerald-100/50 rounded text-xs font-bold text-emerald-800 transition-colors cursor-pointer disabled:opacity-50" disabled={!selectedAppt || Boolean(startingAppointmentId) || isAppointmentExamined(selectedAppt?.status)} onClick={() => void openClinicalOrdering()}>{startingAppointmentId ? 'Đang bắt đầu khám…' : '⊕ Thêm chỉ định'}</button></label>
+              </div>
+              <details className="border border-slate-200 rounded p-4 bg-slate-50/40 text-xs space-y-3" open={vitalsOpen} onToggle={(e) => setVitalsOpen(e.currentTarget.open)}>
+                <summary>Sinh hiệu và ghi chú điều trị</summary>
+                {!examLocked ? <label className="flex items-center gap-2 text-xs font-medium text-slate-600 mb-3 cursor-pointer"><input type="checkbox" checked={vitalsSkipConfirmed} onChange={(e) => { const checked = e.target.checked; setVitalsSkipConfirmed(checked); if (checked) { setVitalsErrors({}); setVitalsFormError('') } }}/><span>Bỏ qua sinh hiệu (không đo lần này)</span></label> : null}
+                {vitalsFormError ? <div className="dr-vitals-form-error" role="alert">{vitalsFormError}</div> : null}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {VITAL_FIELD_UI.map(({ key, label, inputMode, placeholder }) => { const err = vitalsSkipConfirmed ? '' : vitalsErrors[key]; return <label key={key}><span>{label}</span><input className={err ? 'dr-input--invalid' : ''} type="text" inputMode={inputMode || 'text'} placeholder={placeholder || VITAL_PLACEHOLDER} value={vitals[key]} onChange={(e) => setVitalField(key, e.target.value)} onBlur={() => blurVitalField(key)} disabled={examLocked || !selectedAppt || vitalsSkipConfirmed} />{err ? <small className="dr-field-error" role="alert">{err}</small> : null}</label> })}
+                </div>
+                <label className="block space-y-1.5 text-xs font-bold text-slate-700"><span>Hướng điều trị</span><textarea rows={2} value={vitals.treatment} onChange={(e) => setVitals((state) => ({ ...state, treatment: e.target.value }))} disabled={examLocked || !selectedAppt} /></label>
+              </details>
+            </article>
+
+            {examSubTab === 'clinical' ? <article className="bg-white rounded border border-slate-200/90 p-5 shadow-xs space-y-4">
+              <header className="flex items-center justify-between pb-3 border-b border-slate-100"><div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2"><span>✚</span> Chỉ định cận lâm sàng</div><button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => setExamSubTab('info')}>Đóng</button></header>
+              {examSaveOk ? <div className="p-3 rounded bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium" role="status">{examSaveOk}</div> : null}
+              {examSaveErr ? <div className="p-3 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium" role="alert">{examSaveErr}</div> : null}
+              {!examLocked ? <div className="dr-clinical-add"><select className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs" defaultValue="" onChange={(e) => { addClinicalOrder(e.target.value); e.target.value = '' }}><option value="">+ Chọn xét nghiệm hoặc chẩn đoán hình ảnh</option>{clinicalServices.map((service) => <option key={service.id} value={service.id}>{service.category === 'LAB_TEST' ? 'Xét nghiệm' : 'Hình ảnh'} — {service.name}</option>)}</select></div> : null}
+              {clinicalOrders.length === 0 ? <div className="py-8 text-center text-xs text-slate-400">Chưa có chỉ định cận lâm sàng.</div> : <div className="space-y-4">{clinicalOrders.map((order) => <section className="border border-slate-200 rounded p-4 bg-slate-50/50 space-y-3" key={order.id || order.serviceId}>
+                <header><div><strong>{order.serviceName}</strong><small>{order.category === 'IMAGING' ? 'Chẩn đoán hình ảnh' : 'Xét nghiệm'} · {order.status === 'COMPLETED' ? 'Đã có kết quả' : order.status === 'IN_PROGRESS' ? `Đang chờ · STT ${order.queueNumber || '—'}` : 'Đã chỉ định'}</small></div><div>{!examLocked && order.status === 'ORDERED' ? <button type="button" className="w-6 h-6 rounded bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 flex items-center justify-center text-sm font-bold transition-colors cursor-pointer" aria-label="Xóa chỉ định" onClick={() => setClinicalOrders((items) => items.filter((item) => item !== order))}>×</button> : null}</div></header>
+                <div className="dr-clinical-room"><label className="block space-y-1.5 text-xs font-bold text-slate-700"><span>Phòng thực hiện</span><select value={order.assignedRoomId || ''} disabled={examLocked || order.status !== 'ORDERED' || clinicalRoomsForSelectedBranch.length === 0} onChange={(e) => setClinicalOrders((items) => items.map((item) => item === order ? { ...item, assignedRoomId: e.target.value } : item))}><option value="">{clinicalRoomsForSelectedBranch.length ? 'Chọn phòng cận lâm sàng' : 'Chi nhánh chưa cấu hình phòng'}</option>{clinicalRoomsForSelectedBranch.map((room) => <option key={room.id} value={room.id}>{room.code} · {room.name}</option>)}</select></label>{clinicalRoomsForSelectedBranch.length === 0 ? <p className="dr-clinical-room-warning">Chi nhánh của lịch khám chưa có phòng hoạt động.</p> : null}</div>
+                {order.result?.observations ? <div className="overflow-x-auto rounded border border-slate-200 bg-white"><table className="w-full text-left text-xs divide-y divide-slate-200"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Tham chiếu</th><th>Đánh giá</th></tr></thead><tbody>{order.result.observations.map((obs) => <tr key={obs.code}><td>{obs.name}</td><td><strong>{obs.value}</strong> {obs.unit}</td><td>{obs.referenceRange}</td><td className={obs.flag === 'HIGH' ? 'dr-result-high' : 'dr-result-normal'}>{obs.flag === 'HIGH' ? 'Cao' : 'Bình thường'}</td></tr>)}</tbody></table><p className="dr-result-conclusion">Kết luận: {order.result.conclusion}</p></div> : null}
+                {order.result?.imageUrl ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded bg-slate-900 text-white"><img src={order.result.imageUrl} alt="Ảnh X-quang ngực mô phỏng"/><div><p><b>StudyInstanceUID</b><br/><code>{order.result.studyInstanceUid}</code></p><label className="block space-y-1.5 text-xs font-bold text-slate-700"><span>Kết luận hình ảnh</span><textarea rows={3} value={order.result.conclusion || ''} readOnly placeholder="Chưa có kết luận" /></label></div></div> : null}
+              </section>)}</div>}
+              {clinicalPass?.qrImageDataUrl ? <div className="flex items-center gap-4 p-4 rounded border border-emerald-200 bg-emerald-50/60 text-xs"><img src={clinicalPass.qrImageDataUrl} alt="QR phiếu chỉ định cận lâm sàng"/><div><strong>Phiếu chỉ định cận lâm sàng</strong><p>Đưa QR cho bệnh nhân mang đến phòng thực hiện để tiếp nhận và cấp số thứ tự.</p><button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => window.print()}>In phiếu</button></div></div> : null}
+              {!examLocked ? <footer className="flex items-center justify-between gap-4 pt-3 border-t border-slate-100 flex-wrap text-xs"><p>Chọn phòng cho từng dịch vụ rồi lưu để phát hành QR.</p><button type="button" className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer" disabled={!selectedAppt || examSaving} onClick={() => void handleSaveMedicalVisit({ clinicalOnly: true })}>{examSaving ? 'Đang lưu…' : 'Lưu & tạo QR'}</button></footer> : null}
+            </article> : null}
+
+            <article className="bg-white rounded border border-slate-200/90 p-5 shadow-xs space-y-4">
+              <header className="flex items-center justify-between pb-3 border-b border-slate-100"><div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2"><span>▤</span> Kê thuốc</div><button type="button" className="dr-stitch-voice" disabled>♩ Kê thuốc bằng giọng nói</button></header>
+              <div className="space-y-2 overflow-x-auto [scrollbar-width:thin] -mx-1 px-1 pb-1">
+                <div className="min-w-[520px] space-y-2">
+                  <div className="grid grid-cols-[1fr_120px_160px_32px] gap-3 text-xs font-bold text-slate-500 px-2"><span>Tên thuốc</span><span>Số lượng (SL)</span><span>Cách dùng</span><span /></div>
+                  {prescriptionLines.map((line, idx) => <div className="grid grid-cols-[1fr_120px_160px_32px] gap-3 items-center text-xs" key={idx}>
+                    <button type="button" className="w-full text-left px-3 py-2 bg-white border border-slate-300 rounded text-slate-700 hover:border-emerald-500 transition-colors truncate" onClick={() => openMedicinePicker(idx)} disabled={examLocked || !selectedAppt}>{line.medicineDisplayName || line.medicineName || 'Tìm và chọn thuốc...'}</button>
+                    <input type="text" inputMode="decimal" value={line.quantity} onChange={(e) => updateRxLine(idx, { quantity: sanitizeQuantityInput(e.target.value), quantityManual: true })} placeholder="Nhập số lượng" aria-label="Số lượng thuốc" disabled={examLocked || !selectedAppt} />
+                    <select value={line.frequencyPerDay} onChange={(e) => updateRxLine(idx, { frequencyPerDay: e.target.value })} disabled={examLocked || !selectedAppt}><option value="">Chọn cách dùng</option>{RX_FREQUENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                    <button type="button" className="w-8 h-8 rounded border border-slate-200 hover:bg-rose-50 text-slate-400 hover:text-rose-600 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer" onClick={() => removeRxLine(idx)} disabled={examLocked || prescriptionLines.length < 2}>×</button>
+                  </div>)}
+                </div>
+                {!examLocked ? <button type="button" className="mt-2 px-3.5 py-2 text-xs font-bold text-emerald-700 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded transition-colors cursor-pointer" onClick={addRxLine} disabled={!selectedAppt}>＋ Thêm thuốc</button> : null}
+              </div>
+              <footer className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100"><button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => void handleSaveMedicalVisit({ draftOnly: true })} disabled={!selectedAppt || examLocked || examSaving}>Lưu nháp</button><button type="button" className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer" onClick={() => requestFinishExam()} disabled={!selectedAppt || examLocked || examSaving}>{examSaving ? 'Đang hoàn thành…' : '✓ Hoàn thành khám'}</button></footer>
+            </article>
+          </section>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 items-start pt-6 border-t border-slate-200">
+            <aside className="space-y-4" aria-label="Danh sách đăng ký">
+              <section className="bg-white rounded border border-slate-200/90 p-5 shadow-xs space-y-3" aria-label="Bệnh nhân hiện tại">
+                {selectedAppt ? <>
+                  <div className="flex items-center gap-3">
+                    <span className="w-12 h-12 rounded bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm shrink-0">{patientLabel(selectedAppt).split(/\s+/).slice(-2).map((word) => word[0]).join('').toUpperCase()}</span>
+                    <div><h2>{patientLabel(selectedAppt)}</h2><p>{patientDemographicLine(selectedAppt)}</p></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
+                    <span>Mã BN <b>{selectedAppt?.patient?.patientCode || '—'}</b></span>
+                    <span>Mã lịch <b>{selectedAppt?.ticket || '—'}</b></span>
+                    <span>Điện thoại <b>{selectedAppt?.patient?.phone || '—'}</b></span>
+                    <span>Huyết áp <b>{vitals.bp || '—'}</b></span>
+                  </div>
+                </> : <div className="py-8 text-center text-slate-400 text-xs space-y-1"><span>✚</span><b>Chưa chọn bệnh nhân</b><p>Chọn một lịch trong danh sách bên dưới.</p></div>}
+              </section>
+
+              <section className="bg-emerald-50/50 rounded border border-emerald-100 p-4 text-xs text-emerald-900 space-y-1.5" aria-label="Tóm tắt hồ sơ">
+                <div className="font-bold text-emerald-800 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5"><span>✦</span> Tóm tắt hồ sơ</div>
+                {selectedAppt ? <ul>
+                  <li>{vitals.symptoms ? `Triệu chứng: ${vitals.symptoms}` : 'Chưa ghi nhận triệu chứng lâm sàng.'}</li>
+                  <li>{vitals.diagnosis ? `Chẩn đoán: ${vitals.diagnosis}` : 'Chưa có chẩn đoán ICD-10.'}</li>
+                  <li>{prescriptionLines.some((line) => line.medicineName || line.medicineDisplayName) ? `Đơn thuốc có ${prescriptionLines.filter((line) => line.medicineName || line.medicineDisplayName).length} thuốc.` : 'Chưa kê đơn thuốc.'}</li>
+                </ul> : <p>Thông tin tóm tắt sẽ xuất hiện sau khi chọn bệnh nhân.</p>}
+              </section>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={listSearchRef}
+                    id="doctor-list-search"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded placeholder:text-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs"
+                    type="search"
+                    value={listSearch}
+                    onChange={(e) => {
+                      setListSearch(e.target.value)
+                      setQrListFocusTicket('')
+                    }}
+                    placeholder="Tìm mã, mã BN, tên…"
+                    autoComplete="off"
+                    enterKeyHint="search"
+                    aria-label="Tìm trong danh sách đã tải"
+                  />
+                  <button
+                    type="button"
+                    className={`dr-btn dr-btn--filter-toggle${filtersOpen ? ' is-open' : ''}`}
+                    aria-expanded={filtersOpen}
+                    aria-controls="doctor-advanced-filters"
+                    onClick={() => setFiltersOpen((o) => !o)}
+                  >
+                    Lọc
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                    title="Mở camera để quét mã QR lịch hẹn"
+                    onClick={() => {
+                      setQrErr('')
+                      setQrOpen(true)
+                    }}
+                  >
+                    Quét QR
+                  </button>
+                </div>
+                {filtersOpen ? (
+                  <div
+                    id="doctor-advanced-filters"
+                    className="p-3.5 bg-slate-50 border border-slate-200 rounded space-y-2.5 text-xs"
+                    role="region"
+                    aria-label="Lọc theo trạng thái và khoảng ngày"
+                  >
+                    <p className="dr-filters-advanced-hint">
+                      Trạng thái và khoảng ngày lọc trong dữ liệu đã tải; ô phía trên tìm nhanh theo mã, mã BN hoặc tên.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label htmlFor="doctor-status-filter">Trạng thái</label>
+                        <select
+                          id="doctor-status-filter"
+                          value={filterStatus}
+                          onChange={(e) => setFilterStatus(e.target.value)}
+                        >
+                          <option value="all">Tất cả</option>
+                          <option value="confirmed">Chờ khám</option>
+                          <option value="examined">Đã khám</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label htmlFor="doctor-from-date">Từ ngày</label>
+                        <input
+                          id="doctor-from-date"
+                          type="date"
+                          value={filterFrom}
+                          onChange={(e) => setFilterFrom(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label htmlFor="doctor-to-date">Đến ngày</label>
+                        <input
+                          id="doctor-to-date"
+                          type="date"
+                          value={filterTo}
+                          onChange={(e) => setFilterTo(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="bg-white rounded border border-slate-200/90 shadow-xs overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-slate-100">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Danh sách đăng ký</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {loading
+                      ? 'Đang tải…'
+                      : `${totalFiltered} lịch${listSearch.trim() ? ' · tìm kiếm' : ''}${refreshing ? ' · đang làm mới' : ''}`}
+                  </p>
+                </div>
+                <div className="dr-list-head-actions">
+                  <span className="dr-list-page">
+                    Trang {safePage}/{pageCount}
+                  </span>
+                  <button
+                    type="button"
+                    className="dr-icon-btn"
+                    title="Làm mới"
+                    aria-label="Làm mới"
+                    disabled={refreshing}
+                    onClick={() => void loadAppointments({ silent: true })}
+                  >
+                    ↻
+                  </button>
+                </div>
+              </div>
+
+              <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto" role="region" aria-label="Danh sách bệnh nhân">
+                {loading ? (
+                  <p className="dr-queue-empty">Đang tải…</p>
+                ) : pagedRows.length === 0 ? (
+                  <p className="dr-queue-empty">Không có bản ghi phù hợp.</p>
+                ) : (
+                  <ul className="divide-y divide-slate-100">
+                    {pagedRows.map((a, i) => {
+                      const id = String(a?.id || a?._id || '')
+                      const st = String(a?.status || '').toLowerCase()
+                      const sel = selectedApptId && id === String(selectedApptId)
+                      const isCancelled = st === 'cancelled'
+                      const dotClass = sel
+                        ? 'is-active'
+                        : st === 'confirmed'
+                          ? 'is-wait'
+                          : st === 'cancelled'
+                            ? 'is-cancelled'
+                            : isAppointmentExamined(st)
+                              ? 'is-examined'
+                              : st === 'pending'
+                                ? 'is-pending'
+                                : ''
+                      const dotTitle = sel ? 'Đang khám' : statusLabelVi(st)
+                      const queueNo = (safePage - 1) * pageSize + i + 1
+                      const tip = [
+                        `STT ${queueNo}`,
+                        patientLabel(a),
+                        patientDemographicLine(a),
+                        patientIdsLine(a),
+                        st === 'confirmed' ? `Tiếp nhận: ${formatConfirmedByLine(a.confirmedBy)}` : '',
+                        statusLabelVi(st),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                      return (
+                        <li key={id || `${i}`}>
+                          <button
+                            type="button"
+                            className={`dr-queue-item${sel ? ' is-selected' : ''}${isCancelled ? ' is-cancelled' : ''}`}
+                            onClick={() => setSelectedApptId(id)}
+                            title={tip}
+                            aria-current={sel ? 'true' : undefined}
+                          >
+                            <span className={`dr-dot ${dotClass}`} aria-hidden title={dotTitle} />
+                            <span className="dr-queue-item-inner">
+                              <span className="dr-queue-main">
+                                <span className="dr-queue-name" title={patientLabel(a)}>
+                                  {patientLabel(a)}
+                                </span>
+                                <span className="dr-queue-chip dr-queue-chip--demo">
+                                  {patientDemographicLine(a)}
+                                </span>
+                                <span className="dr-queue-chip dr-queue-chip--id">{patientIdsLine(a)}</span>
+                              </span>
+                              <span className="dr-queue-aside">
+                                <span className="dr-queue-stt" aria-label={`Số thứ tự ${queueNo}`}>
+                                  STT: <strong>{pad2(queueNo)}</strong>
+                                </span>
+                                <span
+                                  className={`dr-source-pill dr-source-pill--${appointmentSourceValue(a)}`}
+                                  title={appointmentSourceTitle(a)}
+                                >
+                                  {appointmentSourceLabel(a)}
+                                </span>
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between p-3 border-t border-slate-100 text-xs text-slate-500">
+                <span className="dr-pager-summary">
+                  {totalFiltered} lịch — trang {safePage}/{pageCount}
+                </span>
+                <div className="dr-pager-actions">
+                  <button
+                    type="button"
+                    className="px-3 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                    disabled={safePage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    aria-label="Trang trước"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                    disabled={safePage >= pageCount}
+                    onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                    aria-label="Trang sau"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+              </div>
+            </aside>
+
+            <section className="bg-white rounded border border-slate-200/90 shadow-xs overflow-hidden" aria-label="Khám bệnh">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 pt-3 bg-slate-50/50 flex-wrap gap-3">
+                <div className="flex items-center gap-1" role="tablist">
+                  {[
+                    { id: 'info', label: 'Thông tin khám bệnh' },
+                    { id: 'clinical', label: 'Cận lâm sàng' },
+                    { id: 'prescription', label: 'Kê đơn thuốc' },
+                    { id: 'history', label: 'Lịch sử khám' },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={examSubTab === t.id}
+                      className={`dr-subtab${examSubTab === t.id ? ' is-active' : ''}`}
+                      onClick={() => setExamSubTab(t.id)}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 pb-2">
+                  <button
+                    type="button"
+                    className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                    disabled={examLocked || examSaving}
+                    onClick={() => void handleSaveMedicalVisit()}
+                  >
+                    {examSaving ? 'Đang lưu…' : 'Lưu'}
+                  </button>
+                  {!examLocked ? (
+                    <button
+                      type="button"
+                      className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                      disabled={examSaving}
+                      title={
+                        canFinishExam
+                          ? 'Lưu, in 02 bản và kết thúc khám'
+                          : finishDisabledTitle || 'Chưa đủ điều kiện — bấm để xem chi tiết'
+                      }
+                      onClick={() => requestFinishExam()}
+                    >
+                      {examSaving ? 'Đang xử lý…' : 'Kết thúc & In'}
+                    </button>
+                  ) : selectedAppt && isAppointmentExamined(selectedAppt.status) ? (
+                    <button
+                      type="button"
+                      className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                      disabled={examSaving}
+                      title="In lại đơn thuốc (2 bản)"
+                      onClick={() => openPrescriptionPrint()}
+                    >
+                      In đơn
+                    </button>
+                  ) : null}
+                </div>
+                {!examLocked && !canFinishExam && finishHintsForTab.length > 0 ? (
+                  <ul className="dr-finish-hint" role="status">
+                    {finishHintsForTab.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+
+              {examSaveOk ? (
+                <div className="m-4 p-3 rounded bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium" role="status">
+                  {examSaveOk}
+                </div>
+              ) : null}
+              {examSaveErr ? (
+                <div className="m-4 p-3 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium" role="alert">
+                  {examSaveErr}
+                </div>
+              ) : null}
+
+              <div
+                className={`dr-panel-alert${
+                  examLocked && selectedAppt ? ' dr-panel-alert--readonly' : ''
+                }`}
+                role="status"
+              >
+                {examLocked && examLockMessage ? (
+                  <>
+                    {examLockMessage}
+                    {selectedAppt ? ` — ${patientLabel(selectedAppt)}` : ''}
+                  </>
+                ) : (
+                  <>
+                    Bạn đang khám bệnh
+                    {selectedAppt ? ` — ${patientLabel(selectedAppt)}` : ''}
+                  </>
+                )}
+              </div>
+
+              {examSubTab === 'prescription' ? (
+                <div className="p-5 space-y-4">
+                  <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Đơn thuốc</div>
+                  {!showRxEmptyReadonly ? (
+                    <div className="dr-rx-toolbar">
+                      <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" disabled={examLocked} onClick={addRxLine}>
+                        + Thêm dòng
+                      </button>
+                    </div>
+                  ) : null}
+                  {showRxEmptyReadonly ? (
+                    <div className="dr-rx-empty" role="status">
+                      <p className="dr-rx-empty-title">Không kê thuốc</p>
+                      <p className="dr-rx-empty-hint">Ca khám này chỉ có chẩn đoán — không có đơn thuốc.</p>
+                    </div>
+                  ) : (
+                  <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+                    <table className={`dr-table dr-table--rx${examLocked ? ' dr-table--rx-readonly' : ''}`}>
+                      <thead>
+                        <tr>
+                          <th className="dr-rx-col-ix">#</th>
+                          <th className="dr-rx-col-name">Hoạt chất (biệt dược)</th>
+                          <th className="dr-rx-col-unit">ĐVT</th>
+                          <th className="dr-rx-col-dose">Liều / lần</th>
+                          <th className="dr-rx-col-freq">Tần suất</th>
+                          <th className="dr-rx-col-days">Số ngày</th>
+                          <th className="dr-rx-col-qty">SL</th>
+                          {!examLocked ? <th className="dr-rx-col-act" aria-label="Xóa" /> : null}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rxDisplayLines.map((line, idx) => (
+                          <tr key={idx}>
+                            <td className="dr-rx-col-ix">{idx + 1}</td>
+                            <td className="dr-rx-col-name">
+                              {examLocked ? (
+                                <span className="dr-rx-readonly-name">
+                                  {line.medicineDisplayName || line.medicineName}
+                                </span>
+                              ) : (
+                                <div className="dr-rx-name-cell">
+                                  <input
+                                    className="dr-input dr-input--in-table dr-input--rx-name"
+                                    value={line.medicineDisplayName || line.medicineName}
+                                    readOnly
+                                    placeholder="Bấm Tìm để chọn"
+                                    title="Chọn từ danh mục — hiển thị Hoạt chất (Biệt dược)"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                                    style={{ flexShrink: 0, padding: '0.25rem 0.45rem', fontSize: '0.72rem' }}
+                                    onClick={() => openMedicinePicker(idx)}
+                                  >
+                                    Tìm
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                            <td className="dr-rx-col-unit">
+                              <span className="dr-rx-unit" title="Lấy từ danh mục thuốc">
+                                {line.unit || '—'}
+                              </span>
+                            </td>
+                            <td className="dr-rx-col-dose">
+                              {examLocked ? (
+                                <span className="dr-rx-readonly-cell">
+                                  {formatRxDosageLabel(line) || '—'}
+                                </span>
+                              ) : (
+                                <div className="dr-rx-dose">
+                                  <input
+                                    className="dr-input dr-input--in-table"
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={line.dosageAmount}
+                                    onChange={(e) =>
+                                      updateRxLine(idx, {
+                                        dosageAmount: sanitizeDosageAmountInput(e.target.value),
+                                      })
+                                    }
+                                    placeholder="1"
+                                    aria-label="Liều mỗi lần"
+                                  />
+                                  {line.unit ? (
+                                    <span className="dr-rx-dose-unit">{line.unit}</span>
+                                  ) : null}
+                                </div>
+                              )}
+                            </td>
+                            <td className="dr-rx-col-freq">
+                              {examLocked ? (
+                                <span className="dr-rx-readonly-cell">
+                                  {formatRxFrequencyLabel(line) || '—'}
+                                </span>
+                              ) : (
+                                <select
+                                  className="dr-input dr-input--in-table dr-rx-select"
+                                  value={line.frequencyPerDay}
+                                  onChange={(e) =>
+                                    updateRxLine(idx, { frequencyPerDay: e.target.value })
+                                  }
+                                  aria-label="Tần suất"
+                                >
+                                  <option value="">Chọn…</option>
+                                  {RX_FREQUENCY_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </td>
+                            <td className="dr-rx-col-days">
+                              {examLocked ? (
+                                <span className="dr-rx-readonly-cell">
+                                  {line.durationDays ? formatRxDurationLabel(line) : '—'}
+                                </span>
+                              ) : (
+                                <input
+                                  className="dr-input dr-input--in-table"
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={line.durationDays}
+                                  onChange={(e) =>
+                                    updateRxLine(idx, {
+                                      durationDays: sanitizeDurationDaysInput(e.target.value),
+                                    })
+                                  }
+                                  placeholder="5"
+                                  aria-label="Số ngày"
+                                />
+                              )}
+                            </td>
+                            <td className="dr-rx-col-qty">
+                              {examLocked ? (
+                                <span className="dr-rx-readonly-cell">
+                                  {line.quantity ? String(line.quantity) : '—'}
+                                </span>
+                              ) : (
+                                <input
+                                  className="dr-input dr-input--in-table"
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={line.quantity}
+                                  onChange={(e) =>
+                                    updateRxLine(idx, {
+                                      quantity: sanitizeQuantityInput(e.target.value),
+                                      quantityManual: true,
+                                    })
+                                  }
+                                  placeholder="—"
+                                  title={
+                                    line.quantityManual
+                                      ? 'Đã chỉnh tay — đổi liều/tần suất/ngày để tính lại tự động'
+                                      : 'Tự tính: liều × tần suất × số ngày'
+                                  }
+                                  aria-label="Số lượng"
+                                />
+                              )}
+                            </td>
+                            {!examLocked ? (
+                              <td className="dr-rx-col-act">
+                                {prescriptionLines.length >= 2 ? (
+                                  <button
+                                    type="button"
+                                    className="dr-icon-btn dr-icon-btn--danger"
+                                    onClick={() => removeRxLine(idx)}
+                                    aria-label="Xóa dòng"
+                                  >
+                                    ×
+                                  </button>
+                                ) : null}
+                              </td>
+                            ) : null}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  )}
+                  {!examLocked ? (
+                    <p className="dr-modal-hint" style={{ marginTop: '0.5rem' }}>
+                      Chọn thuốc bằng <strong>Tìm</strong> — tên in dạng <em>Hoạt chất hàm lượng (Biệt dược)</em>. Nhấn{' '}
+                      <strong>Kết thúc &amp; In</strong> để lưu, in 02 bản và khóa hồ sơ.
+                    </p>
+                  ) : null}
+                </div>
+              ) : examSubTab === 'clinical' ? (
+                <div className="p-5 space-y-4">
+                  <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Chỉ định và kết quả LIS/PACS mô phỏng</div>
+                  {!examLocked ? <div className="dr-clinical-add"><select className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs" defaultValue="" onChange={(e) => { addClinicalOrder(e.target.value); e.target.value = '' }}><option value="">+ Chọn dịch vụ để chỉ định</option>{clinicalServices.map((service) => <option key={service.id} value={service.id}>{service.category === 'LAB_TEST' ? 'Xét nghiệm' : 'Hình ảnh'} — {service.name}</option>)}</select></div> : null}
+                  {clinicalOrders.length === 0 ? <div className="py-8 text-center text-xs text-slate-400">Chưa có chỉ định cận lâm sàng.</div> : <div className="space-y-4">{clinicalOrders.map((order) => <article className="border border-slate-200 rounded p-4 bg-slate-50/50 space-y-3" key={order.id || order.serviceId}>
+                    <header><div><strong>{order.serviceName}</strong><small>{order.category === 'IMAGING' ? 'Chẩn đoán hình ảnh' : 'Xét nghiệm'} · {order.status === 'COMPLETED' ? 'Đã có kết quả' : 'Đã chỉ định'}</small></div><div>{!examLocked && order.status !== 'COMPLETED' ? <button type="button" className="w-6 h-6 rounded bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 flex items-center justify-center text-sm font-bold transition-colors cursor-pointer" title="Xóa chỉ định" onClick={() => setClinicalOrders((items) => items.filter((item) => item !== order))}>×</button> : null}</div></header>
+                    {order.result?.observations ? <div className="overflow-x-auto rounded border border-slate-200 bg-white"><table className="w-full text-left text-xs divide-y divide-slate-200"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Tham chiếu</th><th>Đánh giá</th></tr></thead><tbody>{order.result.observations.map((obs) => <tr key={obs.code}><td>{obs.name}</td><td><strong>{obs.value}</strong> {obs.unit}</td><td>{obs.referenceRange}</td><td className={obs.flag === 'HIGH' ? 'dr-result-high' : 'dr-result-normal'}>{obs.flag === 'HIGH' ? 'Cao' : 'Bình thường'}</td></tr>)}</tbody></table><p className="dr-result-conclusion">Kết luận: {order.result.conclusion}</p></div> : null}
+                    {order.result?.imageUrl ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded bg-slate-900 text-white"><img src={order.result.imageUrl} alt="Ảnh X-quang ngực"/><div className="space-y-2"><p><b>StudyInstanceUID</b><br/><code>{order.result.studyInstanceUid}</code></p><label className="dr-field"><span className="dr-field-label">Kết luận hình ảnh</span><textarea className="w-full p-3 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs" rows={3} placeholder="Nhập kết luận chẩn đoán hình ảnh…" value={order.result.conclusion || ''} readOnly /></label></div></div> : null}
+                  </article>)}</div>}
+                </div>
+              ) : examSubTab === 'history' ? (
+                <div className="p-5 space-y-4">
+                  <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Lịch sử khám</div>
+                  {historyLoading ? <div className="py-8 text-center text-xs text-slate-400">Đang tải…</div> : null}
+                  {historyErr ? (
+                    <div className="m-4 p-3 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium" role="alert">
+                      {historyErr}
+                    </div>
+                  ) : null}
+                  {!historyLoading && !historyErr && historyTimeline.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-400">Chưa có lịch sử khám đã hoàn thành.</div>
+                  ) : null}
+                  {!historyLoading && historyTimeline.length > 0 ? (
+                    <div className="space-y-3" role="list">
+                      {historyTimeline.map((h) => {
+                        const ex = h?.medicalVisit
+                        const diagnosis = historyDiagnosisLabel(ex)
+                        const symptoms = String(ex?.symptoms || h?.note || '').trim()
+                        const meds = historyMedicineNames(ex)
+                        const specialty = specialtyLabelFromAppt(h)
+                        const when = formatApptDateVi(h.appointmentDate)
+                        const at = timeLabel(h.startTime)
+                        return (
+                          <article
+                            key={String(h.id || h._id)}
+                            className="p-4 rounded border border-slate-200 bg-slate-50/60 space-y-2 text-xs"
+                            role="listitem"
+                          >
+                            <header className="dr-history-card-head">
+                              <div className="dr-history-card-when">
+                                <strong>{when}</strong>
+                                {at ? <span className="dr-history-card-time">{at}</span> : null}
+                              </div>
+                              <div className="dr-history-card-meta">
+                                <span className="dr-history-card-doctor">{doctorLabelFromAppt(h)}</span>
+                                {specialty ? (
+                                  <span className="dr-history-card-specialty">{specialty}</span>
+                                ) : null}
+                              </div>
+                            </header>
+                            {diagnosis ? (
+                              <div className="dr-history-diagnosis">
+                                <span className="dr-history-label">Chẩn đoán</span>
+                                <p className="dr-history-diagnosis-text">{diagnosis}</p>
+                              </div>
+                            ) : null}
+                            {symptoms ? (
+                              <div className="dr-history-symptoms">
+                                <span className="dr-history-label">Triệu chứng</span>
+                                <p>{symptoms}</p>
+                              </div>
+                            ) : null}
+                            {meds.length > 0 ? (
+                              <div className="dr-history-meds">
+                                <span className="dr-history-label">Đơn thuốc</span>
+                                <ul className="dr-history-med-badges">
+                                  {meds.map((name) => (
+                                    <li key={name}>
+                                      <span className="dr-history-med-badge">{name}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+                          </article>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <>
+                  <div className="p-5 space-y-4">
+                    <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Thông tin người đăng ký</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Mã lịch hẹn</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt?.ticket || '—'}</span>
+                      </div>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Mã bệnh nhân</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt?.patient?.patientCode || '—'}</span>
+                      </div>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Họ tên</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt ? patientLabel(selectedAppt) : '—'}</span>
+                      </div>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Điện thoại</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt?.patient?.phone || '—'}</span>
+                      </div>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Ngày sinh</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt?.patient?.dob ? formatDobVi(selectedAppt.patient.dob) : '—'}</span>
+                      </div>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Giới tính</span>
+                        <span className="font-semibold text-slate-800 block text-xs">
+                          {(() => {
+                            const g = String(selectedAppt?.patient?.gender || '').trim()
+                            if (!g) return '—'
+                            if (/^(male|nam)$/i.test(g)) return 'Nam'
+                            if (/^(female|nữ|nu)$/i.test(g)) return 'Nữ'
+                            return g
+                          })()}
+                        </span>
+                      </div>
+                      <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5 col-span-full">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Địa chỉ</span>
+                        <span className="font-semibold text-slate-800 block text-xs">{selectedAppt?.patient?.address || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedAppt && String(selectedAppt.status || '').toLowerCase() === 'cancelled' ? (
+                    <div className="dr-section dr-section--cancelled">
+                      <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Thông tin hủy lịch</div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                        <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Hủy bởi</span>
+                          <span className="font-semibold text-slate-800 block text-xs">{formatCancelledByLine(selectedAppt.cancelledBy)}</span>
+                        </div>
+                        <div className="p-3 rounded bg-slate-50 border border-slate-100 space-y-0.5">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Thời điểm hủy</span>
+                          <span className="font-semibold text-slate-800 block text-xs">{formatDateTimeVi(selectedAppt.cancelledAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="p-5 space-y-4">
+                    <div className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Khám lâm sàng</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <label className="dr-field">
+                        <span className="dr-field-label">Ngày khám</span>
+                        <input
+                          className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs"
+                          value={vitals.examAt}
+                          onChange={(e) => setVitals((s) => ({ ...s, examAt: e.target.value }))}
+                          disabled={examLocked}
+                        />
+                      </label>
+                      <label className="dr-field">
+                        <span className="dr-field-label">Bác sĩ</span>
+                        <select className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs" disabled={examLocked}>
+                          <option>{displayName(user)}</option>
+                        </select>
+                      </label>
+                      <label className="dr-field">
+                        <span className="dr-field-label">Phòng khám</span>
+                        <input
+                          className="dr-input dr-input--readonly"
+                          value={receptionClinicRoomDisplay.label}
+                          readOnly
+                          disabled
+                          title={receptionClinicRoomDisplay.hint}
+                        />
+                        <span className="dr-field-hint">{receptionClinicRoomDisplay.hint}</span>
+                      </label>
+                    </div>
+
+                    {!examLocked ? (
+                      <label className="dr-vitals-skip">
+                        <input
+                          type="checkbox"
+                          checked={vitalsSkipConfirmed}
+                          onChange={(e) => {
+                            const checked = e.target.checked
+                            setVitalsSkipConfirmed(checked)
+                            if (checked) {
+                              setVitalsErrors({})
+                              setVitalsFormError('')
+                            }
+                          }}
+                        />
+                        <span>Bỏ qua sinh hiệu (không đo lần này)</span>
+                      </label>
+                    ) : null}
+
+                    {vitalsFormError ? (
+                      <div className="dr-vitals-form-error" role="alert">
+                        {vitalsFormError}
+                      </div>
+                    ) : null}
+
+                    <div className={`dr-vitals${vitalsSkipConfirmed ? ' dr-vitals--skipped' : ''}`}>
+                      {VITAL_FIELD_UI.map(({ key, label, inputMode, placeholder }) => {
+                        const err = vitalsSkipConfirmed ? '' : vitalsErrors[key]
+                        const rule = VITAL_RULES[key]
+                        const hint =
+                          rule?.type === 'bp'
+                            ? `Tâm thu ${rule.min}–${rule.max} mmHg`
+                            : rule
+                              ? `${rule.min}–${rule.max}`
+                              : ''
+                        const vitalsDisabled = examLocked || vitalsSkipConfirmed
+                        return (
+                          <label key={key} className="dr-field">
+                            <span className="dr-field-label">{label}</span>
+                            <input
+                              className={`dr-input${err ? ' dr-input--invalid' : ''}`}
+                              type="text"
+                              inputMode={inputMode || 'text'}
+                              placeholder={placeholder || VITAL_PLACEHOLDER}
+                              value={vitals[key]}
+                              onChange={(e) => setVitalField(key, e.target.value)}
+                              onBlur={() => blurVitalField(key)}
+                              disabled={vitalsDisabled}
+                              aria-invalid={err ? 'true' : undefined}
+                              aria-disabled={vitalsDisabled ? 'true' : undefined}
+                              title={hint}
+                            />
+                            {err ? (
+                              <span className="dr-field-error" role="alert">
+                                {err}
+                              </span>
+                            ) : null}
+                          </label>
+                        )
+                      })}
+                    </div>
+
+                    <label className="dr-field dr-field--block">
+                      <span className="dr-field-label">Triệu chứng</span>
+                      <textarea
+                        className="w-full p-3 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs"
+                        rows={2}
+                        value={vitals.symptoms}
+                        onChange={(e) => setVitals((s) => ({ ...s, symptoms: e.target.value }))}
+                        disabled={examLocked}
+                      />
+                    </label>
+                    <IcdDiagnosisField
+                      token={token}
+                      value={diagnosisIcd}
+                      onChange={(pick) => {
+                        setDiagnosisIcd(pick)
+                        setDiagnosisError('')
+                        setVitals((s) => ({
+                          ...s,
+                          diagnosis: pick ? formatIcdLabel(pick.code, pick.name) : '',
+                        }))
+                      }}
+                      disabled={examLocked}
+                      error={diagnosisError}
+                    />
+                    <label className="dr-field dr-field--block">
+                      <span className="dr-field-label">Hướng điều trị</span>
+                      <textarea
+                        className="w-full p-3 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs"
+                        rows={2}
+                        value={vitals.treatment}
+                        onChange={(e) => setVitals((s) => ({ ...s, treatment: e.target.value }))}
+                        disabled={examLocked}
+                        placeholder="Theo dõi, tái khám, lời dặn…"
+                      />
+                    </label>
+                    <label className="dr-field dr-field--block">
+                      <span className="dr-field-label">Ghi chú</span>
+                      <textarea
+                        className="w-full p-3 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs"
+                        rows={2}
+                        value={vitals.notes}
+                        onChange={(e) => setVitals((s) => ({ ...s, notes: e.target.value }))}
+                        disabled={examLocked}
+                      />
+                    </label>
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
+      </main>
+
+      {rxPickOpen ? (
+        <div
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRxPickOpen(false)
+          }}
+        >
+          <div className="bg-white rounded border border-slate-200 shadow-xl max-w-xl w-full p-6 space-y-4" role="dialog" aria-modal="true" aria-labelledby="dr-rx-pick-title">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 id="dr-rx-pick-title" className="text-base font-bold text-slate-900">
+                Chọn thuốc
+              </h2>
+              <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => setRxPickOpen(false)}>
+                Đóng
+              </button>
+            </div>
+            <input
+              className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all shadow-2xs"
+              value={medicineQuery}
+              onChange={(e) => setMedicineQuery(e.target.value)}
+              placeholder="Tìm theo tên hoặc mã thuốc…"
+              autoFocus
+            />
+            {medicineSearchErr ? <div className="dr-modal-err">{medicineSearchErr}</div> : null}
+            <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded p-1">
+              {medicineSearchLoading ? <div className="dr-modal-empty">Đang tìm…</div> : null}
+              {!medicineSearchLoading && medicineResults.length === 0 ? (
+                <div className="dr-modal-empty">
+                  {String(medicineQuery || '').trim()
+                    ? 'Không có kết quả — thử từ khóa khác.'
+                    : 'Danh mục trống hoặc chưa import thuốc vào MongoDB.'}
+                </div>
+              ) : null}
+              {!medicineSearchLoading
+                ? medicineResults.map((m) => (
+                    <button
+                      key={String(m.id)}
+                      type="button"
+                      className="w-full text-left px-3 py-2.5 rounded hover:bg-slate-50 flex items-center justify-between text-xs transition-colors cursor-pointer"
+                      onClick={() => applyMedicineToRow(m)}
+                    >
+                      <span className="dr-modal-code">{m.code || '—'}</span>
+                      <span className="dr-modal-name">{formatMedicineLabel(m)}</span>
+                      <span className="dr-modal-meta">
+                        {[m.strength, m.unit].filter(Boolean).join(' · ') || '—'}
+                      </span>
+                    </button>
+                  ))
+                : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {emptyRxConfirmOpen ? (
+        <div
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEmptyRxConfirmOpen(false)
+          }}
+        >
+          <div
+            className="bg-white rounded border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="dr-empty-rx-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="dr-empty-rx-title" className="text-base font-bold text-slate-900">
+              Đơn thuốc đang trống
+            </h2>
+            <p className="dr-modal-confirm-text">
+              Bạn có chắc chắn kết thúc ca khám này mà không kê đơn thuốc? Hệ thống sẽ in{' '}
+              <strong>phiếu khám bệnh</strong> (không có danh sách thuốc).
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => setEmptyRxConfirmOpen(false)}>
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 text-xs font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                onClick={() => {
+                  setEmptyRxConfirmOpen(false)
+                  void handleFinishExam({ withPrint: false, skipEmptyRxConfirm: true })
+                }}
+              >
+                Xác nhận (Không kê đơn)
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {qrOpen ? (
+        <div
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setQrOpen(false)
+          }}
+        >
+          <div
+            className="bg-white rounded border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dr-qr-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="dr-qr-title" className="text-base font-bold text-slate-900">
+              Quét phiếu khám
+            </h2>
+            <p className="dr-qr-modal-hint">Quét mã QR trên phiếu — hệ thống tìm lịch theo mã vé (YMA…).</p>
+            <div id={DR_QR_READER_ELEMENT_ID} className="dr-qr-reader-wrap" />
+            {qrErr ? <div className="p-3 rounded border border-rose-200 bg-rose-50 text-rose-700 text-xs font-medium" style={{ marginTop: 8 }}>{qrErr}</div> : null}
+            <div className="flex justify-end pt-3 border-t border-slate-100">
+              <button type="button" className="px-3.5 py-2 text-xs font-bold rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer disabled:opacity-50" onClick={() => setQrOpen(false)}>
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
