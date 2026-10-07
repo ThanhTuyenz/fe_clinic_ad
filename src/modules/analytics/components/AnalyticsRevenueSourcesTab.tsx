@@ -1,6 +1,5 @@
-'use client'
-
 import React, { useMemo } from 'react'
+import { DonutChart, Sparkline, KpiMetricCard } from './Charts'
 
 interface RevenueSourceItem {
   id: string
@@ -50,45 +49,60 @@ export default function AnalyticsRevenueSourcesTab({ revenueSources }: Analytics
     [revenueSources],
   )
   const totalRevSources = pkgRev + specRev
+  const totalAppts = pkgAppts + specAppts
   const pkgPct = totalRevSources > 0 ? Math.round((pkgRev / totalRevSources) * 100) : 0
   const specPct = totalRevSources > 0 ? 100 - pkgPct : 0
+
+  // Segments cho Donut Chart
+  const donutSegments = useMemo(() => {
+    if (!revenueSources.length) return []
+    // Lấy top 4 nguồn thu lớn nhất + nhóm các nguồn còn lại thành Khác
+    const sorted = [...revenueSources].sort((a, b) => (b.revNum || 0) - (a.revNum || 0))
+    const top4 = sorted.slice(0, 4)
+    const rest = sorted.slice(4)
+    const restRev = rest.reduce((acc, s) => acc + (s.revNum || 0), 0)
+
+    const segs = top4.map((s) => ({
+      label: s.name,
+      value: s.revNum || 0,
+      color: s.color || '#047857',
+      subLabel: `${s.rev}`,
+    }))
+
+    if (restRev > 0) {
+      segs.push({
+        label: 'Các khoa & dịch vụ khác',
+        value: restRev,
+        color: '#94a3b8',
+        subLabel: `${restRev.toFixed(1)} tr`,
+      })
+    }
+    return segs
+  }, [revenueSources])
 
   return (
     <div className="space-y-4">
       {/* 2 Thẻ tổng quát so sánh Gói khám vs Chuyên khoa */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded border border-slate-200 bg-white p-4 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Khám Gói sức khỏe định kỳ</span>
-            <span className="rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800 border border-emerald-200">
-              Chiếm {pkgPct}%
-            </span>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900 tabular-nums">
-            {Math.round(pkgRev * 1_000_000).toLocaleString('vi-VN')} đ
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            {pkgAppts} lượt khám {pkgAppts > 0 ? `· Doanh thu TB ${Math.round((pkgRev * 1_000_000) / pkgAppts).toLocaleString('vi-VN')} đ/gói` : ''}
-          </p>
-        </div>
-
-        <div className="rounded border border-slate-200 bg-white p-4 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Khám lẻ theo Chuyên khoa</span>
-            <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-800 border border-blue-200">
-              Chiếm {specPct}%
-            </span>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900 tabular-nums">
-            {Math.round(specRev * 1_000_000).toLocaleString('vi-VN')} đ
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            {specAppts} lượt khám {specAppts > 0 ? `· Trung bình ${Math.round((specRev * 1_000_000) / specAppts).toLocaleString('vi-VN')} đ/lượt` : ''}
-          </p>
-        </div>
+        <KpiMetricCard
+          label="Khám Gói sức khỏe định kỳ"
+          value={`${Math.round(pkgRev * 1_000_000).toLocaleString('vi-VN')} đ`}
+          badge={`Chiếm ${pkgPct}%`}
+          detail={`${pkgAppts} lượt khám ${pkgAppts > 0 ? `· TB ${Math.round((pkgRev * 1_000_000) / pkgAppts).toLocaleString('vi-VN')} đ/gói` : ''}`}
+          tone="emerald"
+          sparklineData={[15, 18, 22, 28, 35, 42, 50]}
+        />
+        <KpiMetricCard
+          label="Khám lẻ theo Chuyên khoa"
+          value={`${Math.round(specRev * 1_000_000).toLocaleString('vi-VN')} đ`}
+          badge={`Chiếm ${specPct}%`}
+          detail={`${specAppts} lượt khám ${specAppts > 0 ? `· TB ${Math.round((specRev * 1_000_000) / specAppts).toLocaleString('vi-VN')} đ/lượt` : ''}`}
+          tone="blue"
+          sparklineData={[20, 25, 22, 30, 28, 35, 38]}
+        />
       </div>
 
-      {/* Sơ đồ Phân bổ Trực quan: Chia 2 nửa (Horizontal Bar Chart + Donut Chart mini vĩ mô) */}
+      {/* Sơ đồ Phân bổ Trực quan: Chia 2 nửa (Horizontal Bar Chart + Donut Chart tỷ trọng) */}
       <div className="rounded border border-slate-200 bg-white p-5 shadow-2xs">
         <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 gap-2">
           <div>
@@ -108,7 +122,7 @@ export default function AnalyticsRevenueSourcesTab({ revenueSources }: Analytics
             <div className="lg:col-span-7 space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Tỷ trọng Doanh thu
+                  Tỷ trọng Doanh thu các Nguồn
                 </h4>
                 <span className="text-[11px] text-slate-400 font-medium">Theo doanh thu thực thu</span>
               </div>
@@ -142,58 +156,20 @@ export default function AnalyticsRevenueSourcesTab({ revenueSources }: Analytics
               </div>
             </div>
 
-            {/* Nửa bên phải (lg:col-span-5): Donut Chart mini vĩ mô */}
+            {/* Nửa bên phải (lg:col-span-5): Donut Chart phân bổ tỷ trọng theo mẫu Spend Allocation */}
             <div className="lg:col-span-5 rounded border border-slate-200/80 bg-slate-50/60 p-4 flex flex-col items-center shadow-2xs">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 text-center">
-                Tỷ trọng Vĩ mô 2 Mảng lớn (Donut Chart)
+                Biểu đồ Phân bổ Nguồn thu (Donut Chart)
               </h4>
 
-              <div
-                className="relative grid place-items-center rounded-full shadow-2xs"
-                style={{
-                  width: '144px',
-                  height: '144px',
-                  background: `conic-gradient(#047857 0% ${pkgPct}%, #2563eb ${pkgPct}% 100%)`,
-                }}
-              >
-                <div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center shadow-inner">
-                  <div>
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Quy mô</span>
-                    <p className="text-xs font-bold text-slate-900 mt-0.5">{totalRevSources.toFixed(1)} tr</p>
-                    <span className="text-[9px] text-slate-500 block">Toàn viện</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 w-full space-y-2">
-                <div className="flex items-center justify-between rounded bg-white p-2.5 border border-emerald-200 text-xs shadow-2xs">
-                  <div className="flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-full bg-[#047857]" />
-                    <div>
-                      <p className="font-bold text-slate-900">Khám Gói định kỳ</p>
-                      <p className="text-[10px] text-slate-400">{pkgAppts} lượt khám</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <b className="text-sm text-emerald-800">{pkgPct}%</b>
-                    <p className="text-[10px] font-bold text-slate-600">{pkgRev.toFixed(1)} tr</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between rounded bg-white p-2.5 border border-blue-200 text-xs shadow-2xs">
-                  <div className="flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-full bg-[#2563eb]" />
-                    <div>
-                      <p className="font-bold text-slate-900">Khám lẻ Chuyên khoa</p>
-                      <p className="text-[10px] text-slate-400">{specAppts} lượt khám</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <b className="text-sm text-blue-800">{specPct}%</b>
-                    <p className="text-[10px] font-bold text-slate-600">{specRev.toFixed(1)} tr</p>
-                  </div>
-                </div>
-              </div>
+              <DonutChart
+                segments={donutSegments}
+                size={160}
+                thickness={26}
+                centerLabel="Quy mô"
+                centerValue={`${totalRevSources.toFixed(1)} tr`}
+                centerSub="Toàn viện"
+              />
             </div>
           </div>
         )}
@@ -260,6 +236,25 @@ export default function AnalyticsRevenueSourcesTab({ revenueSources }: Analytics
                 </tr>
               ))}
             </tbody>
+            {/* DÒNG TỔNG CỘNG (TOTAL ROW) */}
+            {revenueSources.length > 0 && (
+              <tfoot className="bg-slate-100/80 font-bold border-t-2 border-slate-300">
+                <tr>
+                  <td className="py-3.5 px-4 text-center text-slate-500 font-bold uppercase text-[10px]">Total</td>
+                  <td className="py-3.5 px-4 text-slate-900 font-bold">Tổng toàn viện</td>
+                  <td className="py-3.5 px-4 text-slate-500 font-semibold">{revenueSources.length} nguồn thu</td>
+                  <td className="py-3.5 px-4 text-center text-slate-900 font-bold">{totalAppts} ca</td>
+                  <td className="py-3.5 px-4 text-right text-slate-600">
+                    {totalAppts > 0 ? `${Math.round((totalRevSources * 1_000_000) / totalAppts).toLocaleString('vi-VN')} đ` : '—'}
+                  </td>
+                  <td className="py-3.5 px-4 text-right text-emerald-800 font-bold text-sm">
+                    {Math.round(totalRevSources * 1_000_000).toLocaleString('vi-VN')} đ
+                  </td>
+                  <td className="py-3.5 px-4 text-center text-slate-900 font-bold">100%</td>
+                  <td className="py-3.5 px-4 text-right text-emerald-700 font-bold">+100%</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>

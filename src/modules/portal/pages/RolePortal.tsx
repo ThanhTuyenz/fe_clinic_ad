@@ -3,7 +3,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@/common/hooks/useNextNavigation'
 import { useAuth } from '@/common/hooks/useAuth'
-import { fetchDashboardStats, AdminAnalyticsPage } from '@/modules/analytics'
+import { fetchDashboardStats, AdminAnalyticsPage, Sparkline, DonutChart, KpiMetricCard, SectionCard as Card } from '@/modules/analytics'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  LabelList,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { StaffCrudPage, ClinicStaffPage, RolesPermissionsPage } from '@/modules/staff'
 import { SystemCatalogCrudPage, BookingMethodsPage, BookingPackagesPage } from '@/modules/catalog'
 import { DoctorWorkSchedulesPage } from '@/modules/doctor'
@@ -128,42 +138,6 @@ function initials(user: any) {
   return name.split(/\s+/).slice(-2).map((x) => x[0]).join('').toUpperCase()
 }
 
-function Kpi({ label, value, detail, tone = 'emerald', icon = 'appointments' }: any) {
-  const tones: Record<string, { icon: string; text: string; sub: string }> = {
-    emerald: { icon: 'bg-emerald-50 text-emerald-700 border border-emerald-100', text: 'text-slate-900', sub: 'text-emerald-700' },
-    blue: { icon: 'bg-blue-50 text-blue-700 border border-blue-100', text: 'text-slate-900', sub: 'text-blue-700' },
-    amber: { icon: 'bg-amber-50 text-amber-700 border border-amber-100', text: 'text-slate-900', sub: 'text-amber-700' },
-    slate: { icon: 'bg-slate-100 text-slate-700 border border-slate-200', text: 'text-slate-900', sub: 'text-slate-500' },
-  }
-  const theme = tones[tone] || tones.emerald
-  return (
-    <article className="rounded border border-slate-200/80 bg-white p-4 shadow-xs transition-all hover:border-slate-300">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-semibold text-slate-500">{label}</p>
-          <p className={`mt-1 text-2xl font-bold tracking-tight ${theme.text}`}>{value}</p>
-        </div>
-        <span className={`grid h-9 w-9 place-items-center rounded shrink-0 ${theme.icon}`}>
-          <Icon name={icon} />
-        </span>
-      </div>
-      <p className={`mt-2 text-[11px] font-medium ${theme.sub}`}>{detail}</p>
-    </article>
-  )
-}
-
-function Card({ title, action, children, className = '' }: any) {
-  return (
-    <section className={`rounded border border-slate-200/80 bg-white shadow-xs overflow-hidden ${className}`}>
-      <header className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-3.5">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900">{title}</h2>
-        {action && <span className="text-xs font-semibold text-slate-500">{action}</span>}
-      </header>
-      <div className="p-5">{children}</div>
-    </section>
-  )
-}
-
 function ActivityTable({ title = 'Lịch hẹn hôm nay', items = [] }: { title?: string; items?: any[] }) {
   const rows = items.length
     ? items.map((it: any) => [
@@ -245,6 +219,8 @@ function AdminDashboard({ stats, loading }: any) {
         chartBars: stats?.chartBars?.today || [],
         cashShare,
         transferShare,
+        cashAmount: cash,
+        transferAmount: transfer,
       }
     }
     if (timeFilter === 'month') {
@@ -268,6 +244,8 @@ function AdminDashboard({ stats, loading }: any) {
         chartBars: stats?.chartBars?.month || [],
         cashShare,
         transferShare,
+        cashAmount: cash,
+        transferAmount: transfer,
       }
     }
 
@@ -291,11 +269,14 @@ function AdminDashboard({ stats, loading }: any) {
       chartBars: stats?.chartBars?.week || [],
       cashShare,
       transferShare,
+      cashAmount: cash,
+      transferAmount: transfer,
     }
   }, [timeFilter, revTodayObj, revWeekObj, revMonthObj, todayCounts, weekCounts, monthCounts, stats])
 
-  const maxBarRev = Math.max(...(metrics.chartBars.map((b: any) => Number(b.rev) || 0) || [0]), 1)
-  const ceiling = Math.ceil(maxBarRev * 1.25) || (timeFilter === 'month' ? 200 : timeFilter === 'week' ? 32 : 5)
+  // Tính trần hiển thị linh hoạt để biểu đồ đạt độ cao đẹp mắt (~75-80%), tránh bị lùn và trống trải
+  const maxBarRev = Math.max(...(metrics.chartBars.map((b: any) => Number(b.rev) || 0) || [0]), 0.1)
+  const ceiling = maxBarRev * 1.35
   const todayRows = stats?.todayRows || stats?.data?.todayRows || []
 
   return (
@@ -332,10 +313,34 @@ function AdminDashboard({ stats, loading }: any) {
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Tổng doanh thu" value={loading ? '—' : metrics.revenue} detail={metrics.revenueSub} icon="billing" tone="emerald" />
-        <Kpi label="Lượt khám thực hiện" value={loading ? '—' : metrics.appointments} detail={metrics.appointmentsSub} icon="appointments" tone="blue" />
-        <Kpi label="Bệnh nhân phục vụ" value={loading ? '—' : metrics.patients} detail={metrics.patientsSub} icon="patients" tone="amber" />
-        <Kpi label="Công suất buồng khám" value={loading ? '—' : metrics.occupancy} detail={metrics.occupancySub} icon="branches" tone="slate" />
+        <KpiMetricCard
+          label="Tổng doanh thu"
+          value={loading ? '—' : metrics.revenue}
+          detail={metrics.revenueSub}
+          tone="emerald"
+          sparklineData={metrics.chartBars.map((b: any) => b.rev)}
+        />
+        <KpiMetricCard
+          label="Lượt khám thực hiện"
+          value={loading ? '—' : metrics.appointments}
+          detail={metrics.appointmentsSub}
+          tone="blue"
+          sparklineData={metrics.chartBars.map((b: any) => b.count)}
+        />
+        <KpiMetricCard
+          label="Bệnh nhân phục vụ"
+          value={loading ? '—' : metrics.patients}
+          detail={metrics.patientsSub}
+          tone="amber"
+          sparklineData={metrics.chartBars.map((b: any) => (b.patients != null ? b.patients : b.count))}
+        />
+        <KpiMetricCard
+          label="Công suất buồng khám"
+          value={loading ? '—' : metrics.occupancy}
+          detail={metrics.occupancySub}
+          tone="slate"
+          sparklineData={metrics.chartBars.map((b: any) => (b.occupancy != null ? b.occupancy : (b.count > 0 ? 75 : 0)))}
+        />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_1fr]">
@@ -344,56 +349,119 @@ function AdminDashboard({ stats, loading }: any) {
             <p className="py-12 text-center text-xs text-slate-400">Chưa có dữ liệu biểu đồ trong khoảng thời gian này</p>
           ) : (
             <div className="pt-2">
-              <div className="relative h-48 border-b border-slate-200 flex items-end justify-around px-2">
-                {metrics.chartBars.map((item: any, idx: number) => {
-                  const height = Math.min(100, Math.max(8, Math.round((item.rev / ceiling) * 100)))
-                  return (
-                    <div key={idx} className="group relative flex flex-1 flex-col items-center h-full justify-end max-w-[64px] cursor-pointer">
-                      <span className="mb-1 text-[10px] font-bold text-slate-700 group-hover:text-emerald-700">{item.rev}</span>
-                      <div className="w-7 sm:w-9 rounded-t bg-emerald-700 hover:bg-emerald-800 transition-all shadow-xs" style={{ height: `${height}%` }} />
-                    </div>
-                  )
-                })}
+              <div className="h-44 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={metrics.chartBars}
+                    margin={{ top: 18, right: 10, left: -20, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={{ stroke: '#e2e8f0' }}
+                      tick={{ fontSize: 11, fill: '#334155', fontWeight: 600 }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 10, fill: '#94a3b8' }}
+                      unit=" tr"
+                    />
+                    <RechartsTooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null
+                        const d = payload[0].payload
+                        return (
+                          <div className="rounded border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
+                            <p className="font-bold text-slate-900">{label}</p>
+                            <p className="text-emerald-700 font-bold mt-0.5">Doanh thu: {d.rev} triệu VNĐ</p>
+                            <p className="text-slate-500 text-[11px]">Lượt khám: {d.count} ca</p>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Bar
+                      dataKey="rev"
+                      fill="#047857"
+                      radius={[4, 4, 0, 0]}
+                      barSize={28}
+                    >
+                      <LabelList
+                        dataKey="rev"
+                        position="top"
+                        formatter={(val: any) => `${val}`}
+                        className="fill-slate-700 text-[10px] font-bold"
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <div className="flex justify-around px-2 pt-2 text-center">
-                {metrics.chartBars.map((item: any, idx: number) => (
-                  <div key={idx} className="flex-1 max-w-[64px]">
-                    <p className="text-xs font-bold text-slate-700">{item.label}</p>
-                    <p className="text-[10px] text-slate-400">{item.count} ca</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-                <span>Chuyển khoản / QR: <b className="text-slate-900">{metrics.transferShare}%</b></span>
-                <span>Tiền mặt tại quầy: <b className="text-slate-900">{metrics.cashShare}%</b></span>
+
+              {/* Thông tin tóm tắt vận hành */}
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-600" />
+                  <span>Tổng doanh thu ghi nhận: <b className="text-slate-900">{metrics.revenue}</b></span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+                  <span>Tổng ca khám: <b className="text-slate-800">{metrics.appointments}</b></span>
+                </div>
               </div>
             </div>
           )}
         </Card>
 
-        <Card title="Hiệu suất theo Chi nhánh" action="Hệ thống VitaCare Clinic">
-          <div className="space-y-3">
-            {(!stats?.branchComparison || stats.branchComparison.length === 0) ? (
-              <p className="py-8 text-center text-xs text-slate-400">Chưa có dữ liệu cơ sở chi nhánh</p>
-            ) : (
-              stats.branchComparison.map((b: any) => (
-                <div key={b.id || b.name} className="rounded border border-slate-200/80 bg-white p-3 shadow-xs">
-                  <div className="flex items-start justify-between text-xs">
-                    <h3 className="font-bold text-slate-900">{b.name}</h3>
-                    <span className="font-bold text-slate-900">{b.rev}</span>
+        {/* Cột phải: Donut Chart Cơ cấu Kênh Thanh toán & Hiệu suất chi nhánh */}
+        <div className="space-y-4 flex flex-col justify-between">
+          <Card title="Cơ cấu Kênh Thanh toán" action="Thời gian thực">
+            <DonutChart
+              segments={[
+                {
+                  label: 'Chuyển khoản & QR',
+                  value: metrics.transferAmount > 0 || metrics.cashAmount > 0 ? metrics.transferAmount : (metrics.transferShare > 0 ? metrics.transferShare : 100),
+                  color: '#047857',
+                  subLabel: `${Math.round(metrics.transferAmount || 0).toLocaleString('vi-VN')} đ`,
+                },
+                {
+                  label: 'Tiền mặt tại quầy',
+                  value: metrics.cashAmount > 0 ? metrics.cashAmount : (metrics.cashShare > 0 ? metrics.cashShare : 0),
+                  color: '#0284c7',
+                  subLabel: `${Math.round(metrics.cashAmount || 0).toLocaleString('vi-VN')} đ`,
+                },
+              ]}
+              size={110}
+              thickness={18}
+              centerLabel="Thanh toán"
+              centerValue="100%"
+              layout="horizontal"
+            />
+          </Card>
+
+          <Card title="Hiệu suất theo Chi nhánh" action="Hệ thống VitaCare Clinic">
+            <div className="space-y-3">
+              {(!stats?.branchComparison || stats.branchComparison.length === 0) ? (
+                <p className="py-6 text-center text-xs text-slate-400">Chưa có dữ liệu cơ sở chi nhánh</p>
+              ) : (
+                stats.branchComparison.map((b: any) => (
+                  <div key={b.id || b.name} className="rounded border border-slate-100 bg-slate-50/70 p-3 shadow-2xs hover:bg-slate-50 transition-colors">
+                    <div className="flex items-start justify-between text-xs">
+                      <h3 className="font-bold text-slate-900 truncate pr-2">{b.name}</h3>
+                      <span className="font-bold text-slate-900 tabular-nums shrink-0">{b.rev}</span>
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Lượt khám: <b className="text-slate-700">{b.appts} ca</b></span>
+                      <span>Công suất: <b className="text-slate-700">{b.cap}%</b></span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-200/70 overflow-hidden">
+                      <div className={`h-full ${b.col}`} style={{ width: `${b.cap}%` }} />
+                    </div>
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>Lượt khám: <b>{b.appts} ca</b></span>
-                    <span>Công suất: <b>{b.cap}%</b></span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
-                    <div className={`h-full ${b.col}`} style={{ width: `${b.cap}%` }} />
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
       </div>
 
       <div className="mt-5">
@@ -419,10 +487,10 @@ function ManagerDashboard({ stats, loading }: any) {
         <p className="text-xs text-slate-500">Hoạt động vận hành và lịch khám hôm nay theo thời gian thực.</p>
       </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Lịch hẹn hôm nay" value={loading ? '—' : `${t.total ?? 0} ca`} detail={`Đã khám: ${t.examined ?? 0} · Đang chờ: ${t.checkedIn ?? 0}`} icon="appointments" />
-        <Kpi label="Doanh thu hôm nay" value={loading ? '—' : rev} detail="Thu tiền mặt & chuyển khoản" tone="emerald" icon="billing" />
-        <Kpi label="Đang chờ khám" value={loading ? '—' : `${t.checkedIn ?? 0} ca`} detail="Bệnh nhân đã tiếp đón vào phòng" tone="amber" icon="patients" />
-        <Kpi label="Hoàn thành" value={loading ? '—' : `${t.examined ?? 0} ca`} detail="Đã hoàn tất ca khám và kê đơn" tone="blue" icon="appointments" />
+        <KpiMetricCard label="Lịch hẹn hôm nay" value={loading ? '—' : `${t.total ?? 0} ca`} detail={`Đã khám: ${t.examined ?? 0} · Đang chờ: ${t.checkedIn ?? 0}`} tone="blue" />
+        <KpiMetricCard label="Doanh thu hôm nay" value={loading ? '—' : rev} detail="Thu tiền mặt & chuyển khoản" tone="emerald" />
+        <KpiMetricCard label="Đang chờ khám" value={loading ? '—' : `${t.checkedIn ?? 0} ca`} detail="Bệnh nhân đã tiếp đón vào phòng" tone="amber" />
+        <KpiMetricCard label="Hoàn thành" value={loading ? '—' : `${t.examined ?? 0} ca`} detail="Đã hoàn tất ca khám và kê đơn" tone="emerald" />
       </div>
       <div className="mt-5">
         <ActivityTable title="Lịch hẹn tại chi nhánh hôm nay" items={todayRows} />

@@ -101,7 +101,7 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
     { id: 'revenue_sources' as TabType, label: 'Nguồn thu Chuyên khoa & Gói khám' },
     { id: 'operations' as TabType, label: 'Lượt khám & Vận hành' },
     { id: 'doctors' as TabType, label: 'Hiệu suất Bác sĩ' },
-    { id: 'demand_ai' as TabType, label: 'Nhu cầu Khám & AI Insights' },
+    { id: 'demand_ai' as TabType, label: 'Phân tích nhu cầu Khám' },
   ]
 
   return (
@@ -232,8 +232,8 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
                   type="button"
                   onClick={() => setTimeFilter(filter)}
                   className={`rounded px-3 py-1.5 font-semibold transition-colors cursor-pointer ${isActive
-                      ? 'bg-slate-900 text-white font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-slate-900 text-white font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
                     }`}
                 >
                   {labels[filter]}
@@ -268,8 +268,8 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={`rounded px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${isActive
-                  ? 'bg-slate-100 text-slate-900 font-bold border border-slate-200'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                ? 'bg-slate-100 text-slate-900 font-bold border border-slate-200'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                 }`}
             >
               {tab.label}
@@ -304,6 +304,9 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
         <AnalyticsDemandAiTab
           branchFilter={branchFilter}
           branches={branches}
+          timeFilter={timeFilter}
+          startDate={startDate}
+          endDate={endDate}
         />
       )}
     </div>

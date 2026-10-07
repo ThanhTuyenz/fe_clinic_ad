@@ -15,6 +15,14 @@
   --error: #dc2626;
   --radius: 4px;
   --shadow: none;
+
+  /* Shadcn / UI Chart Color Variables */
+  --chart-1: #047857; /* emerald-700 */
+  --chart-2: #0284c7; /* sky-600 */
+  --chart-3: #d97706; /* amber-600 */
+  --chart-4: #4f46e5; /* indigo-600 */
+  --chart-5: #e11d48; /* rose-600 */
+
   font-family: var(--font-inter), Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -24,6 +32,14 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.dark {
+  --chart-1: #10b981; /* emerald-500 */
+  --chart-2: #38bdf8; /* sky-400 */
+  --chart-3: #fbbf24; /* amber-400 */
+  --chart-4: #818cf8; /* indigo-400 */
+  --chart-5: #f43f5e; /* rose-500 */
 }
 
 *,

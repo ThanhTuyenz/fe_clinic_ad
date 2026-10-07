@@ -85,8 +85,10 @@ export default function DoctorWorkSchedulesPage() {
   const [error, setError] = useState('')
 
   const [filterBranch, setFilterBranch] = useState('')
+  const [filterSpecialty, setFilterSpecialty] = useState('')
   const [filterDoctor, setFilterDoctor] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [specialties, setSpecialties] = useState<any[]>([])
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()))
 
@@ -119,7 +121,7 @@ export default function DoctorWorkSchedulesPage() {
     setLoading(true)
     setError('')
     try {
-      const [scRes, uRes, bRes, rRes] = await Promise.all([
+      const [scRes, uRes, bRes, rRes, spRes] = await Promise.all([
         listSchedules({
           doctorId: filterDoctor || undefined,
           branchId: filterBranch || undefined,
@@ -129,11 +131,13 @@ export default function DoctorWorkSchedulesPage() {
         listUsers(),
         listCatalog('branches').catch(() => []),
         listClinicRooms().catch(() => []),
+        listCatalog('specialties').catch(() => []),
       ])
       setSchedules(scRes || [])
       setDoctors(uRes.data?.filter((u: any) => String(u.role || u.userType).toLowerCase() === 'doctor') || [])
       setBranches(bRes || [])
       setRooms(rRes || [])
+      setSpecialties(spRes || [])
     } catch (e: any) {
       setError(e?.message || 'Không tải được lịch làm việc.')
     } finally {
@@ -175,6 +179,14 @@ export default function DoctorWorkSchedulesPage() {
       const name = (d.fullName || d.doctor?.fullName || '').toLowerCase()
       if (q && !name.includes(q)) return false
       if (filterDoctor && dId !== filterDoctor && uId !== filterDoctor) return false
+      if (filterSpecialty) {
+        const hasSpec =
+          d.doctor?.specialties?.some(
+            (sp: any) =>
+              String(sp.specialtyId || sp.specialty?.id || sp.id) === String(filterSpecialty)
+          ) || String(d.doctor?.specialtyId) === String(filterSpecialty)
+        if (!hasSpec) return false
+      }
       if (filterBranch) {
         const hasA = d.branchAssignments?.some(
           (ba: any) => ba.branchId === filterBranch || ba.branch?.id === filterBranch
@@ -186,7 +198,43 @@ export default function DoctorWorkSchedulesPage() {
       }
       return true
     })
-  }, [doctors, schedules, filterDoctor, filterBranch, searchTerm])
+  }, [doctors, schedules, filterDoctor, filterBranch, filterSpecialty, searchTerm])
+
+  const availableDoctorsForSelect = useMemo(() => {
+    if (!filterSpecialty) return doctors
+    return doctors.filter((d) => {
+      return (
+        d.doctor?.specialties?.some(
+          (sp: any) =>
+            String(sp.specialtyId || sp.specialty?.id || sp.id) === String(filterSpecialty)
+        ) || String(d.doctor?.specialtyId) === String(filterSpecialty)
+      )
+    })
+  }, [doctors, filterSpecialty])
+
+  const filteredSchedules = useMemo(() => {
+    return schedules.filter((row) => {
+      if (filterBranch && row.branchId !== filterBranch) return false
+      const doc = doctors.find(
+        (d) => (d.doctor?.id || d.id) === row.doctorId || d.id === row.doctor?.userId
+      )
+      if (filterDoctor && row.doctorId !== filterDoctor && doc?.id !== filterDoctor) return false
+      if (filterSpecialty) {
+        const hasSpec =
+          doc?.doctor?.specialties?.some(
+            (sp: any) =>
+              String(sp.specialtyId || sp.specialty?.id || sp.id) === String(filterSpecialty)
+          ) || String(doc?.doctor?.specialtyId) === String(filterSpecialty)
+        if (!hasSpec) return false
+      }
+      if (searchTerm.trim()) {
+        const q = searchTerm.trim().toLowerCase()
+        const docName = (row.doctor?.fullName || doc?.fullName || '').toLowerCase()
+        if (!docName.includes(q)) return false
+      }
+      return true
+    })
+  }, [schedules, filterBranch, filterDoctor, filterSpecialty, searchTerm, doctors])
 
   const openScheduleModal = (doctorId?: string, dateStr?: string) => {
     setSelectedDoctorId(doctorId || filterDoctor || '')
@@ -388,12 +436,28 @@ export default function DoctorWorkSchedulesPage() {
           </select>
 
           <select
+            value={filterSpecialty}
+            onChange={(e) => {
+              setFilterSpecialty(e.target.value)
+              setFilterDoctor('')
+            }}
+            className="max-w-[140px] truncate rounded border border-slate-200 bg-white px-2 py-1 text-xs font-semibold outline-none focus:border-emerald-600 shrink-0"
+          >
+            <option value="">Tất cả Chuyên khoa</option>
+            {specialties.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+
+          <select
             value={filterDoctor}
             onChange={(e) => setFilterDoctor(e.target.value)}
             className="max-w-[135px] truncate rounded border border-slate-200 bg-white px-2 py-1 text-xs font-semibold outline-none focus:border-emerald-600 shrink-0"
           >
             <option value="">Tất cả Bác sĩ</option>
-            {doctors.map((d) => (
+            {availableDoctorsForSelect.map((d) => (
               <option key={d.id} value={d.doctor?.id || d.id}>
                 {d.academicRank ? `${d.academicRank} ` : ''}
                 {d.fullName}
@@ -701,10 +765,10 @@ export default function DoctorWorkSchedulesPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <AdminTableLoading colSpan={8} message="Đang tải lịch…" />
-              ) : schedules.length === 0 ? (
+              ) : filteredSchedules.length === 0 ? (
                 <AdminTableEmpty colSpan={8} message="Chưa có ca trực nào." />
               ) : (
-                schedules.map((row) => {
+                filteredSchedules.map((row) => {
                   const occupied = row.occupiedCount || 0
                   const capacity = row.totalCapacity || row.slots?.length || 0
                   const isFull = occupied >= capacity && capacity > 0

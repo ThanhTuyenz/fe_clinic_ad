@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
+import { Sparkline, KpiMetricCard } from './Charts'
 
 interface DoctorPerformanceItem {
   id: string
@@ -33,36 +34,62 @@ export default function AnalyticsDoctorsTab({ doctorsPerformance }: AnalyticsDoc
     })[0]
   }, [doctorsPerformance])
 
+  // Tính tổng cộng cho Total Row
+  const totals = useMemo(() => {
+    let totalAppts = 0
+    let totalExamRev = 0
+    let totalSubRev = 0
+    let totalRev = 0
+
+    doctorsPerformance.forEach((d) => {
+      totalAppts += d.appts || 0
+      const exam = parseFloat(String(d.examRev || '0').replace(/\./g, '').replace(' đ', '')) || 0
+      const sub = parseFloat(String(d.subclinicalRev || '0').replace(/\./g, '').replace(' đ', '')) || 0
+      const tot = parseFloat(String(d.totalRev || '0').replace(/\./g, '').replace(' đ', '')) || 0
+      totalExamRev += exam
+      totalSubRev += sub
+      totalRev += tot
+    })
+
+    return {
+      totalAppts,
+      totalExamRev: `${Math.round(totalExamRev).toLocaleString('vi-VN')} đ`,
+      totalSubRev: `${Math.round(totalSubRev).toLocaleString('vi-VN')} đ`,
+      totalRev: `${Math.round(totalRev).toLocaleString('vi-VN')} đ`,
+    }
+  }, [doctorsPerformance])
+
+  const maxTotalRevNum = useMemo(() => {
+    return Math.max(
+      1,
+      ...doctorsPerformance.map((d) => parseFloat(String(d.totalRev || '0').replace(/\./g, '').replace(' đ', '')) || 0)
+    )
+  }, [doctorsPerformance])
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded border border-slate-200 bg-white p-4 shadow-2xs">
-          <span className="text-xs font-medium text-slate-500">Số bác sĩ có số liệu</span>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
-            {doctorsPerformance.length} bác sĩ
-          </p>
-          <p className="mt-1 text-xs text-slate-400">Tham gia tiếp nhận và khám bệnh trong kỳ</p>
-        </div>
-
-        <div className="rounded border border-slate-200 bg-white p-4 shadow-2xs">
-          <span className="text-xs font-medium text-slate-500">Bác sĩ dẫn đầu ca khám</span>
-          <p className="mt-1.5 text-base font-bold text-slate-900 truncate">
-            {topByAppts?.name || '—'}
-          </p>
-          <p className="mt-1 text-xs text-emerald-700 font-medium">
-            {topByAppts ? `${topByAppts.appts} ca hoàn thành` : 'Chưa có dữ liệu'}
-          </p>
-        </div>
-
-        <div className="rounded border border-slate-200 bg-white p-4 shadow-2xs">
-          <span className="text-xs font-medium text-slate-500">Bác sĩ dẫn đầu doanh thu</span>
-          <p className="mt-1.5 text-base font-bold text-slate-900 truncate">
-            {topByRev?.name || '—'}
-          </p>
-          <p className="mt-1 text-xs text-blue-700 font-medium">
-            {topByRev ? topByRev.totalRev : 'Chưa có dữ liệu'}
-          </p>
-        </div>
+        <KpiMetricCard
+          label="Số bác sĩ có số liệu"
+          value={`${doctorsPerformance.length} bác sĩ`}
+          detail="Trực khám thực tế trong kỳ"
+          tone="emerald"
+          sparklineData={[5, 8, 12, 10, 15, 14, 18]}
+        />
+        <KpiMetricCard
+          label="Bác sĩ dẫn đầu ca khám"
+          value={topByAppts?.name || '—'}
+          detail={topByAppts ? `${topByAppts.appts} ca hoàn thành` : 'Chưa có dữ liệu'}
+          tone="blue"
+          sparklineData={[8, 12, 16, 22, 28, 35, 40]}
+        />
+        <KpiMetricCard
+          label="Bác sĩ dẫn đầu doanh thu"
+          value={topByRev?.name || '—'}
+          detail={topByRev ? topByRev.totalRev : 'Chưa có dữ liệu'}
+          tone="indigo"
+          sparklineData={[10, 15, 20, 25, 30, 35, 45]}
+        />
       </div>
 
       {/* Biểu đồ Cột Ngang (Horizontal Bar Chart) Top Bác Sĩ Gánh Tải Chính */}
@@ -162,6 +189,9 @@ export default function AnalyticsDoctorsTab({ doctorsPerformance }: AnalyticsDoc
                         <span className="text-xs font-bold text-slate-900 tabular-nums">
                           {doctorMetric === 'revenue' ? doc.totalRev : `${doc.appts} ca khám`}
                         </span>
+                        <span className="rounded bg-white border border-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                          {widthPct}%
+                        </span>
                       </div>
                     </div>
 
@@ -196,42 +226,70 @@ export default function AnalyticsDoctorsTab({ doctorsPerformance }: AnalyticsDoc
                 <th className="py-3 px-4 text-right">Thu từ Khám bệnh</th>
                 <th className="py-3 px-4 text-right">Thu từ Chỉ định CLS</th>
                 <th className="py-3 px-4 text-right">Tổng doanh thu</th>
+                <th className="py-3 px-4 text-center">Tiến độ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {doctorsPerformance.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-400">
+                  <td colSpan={7} className="py-8 text-center text-slate-400">
                     Chưa có dữ liệu hiệu suất bác sĩ trong kỳ.
                   </td>
                 </tr>
               ) : (
-                doctorsPerformance.map((doc, idx) => (
-                  <tr key={doc.id || idx} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-slate-900 whitespace-nowrap">
-                      {doc.name}
-                    </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                        {doc.specialty}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-center font-bold text-slate-800 tabular-nums whitespace-nowrap">
-                      {doc.appts} ca
-                    </td>
-                    <td className="py-3.5 px-4 text-right text-slate-600 tabular-nums whitespace-nowrap">
-                      {doc.examRev}
-                    </td>
-                    <td className="py-3.5 px-4 text-right text-slate-600 tabular-nums whitespace-nowrap">
-                      {doc.subclinicalRev}
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">
-                      {doc.totalRev}
-                    </td>
-                  </tr>
-                ))
+                doctorsPerformance.map((doc, idx) => {
+                  const revNum = parseFloat(String(doc.totalRev || '0').replace(/\./g, '').replace(' đ', '')) || 0
+                  const barPct = Math.min(100, Math.max(5, Math.round((revNum / maxTotalRevNum) * 100)))
+
+                  return (
+                    <tr key={doc.id || idx} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-slate-900 whitespace-nowrap">
+                        {doc.name}
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                          {doc.specialty}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center font-bold text-slate-800 tabular-nums whitespace-nowrap">
+                        {doc.appts} ca
+                      </td>
+                      <td className="py-3.5 px-4 text-right text-slate-600 tabular-nums whitespace-nowrap">
+                        {doc.examRev}
+                      </td>
+                      <td className="py-3.5 px-4 text-right text-slate-600 tabular-nums whitespace-nowrap">
+                        {doc.subclinicalRev}
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">
+                        {doc.totalRev}
+                      </td>
+                      <td className="py-3.5 px-4 text-center w-28 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
+                            <div className="h-full rounded-full bg-emerald-700" style={{ width: `${barPct}%` }} />
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-500 w-7 text-right">{barPct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
+            {/* DÒNG TỔNG CỘNG (TOTAL ROW) */}
+            {doctorsPerformance.length > 0 && (
+              <tfoot className="bg-slate-100/80 font-bold border-t-2 border-slate-300">
+                <tr>
+                  <td className="py-3.5 px-4 text-slate-900 font-bold">Tổng cộng toàn viện</td>
+                  <td className="py-3.5 px-4 text-slate-500 font-semibold">{doctorsPerformance.length} bác sĩ</td>
+                  <td className="py-3.5 px-4 text-center text-slate-900 font-bold">{totals.totalAppts} ca</td>
+                  <td className="py-3.5 px-4 text-right text-slate-700 font-semibold">{totals.totalExamRev}</td>
+                  <td className="py-3.5 px-4 text-right text-slate-700 font-semibold">{totals.totalSubRev}</td>
+                  <td className="py-3.5 px-4 text-right text-emerald-800 font-bold text-sm">{totals.totalRev}</td>
+                  <td className="py-3.5 px-4 text-center text-slate-900 font-bold">100%</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>

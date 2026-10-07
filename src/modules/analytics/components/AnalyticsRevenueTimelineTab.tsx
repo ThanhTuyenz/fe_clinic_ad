@@ -1,6 +1,17 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from 'recharts'
+import { DonutChart, Sparkline, KpiMetricCard } from './Charts'
 
 interface AnalyticsRevenueTimelineTabProps {
   data: {
@@ -17,33 +28,42 @@ interface AnalyticsRevenueTimelineTabProps {
 }
 
 export default function AnalyticsRevenueTimelineTab({ data }: AnalyticsRevenueTimelineTabProps) {
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  const revTrend = data.bars.map((b) => b.rev)
+  const countTrend = data.bars.map((b) => b.count)
+
+  const maxCount = Math.max(10, Math.ceil(Math.max(...countTrend, 0) * 1.25))
+
   return (
     <div className="space-y-4">
-      {/* 3 Thẻ chỉ số ngắn gọn, trắng sạch */}
+      {/* 3 Thẻ chỉ số Executive có Sparkline mini */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded border border-slate-200 bg-white p-4 shadow-2xs">
-          <span className="text-xs font-medium text-slate-500">Tổng doanh thu kỳ này</span>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
-            {data.revenue}
-          </p>
-          <p className="mt-1 text-xs text-emerald-700 font-medium">↑ {data.revenueGrowth}</p>
-        </div>
-
-        <div className="rounded border border-slate-200 bg-white p-4 shadow-2xs">
-          <span className="text-xs font-medium text-slate-500">Doanh thu trung bình / ngày</span>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
-            {data.dailyAvg}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">Tính trên chu kỳ vận hành đã chọn</p>
-        </div>
-
-        <div className="rounded border border-slate-200 bg-white p-4 shadow-2xs">
-          <span className="text-xs font-medium text-slate-500">Doanh thu trung bình / lượt khám</span>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
-            {data.avgPerPatient}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">Khám lâm sàng & chỉ định cận lâm sàng</p>
-        </div>
+        <KpiMetricCard
+          label="Tổng doanh thu kỳ này"
+          value={data.revenue}
+          badge={`↑ ${data.revenueGrowth}`}
+          detail="vs kỳ trước"
+          tone="emerald"
+          sparklineData={revTrend.length ? revTrend : [10, 20, 15, 30, 25, 35, 40]}
+        />
+        <KpiMetricCard
+          label="Doanh thu TB / ngày"
+          value={data.dailyAvg}
+          detail="Theo chu kỳ vận hành"
+          tone="blue"
+          sparklineData={revTrend.length ? revTrend : [5, 8, 7, 12, 10, 15, 14]}
+        />
+        <KpiMetricCard
+          label="Doanh thu TB / lượt khám"
+          value={data.avgPerPatient}
+          detail="Khám & cận lâm sàng"
+          tone="indigo"
+          sparklineData={countTrend.length ? countTrend : [15, 25, 20, 35, 30, 45, 42]}
+        />
       </div>
 
       {/* Biểu đồ Combo Doanh Thu & Lượt Khám (Cột Doanh thu + Đường Line số ca khám) */}
@@ -51,7 +71,7 @@ export default function AnalyticsRevenueTimelineTab({ data }: AnalyticsRevenueTi
         <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 gap-2">
           <div>
             <h3 className="text-sm font-bold text-slate-900">{data.chartLabel}</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Biểu đồ kết hợp (Combo Chart): Cột Doanh thu & Đường Line Lượt khám thực tế</p>
+            <p className="text-xs text-slate-400 mt-0.5">Biểu đồ kết hợp (Recharts Composed Chart): Cột Doanh thu & Đường Line Lượt khám thực tế</p>
           </div>
           {/* Chú giải 2 trục trực quan */}
           <div className="flex items-center gap-4 text-xs font-semibold">
@@ -69,146 +89,81 @@ export default function AnalyticsRevenueTimelineTab({ data }: AnalyticsRevenueTi
         </div>
 
         <div className="pt-5">
-          {/* Vùng Canvas Biểu đồ 2 trục Y: Trục trái (Doanh thu) - Trục phải (Lượt khám) */}
-          <div className="flex">
-            {/* Trục Y Trái: Giá trị Doanh thu */}
-            <div className="flex flex-col justify-between text-right pr-3 select-none w-12 shrink-0 h-56">
-              {data.guides.map((val, idx) => (
-                <span key={idx} className="text-[10px] font-medium text-slate-400 tabular-nums leading-none">
-                  {val} <span className="text-[9px]">tr</span>
-                </span>
-              ))}
-              <span className="text-[10px] font-bold text-slate-600 tabular-nums leading-none">
-                0 <span className="text-[9px]">tr</span>
-              </span>
-            </div>
-
-            {/* Vùng Canvas Biểu Đồ: Đáy biểu đồ là đường border-b border-slate-300 (mốc 0) */}
-            <div className="relative flex-1 h-56 border-b border-slate-300">
-              {/* Đường kẻ ngang nét đứt tham chiếu */}
-              <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
-                <div className="border-b border-dashed border-slate-200 w-full" />
-                <div className="border-b border-dashed border-slate-200 w-full" />
-                <div className="border-b border-dashed border-slate-200 w-full" />
-                <div className="border-b border-dashed border-slate-200 w-full" />
-                <div className="w-full" />
-              </div>
-
-              {/* 1. Cột Doanh Thu: Đặt items-end, chạm TRỰC TIẾP vào đáy container (đường mốc 0) */}
-              <div className="relative z-10 flex h-full items-end justify-around px-4">
-                {data.bars.map((item, idx) => {
-                  const heightPercent = Math.min(100, Math.max(4, Math.round((item.rev / data.chartCeiling) * 100)))
-                  return (
-                    <div
-                      key={idx}
-                      className="group relative flex flex-col items-center justify-end h-full flex-1 max-w-[68px] cursor-pointer"
-                    >
-                      {/* Tooltip khi rê chuột */}
-                      <div className="opacity-0 group-hover:opacity-100 transition-all duration-150 pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 z-40 whitespace-nowrap rounded bg-slate-900 px-2.5 py-1 text-center shadow-md">
-                        <p className="text-[11px] font-bold text-white">{item.label}: {item.rev} triệu VNĐ</p>
-                        <p className="text-[10px] text-sky-300 font-medium">Lưu lượng: {item.count} lượt khám</p>
-                      </div>
-
-                      {/* Số tiền trên đầu cột */}
-                      <span className="text-[11px] font-bold text-slate-700 mb-1.5 tabular-nums transition-colors group-hover:text-emerald-700">
-                        {item.rev}
-                      </span>
-
-                      {/* Thân cột: Chạm đúng vào đường mốc 0, không có khoảng hở */}
-                      <div
-                        className="w-8 sm:w-10 rounded-t bg-emerald-700 hover:bg-emerald-800 transition-all duration-300 shadow-2xs"
-                        style={{ height: `${heightPercent}%` }}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* 2. Đường Line Lượt khám (Overlay Combo Chart) */}
-              {(() => {
-                const rawMaxCount = Math.max(...data.bars.map((b: any) => b.count || 0), 0)
-                const maxCount = rawMaxCount > 0 ? Math.max(10, Math.ceil(rawMaxCount * 1.25)) : 10
-                return (
-                  <>
-                    <svg className="pointer-events-none absolute inset-0 h-full w-full z-20 overflow-visible" preserveAspectRatio="none">
-                      <polyline
-                        fill="none"
-                        stroke="#0284c7"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        points={data.bars.map((item, idx) => {
-                          const xPercent = ((idx + 0.5) / data.bars.length) * 100
-                          const yPercent = 100 - (item.count / maxCount) * 100
-                          return `${xPercent}%,${yPercent}%`
-                        }).join(' ')}
-                      />
-                    </svg>
-
-                    {/* Điểm nút & Huy hiệu số ca trên Line */}
-                    <div className="pointer-events-none absolute inset-0 z-30">
-                      {data.bars.map((item, idx) => {
-                        const xPercent = ((idx + 0.5) / data.bars.length) * 100
-                        const yPercent = 100 - (item.count / maxCount) * 100
-                        return (
-                          <div
-                            key={idx}
-                            style={{ left: `${xPercent}%`, top: `${yPercent}%` }}
-                            className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center"
-                          >
-                            <span className="h-3 w-3 rounded-full bg-white border-2 border-sky-600 shadow-xs" />
-                            <span className="mt-1 rounded bg-sky-50/90 border border-sky-200 px-1 py-0.2 text-[9px] font-bold text-sky-800 shadow-2xs">
-                              {item.count} ca
-                            </span>
+          {!isMounted ? (
+            <div className="h-64 w-full animate-pulse rounded bg-slate-100" />
+          ) : (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={data.bars} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    stroke="#94a3b8"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={{ stroke: '#cbd5e1' }}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    stroke="#047857"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    unit=" tr"
+                    domain={[0, data.chartCeiling || 'auto']}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    stroke="#0284c7"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    unit=" ca"
+                    domain={[0, maxCount]}
+                  />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload || !payload.length) return null
+                      const revVal = payload.find((p) => p.dataKey === 'rev')?.value
+                      const countVal = payload.find((p) => p.dataKey === 'count')?.value
+                      return (
+                        <div className="rounded border border-slate-200 bg-slate-900/95 px-3 py-2 text-white shadow-xl backdrop-blur-sm">
+                          <p className="text-xs font-bold text-slate-100">{label}</p>
+                          <div className="mt-1 space-y-0.5 text-[11px]">
+                            <p className="flex items-center gap-1.5 text-emerald-300 font-semibold">
+                              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                              Doanh thu: {revVal} triệu VNĐ
+                            </p>
+                            <p className="flex items-center gap-1.5 text-sky-300 font-medium">
+                              <span className="h-2 w-2 rounded-full bg-sky-400" />
+                              Lưu lượng: {countVal} ca khám
+                            </p>
                           </div>
-                        )
-                      })}
-                    </div>
-                  </>
-                )
-              })()}
+                        </div>
+                      )
+                    }}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="rev"
+                    fill="#047857"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={48}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#0284c7"
+                    strokeWidth={2.5}
+                    dot={{ fill: '#ffffff', stroke: '#0284c7', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, fill: '#0284c7' }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
-
-            {/* Trục Y Phải: Giá trị Lượt khám (Ca) */}
-            {(() => {
-              const rawMaxCount = Math.max(...data.bars.map((b: any) => b.count || 0), 0)
-              const maxCount = rawMaxCount > 0 ? Math.max(10, Math.ceil(rawMaxCount * 1.25)) : 10
-              const step = maxCount / 4
-              return (
-                <div className="flex flex-col justify-between text-left pl-3 select-none w-12 shrink-0 h-56">
-                  <span className="text-[10px] font-semibold text-sky-700 tabular-nums leading-none">
-                    {maxCount} <span className="text-[9px] font-normal">ca</span>
-                  </span>
-                  <span className="text-[10px] font-medium text-sky-600/70 tabular-nums leading-none">
-                    {Math.round(step * 3)} <span className="text-[9px] font-normal">ca</span>
-                  </span>
-                  <span className="text-[10px] font-medium text-sky-600/70 tabular-nums leading-none">
-                    {Math.round(step * 2)} <span className="text-[9px] font-normal">ca</span>
-                  </span>
-                  <span className="text-[10px] font-medium text-sky-600/70 tabular-nums leading-none">
-                    {Math.round(step)} <span className="text-[9px] font-normal">ca</span>
-                  </span>
-                  <span className="text-[10px] font-bold text-sky-700 tabular-nums leading-none">
-                    0 <span className="text-[9px] font-normal">ca</span>
-                  </span>
-                </div>
-              )
-            })()}
-          </div>
-
-          {/* Nhãn trục X đặt riêng bên dưới mốc 0 */}
-          <div className="flex pt-2.5">
-            <div className="w-12 shrink-0 pr-3" />
-            <div className="flex-1 flex justify-around px-4 select-none">
-              {data.bars.map((item, idx) => (
-                <div key={idx} className="text-center flex-1 max-w-[68px]">
-                  <p className="text-xs font-bold text-slate-700">{item.label}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">{item.count} ca</p>
-                </div>
-              ))}
-            </div>
-            <div className="w-12 shrink-0 pl-3" />
-          </div>
+          )}
         </div>
       </div>
 
@@ -224,38 +179,27 @@ export default function AnalyticsRevenueTimelineTab({ data }: AnalyticsRevenueTi
         <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
           {/* Donut Chart */}
           <div className="lg:col-span-5 flex flex-col items-center justify-center p-2">
-            <div
-              className="relative grid place-items-center rounded-full shadow-sm"
-              style={{
-                width: '164px',
-                height: '164px',
-                background: `conic-gradient(
-                  #ec4899 0% ${data.payments[0]?.pct || 0}%,
-                  #047857 ${data.payments[0]?.pct || 0}% 100%
-                )`,
-              }}
-            >
-              {/* Tâm tròn tạo hình Donut */}
-              <div className="grid h-28 w-28 place-items-center rounded-full bg-white text-center shadow-inner">
-                <div className="px-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Tổng thu</span>
-                  <p className="text-xs font-bold text-slate-900 leading-tight mt-0.5 truncate max-w-[96px]" title={data.revenue}>
-                    {data.revenue}
-                  </p>
-                  <span className="text-[9px] text-emerald-700 font-semibold block mt-0.5">2 Kênh thu</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Legend mini dưới Donut */}
-            <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-[11px]">
-              <span className="flex items-center gap-1.5 text-slate-600">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#ec4899]" /> {data.payments[0]?.name || 'Trực tuyến'} ({data.payments[0]?.pct || 0}%)
-              </span>
-              <span className="flex items-center gap-1.5 text-slate-600">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#047857]" /> {data.payments[1]?.name || 'Tại quầy'} ({data.payments[1]?.pct || 0}%)
-              </span>
-            </div>
+            <DonutChart
+              segments={[
+                {
+                  label: data.payments[0]?.name || 'Trực tuyến (QR/Banking)',
+                  value: data.payments[0]?.pct || 0,
+                  color: '#ec4899',
+                  subLabel: data.payments[0]?.amount,
+                },
+                {
+                  label: data.payments[1]?.name || 'Tại quầy (Tiền mặt/POS)',
+                  value: data.payments[1]?.pct || 0,
+                  color: '#047857',
+                  subLabel: data.payments[1]?.amount,
+                },
+              ]}
+              size={150}
+              thickness={22}
+              centerLabel="Tổng thu"
+              centerValue="100%"
+              layout="horizontal"
+            />
           </div>
 
           {/* Thẻ chi tiết 2 phương thức */}

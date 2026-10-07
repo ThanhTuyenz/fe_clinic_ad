@@ -51,18 +51,24 @@ export async function fetchAnalyticsData({
 
 export async function fetchDemandInsights({
   token,
-  timeFilter = '30days',
+  timeFilter = 'month',
   branchId,
+  startDate,
+  endDate,
 }: {
   token?: string
-  timeFilter?: 'today' | '7days' | '30days'
+  timeFilter?: 'today' | 'week' | 'month' | 'quarter' | '7days' | '30days' | string
   branchId?: string
+  startDate?: string
+  endDate?: string
 } = {}) {
   try {
     const headers: Record<string, string> = {}
     if (token) headers.Authorization = `Bearer ${token}`
     const params: Record<string, any> = { timeFilter }
     if (branchId && branchId !== 'all') params.branchId = branchId
+    if (startDate) params.startDate = startDate
+    if (endDate) params.endDate = endDate
 
     return await apiRequest({ method: 'GET', url: '/stats/demand-insights', headers, params })
   } catch (error) {
@@ -72,13 +78,17 @@ export async function fetchDemandInsights({
 
 export async function fetchAiExecutiveReport({
   token,
-  timeFilter = '30days',
+  timeFilter = 'month',
   branchId,
+  startDate,
+  endDate,
   forceRefresh,
 }: {
   token?: string
-  timeFilter?: 'today' | '7days' | '30days' | string
+  timeFilter?: 'today' | 'week' | 'month' | 'quarter' | '7days' | '30days' | string
   branchId?: string
+  startDate?: string
+  endDate?: string
   forceRefresh?: boolean
 } = {}) {
   try {
@@ -86,6 +96,8 @@ export async function fetchAiExecutiveReport({
     if (token) headers.Authorization = `Bearer ${token}`
     const params: Record<string, any> = { timeFilter }
     if (branchId && branchId !== 'all') params.branchId = branchId
+    if (startDate) params.startDate = startDate
+    if (endDate) params.endDate = endDate
     if (forceRefresh) params.forceRefresh = true
 
     return await apiRequest({ method: 'GET', url: '/stats/ai-executive-report', headers, params })
