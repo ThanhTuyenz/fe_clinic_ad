@@ -159,7 +159,7 @@ export default function AnalyticsRevenueSourcesTab({ revenueSources }: Analytics
             {/* Nửa bên phải (lg:col-span-5): Donut Chart phân bổ tỷ trọng theo mẫu Spend Allocation */}
             <div className="lg:col-span-5 rounded border border-slate-200/80 bg-slate-50/60 p-4 flex flex-col items-center shadow-2xs">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 text-center">
-                Biểu đồ Phân bổ Nguồn thu (Donut Chart)
+                Biểu đồ Phân bổ Nguồn thu
               </h4>
 
               <DonutChart
@@ -211,8 +211,8 @@ export default function AnalyticsRevenueSourcesTab({ revenueSources }: Analytics
                   <td className="py-3.5 px-4 whitespace-nowrap">
                     <span
                       className={`inline-block rounded px-2 py-0.5 text-[10px] font-bold ${s.category === 'Gói khám bệnh' || s.category?.includes('Gói')
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          : 'bg-slate-100 text-slate-700'
+                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                        : 'bg-slate-100 text-slate-700'
                         }`}
                     >
                       {s.category}

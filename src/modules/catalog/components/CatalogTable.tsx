@@ -28,6 +28,7 @@ interface CatalogTableProps {
   onDetail: (row: any) => void
   onEdit: (row: any) => void
   onRemove: (row: any) => void
+  canRemove?: boolean
   display: (key: string, value: any) => React.ReactNode
 }
 
@@ -56,6 +57,7 @@ export default function CatalogTable({
   onDetail,
   onEdit,
   onRemove,
+  canRemove = true,
   display,
 }: CatalogTableProps) {
   return (
@@ -176,7 +178,7 @@ export default function CatalogTable({
         </div>
       )}
 
-      <div className="overflow-x-auto [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
+      <div className="overflow-x-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch]">
         {resource === 'service-packages' ? (
           <table className="w-full min-w-[960px] text-left text-xs">
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
@@ -408,13 +410,15 @@ export default function CatalogTable({
                       >
                         Sửa
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onRemove(row)}
-                        className="rounded border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:border-rose-300 cursor-pointer"
-                      >
-                        Ngừng dùng
-                      </button>
+                      {canRemove && (
+                        <button
+                          type="button"
+                          onClick={() => onRemove(row)}
+                          className="rounded border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:border-rose-300 cursor-pointer"
+                        >
+                          Ngừng dùng
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

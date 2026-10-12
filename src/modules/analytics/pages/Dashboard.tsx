@@ -9,7 +9,7 @@ import {
   fetchDoctorQueueSummary,
 } from '../services/analyticsService'
 import DoctorAppHeader from '@/modules/doctor/components/DoctorAppHeader'
-import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/portal/components/RoleSidebar'
 import { getStaffSession, isReceptionStaff, staffRole } from '@/modules/admin/utils/staffSession'
 import { UserPlus, Calendar, ArrowRight, RefreshCw, Users, QrCode } from 'lucide-react'
 

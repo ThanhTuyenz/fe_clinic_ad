@@ -5,7 +5,7 @@ import { useNavigate } from '@/common/hooks/useNextNavigation'
 import { useAuth } from '@/common/hooks/useAuth'
 import { listPatientHistoryReception, listPatientsReception } from '@/modules/admin/services/appointments'
 import { formatDateVi, genderLabelVi, patientDobValue, patientListDisplayName, receptionStatusMeta, toRegistrationPatient } from '../components/receptionHelpers'
-import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/portal/components/RoleSidebar'
 import { Plus, Search, ChevronLeft, ChevronRight, X, Loader2, RotateCcw, RefreshCw } from 'lucide-react'
 import {
   AdminButton,

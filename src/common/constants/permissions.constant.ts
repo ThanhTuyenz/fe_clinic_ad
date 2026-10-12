@@ -1,30 +1,53 @@
 export enum AppPermission {
-  // Nhóm Lịch hẹn
+  // 1. Nhóm Lịch hẹn (Appointments)
   APPOINTMENT_READ = 'appointment:read',
   APPOINTMENT_CREATE = 'appointment:create',
   APPOINTMENT_CHECKIN = 'appointment:checkin',
   APPOINTMENT_CANCEL = 'appointment:cancel',
 
-  // Nhóm Khám bệnh & Cận lâm sàng
+  // 2. Nhóm Bệnh nhân & Hồ sơ y tế (Patients)
+  PATIENT_READ = 'patient:read',
+  PATIENT_MANAGE = 'patient:manage',
   CLINICAL_READ = 'clinical:read',
-  CLINICAL_EXAMINE = 'clinical:examine',
-  PRESCRIPTION_WRITE = 'prescription:write',
-  CLINICAL_ORDER_CREATE = 'clinical_order:create',
+  CLINICAL_WRITE = 'clinical:write',
 
-  // Nhóm Vận hành chi nhánh & Ca trực
-  SCHEDULE_MANAGE = 'schedule:manage',
-  ROOM_MANAGE = 'room:manage',
+  // 3. Nhóm Vận hành chi nhánh & Cơ sở vật chất (Branch & Operations)
+  BRANCH_READ = 'branch:read',
+  BRANCH_MANAGE = 'branch:manage',       // Tạo/sửa chi nhánh (Super Admin)
+  ROOM_MANAGE = 'room:manage',           // Quản lý phòng khám tại chi nhánh
+  SCHEDULE_READ = 'schedule:read',       // Xem lịch làm việc & ca trực
+  SCHEDULE_MANAGE = 'schedule:manage',   // Xếp lịch làm việc bác sĩ
 
-  // Nhóm Tài chính & Viện phí
-  FINANCE_COLLECT = 'finance:collect',
-  FINANCE_READ = 'finance:read',
+  // 4. Nhóm Chuyên môn & Dịch vụ y tế (Medical Services)
+  SPECIALTY_MANAGE = 'specialty:manage', // Quản lý chuyên khoa
+  SERVICE_MANAGE = 'service:manage',     // Quản lý danh mục dịch vụ & bảng giá
 
-  // Nhóm Nhân sự & Quản trị hệ thống
+  // 5. Nhóm Tài chính & Hóa đơn (Finance & Billing)
+  FINANCE_COLLECT = 'finance:collect',   // Thu tiền / Xuất hóa đơn tại quầy (Lễ tân)
+  FINANCE_READ = 'finance:read',         // Xem chi tiết giao dịch / hóa đơn
+
+  // 6. Nhóm Báo cáo & Thống kê (Reports & Analytics)
+  REPORT_BRANCH_READ = 'report:branch_read', // Xem báo cáo chi nhánh mình
+  REPORT_SYSTEM_READ = 'report:system_read', // Xem báo cáo tổng toàn hệ thống (Super Admin)
+
+  // 7. Nhóm Nhân sự & Phân quyền (Users & RBAC)
   USER_READ = 'user:read',
-  USER_MANAGE = 'user:manage',
+  USER_MANAGE = 'user:manage',           // Tạo/sửa tài khoản nhân viên
+  ROLE_MANAGE = 'role:manage',           // Tạo vai trò & gán permission (Super Admin)
+
+  // 8. Nhóm Cấu hình Hệ thống (System Config)
+  SYSTEM_CONFIG_MANAGE = 'system:config_manage', // Cấu hình hình thức đặt khám, app settings
 }
 
-export type PermissionGroup = 'appointment' | 'clinical' | 'operation' | 'finance' | 'system'
+export type PermissionGroup =
+  | 'appointment'
+  | 'patient'
+  | 'clinical'
+  | 'operation'
+  | 'service'
+  | 'finance'
+  | 'report'
+  | 'system'
 
 export interface PermissionItem {
   code: AppPermission | string
@@ -33,16 +56,22 @@ export interface PermissionItem {
   group: PermissionGroup
 }
 
-export const PERMISSION_GROUP_CONFIG: Record<PermissionGroup, { label: string; badgeTone: 'emerald' | 'blue' | 'purple' | 'amber' | 'slate' }> = {
+export const PERMISSION_GROUP_CONFIG: Record<
+  PermissionGroup,
+  { label: string; badgeTone: 'emerald' | 'blue' | 'purple' | 'amber' | 'slate' }
+> = {
   appointment: { label: 'Lịch hẹn & Tiếp đón', badgeTone: 'blue' },
+  patient: { label: 'Hồ sơ Bệnh nhân', badgeTone: 'emerald' },
   clinical: { label: 'Khám bệnh & Bệnh án', badgeTone: 'purple' },
-  operation: { label: 'Vận hành & Buồng khám', badgeTone: 'emerald' },
+  operation: { label: 'Vận hành & Cơ sở vật chất', badgeTone: 'emerald' },
+  service: { label: 'Chuyên môn & Dịch vụ', badgeTone: 'blue' },
   finance: { label: 'Tài chính & Thu phí', badgeTone: 'amber' },
-  system: { label: 'Nhân sự & Phân quyền', badgeTone: 'slate' },
+  report: { label: 'Báo cáo & Thống kê', badgeTone: 'purple' },
+  system: { label: 'Nhân sự & Hệ thống', badgeTone: 'slate' },
 }
 
 export const PERMISSION_CATALOG: PermissionItem[] = [
-  // Lịch hẹn
+  // 1. Lịch hẹn
   {
     code: AppPermission.APPOINTMENT_READ,
     label: 'Xem danh sách & chi tiết lịch khám',
@@ -68,7 +97,19 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
     group: 'appointment',
   },
 
-  // Khám bệnh
+  // 2. Bệnh nhân & Hồ sơ y tế
+  {
+    code: AppPermission.PATIENT_READ,
+    label: 'Xem hồ sơ & thông tin bệnh nhân',
+    description: 'Tra cứu thông tin cá nhân, nhân thân, số CCCD và lịch sử bệnh nhân.',
+    group: 'patient',
+  },
+  {
+    code: AppPermission.PATIENT_MANAGE,
+    label: 'Tạo mới & cập nhật hồ sơ bệnh nhân',
+    description: 'Đăng ký thông tin bệnh nhân mới hoặc chỉnh sửa hồ sơ y tế hành chính.',
+    group: 'patient',
+  },
   {
     code: AppPermission.CLINICAL_READ,
     label: 'Xem hồ sơ bệnh án & lịch sử ca khám',
@@ -76,29 +117,23 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
     group: 'clinical',
   },
   {
-    code: AppPermission.CLINICAL_EXAMINE,
-    label: 'Thực hiện khám bệnh & chẩn đoán ICD-10',
-    description: 'Mở ca khám trực tiếp, ghi nhận triệu chứng lâm sàng và kết luận mã bệnh lý ICD-10.',
-    group: 'clinical',
-  },
-  {
-    code: AppPermission.PRESCRIPTION_WRITE,
-    label: 'Kê đơn thuốc điện tử',
-    description: 'Lập đơn thuốc, hướng dẫn liều dùng và ký xuất đơn thuốc điện tử cho bệnh nhân.',
-    group: 'clinical',
-  },
-  {
-    code: AppPermission.CLINICAL_ORDER_CREATE,
-    label: 'Chỉ định cận lâm sàng & xét nghiệm',
-    description: 'Tạo phiếu chỉ định xét nghiệm máu, chụp X-quang, siêu âm và liên thông phòng máy.',
+    code: AppPermission.CLINICAL_WRITE,
+    label: 'Khám bệnh, chẩn đoán & kê đơn thuốc',
+    description: 'Thực hiện phiên khám lâm sàng, nhập chẩn đoán ICD-10, kê đơn thuốc và chỉ định xét nghiệm.',
     group: 'clinical',
   },
 
-  // Vận hành
+  // 3. Vận hành chi nhánh & Cơ sở vật chất
   {
-    code: AppPermission.SCHEDULE_MANAGE,
-    label: 'Quản lý lịch làm việc & ca trực',
-    description: 'Phân ca trực bác sĩ, mở hoặc đóng các khung giờ khám (slots) theo ngày.',
+    code: AppPermission.BRANCH_READ,
+    label: 'Xem thông tin cơ sở & chi nhánh',
+    description: 'Xem danh sách các cơ sở, phòng khám trực thuộc và thông số chi nhánh.',
+    group: 'operation',
+  },
+  {
+    code: AppPermission.BRANCH_MANAGE,
+    label: 'Quản lý cơ sở & chi nhánh',
+    description: 'Tạo mới, chỉnh sửa thông tin chi nhánh, địa chỉ và thiết lập chi nhánh.',
     group: 'operation',
   },
   {
@@ -107,8 +142,34 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
     description: 'Gán chuyên khoa cho phòng khám, theo dõi tải buồng khám và trạng thái phòng.',
     group: 'operation',
   },
+  {
+    code: AppPermission.SCHEDULE_READ,
+    label: 'Xem lịch làm việc & ca trực',
+    description: 'Tra cứu lịch làm việc của bác sĩ, theo dõi ca trực và khung giờ khám.',
+    group: 'operation',
+  },
+  {
+    code: AppPermission.SCHEDULE_MANAGE,
+    label: 'Xếp lịch làm việc & phân ca trực',
+    description: 'Phân ca trực bác sĩ, mở hoặc đóng các khung giờ khám (slots) theo ngày.',
+    group: 'operation',
+  },
 
-  // Tài chính
+  // 4. Chuyên môn & Dịch vụ y tế
+  {
+    code: AppPermission.SPECIALTY_MANAGE,
+    label: 'Quản lý danh mục chuyên khoa',
+    description: 'Thêm, sửa, kích hoạt hoặc ẩn các chuyên khoa khám bệnh.',
+    group: 'service',
+  },
+  {
+    code: AppPermission.SERVICE_MANAGE,
+    label: 'Quản lý danh mục dịch vụ & bảng giá',
+    description: 'Cấu hình danh mục dịch vụ khám, gói khám sức khỏe và định giá viện phí.',
+    group: 'service',
+  },
+
+  // 5. Tài chính & Hóa đơn
   {
     code: AppPermission.FINANCE_COLLECT,
     label: 'Thu viện phí & xuất hóa đơn tại quầy',
@@ -122,7 +183,21 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
     group: 'finance',
   },
 
-  // Hệ thống & Nhân sự
+  // 6. Báo cáo & Thống kê
+  {
+    code: AppPermission.REPORT_BRANCH_READ,
+    label: 'Xem báo cáo hoạt động chi nhánh',
+    description: 'Xem số liệu thống kê lượt khám, hiệu suất và hoạt động tại chi nhánh mình.',
+    group: 'report',
+  },
+  {
+    code: AppPermission.REPORT_SYSTEM_READ,
+    label: 'Xem báo cáo tổng hợp toàn hệ thống',
+    description: 'Báo cáo tổng quan đa chi nhánh, thống kê tăng trưởng và phân tích toàn diện.',
+    group: 'report',
+  },
+
+  // 7. Nhân sự & Phân quyền
   {
     code: AppPermission.USER_READ,
     label: 'Xem danh sách tài khoản & nhân sự',
@@ -131,8 +206,22 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   },
   {
     code: AppPermission.USER_MANAGE,
-    label: 'Quản lý nhân sự & phân quyền (RBAC)',
-    description: 'Tạo tài khoản nhân viên, gán vai trò và tùy biến cấp/tước quyền cụ thể.',
+    label: 'Quản lý tài khoản nhân viên',
+    description: 'Tạo tài khoản nhân viên, khóa/mở khóa tài khoản và cập nhật hồ sơ nhân sự.',
+    group: 'system',
+  },
+  {
+    code: AppPermission.ROLE_MANAGE,
+    label: 'Quản lý vai trò & phân quyền (RBAC)',
+    description: 'Cấu hình quyền hạn chi tiết, cấp hoặc tước quyền tùy biến cho từng nhân sự.',
+    group: 'system',
+  },
+
+  // 8. Cấu hình Hệ thống
+  {
+    code: AppPermission.SYSTEM_CONFIG_MANAGE,
+    label: 'Cấu hình thông số hệ thống',
+    description: 'Cài đặt hình thức đặt khám, thông số phòng khám và cấu hình ứng dụng.',
     group: 'system',
   },
 ]
@@ -144,30 +233,42 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, AppPermission[]> = {
     AppPermission.APPOINTMENT_CREATE,
     AppPermission.APPOINTMENT_CHECKIN,
     AppPermission.APPOINTMENT_CANCEL,
+    AppPermission.PATIENT_READ,
+    AppPermission.PATIENT_MANAGE,
     AppPermission.CLINICAL_READ,
-    AppPermission.SCHEDULE_MANAGE,
+    AppPermission.BRANCH_READ,
     AppPermission.ROOM_MANAGE,
+    AppPermission.SCHEDULE_READ,
+    AppPermission.SCHEDULE_MANAGE,
+    AppPermission.SPECIALTY_MANAGE,
+    AppPermission.SERVICE_MANAGE,
     AppPermission.FINANCE_READ,
+    AppPermission.REPORT_BRANCH_READ,
     AppPermission.USER_READ,
   ],
   doctor: [
     AppPermission.APPOINTMENT_READ,
+    AppPermission.PATIENT_READ,
     AppPermission.CLINICAL_READ,
-    AppPermission.CLINICAL_EXAMINE,
-    AppPermission.PRESCRIPTION_WRITE,
-    AppPermission.CLINICAL_ORDER_CREATE,
+    AppPermission.CLINICAL_WRITE,
+    AppPermission.SCHEDULE_READ,
   ],
   receptionist: [
     AppPermission.APPOINTMENT_READ,
     AppPermission.APPOINTMENT_CREATE,
     AppPermission.APPOINTMENT_CHECKIN,
     AppPermission.APPOINTMENT_CANCEL,
+    AppPermission.PATIENT_READ,
+    AppPermission.PATIENT_MANAGE,
+    AppPermission.BRANCH_READ,
+    AppPermission.SCHEDULE_READ,
     AppPermission.FINANCE_COLLECT,
   ],
   patient: [
     AppPermission.APPOINTMENT_READ,
     AppPermission.APPOINTMENT_CREATE,
     AppPermission.CLINICAL_READ,
+    AppPermission.SCHEDULE_READ,
   ],
 }
 
@@ -176,45 +277,69 @@ export interface CustomPermissionsPayload {
   revoked?: string[]
 }
 
+// Cache sẵn toàn bộ quyền hợp lệ một lần duy nhất trong RAM (Zero allocation khi gọi hàm)
+export const ALL_APP_PERMISSIONS = Object.freeze(Object.values(AppPermission)) as readonly AppPermission[]
+export const VALID_PERMISSIONS_SET = new Set<string>(ALL_APP_PERMISSIONS)
+
 /**
- * Tính toán danh sách quyền hiệu lực của người dùng
+ * Tính toán danh sách quyền hiệu lực của người dùng (Tối ưu hóa O(1), tự động dọn quyền rác)
  */
 export function calculateEffectivePermissions(
   role?: string | null,
   customPermissions?: CustomPermissionsPayload | string[] | any,
-): string[] {
+): AppPermission[] {
   const normalizedRole = String(role || 'patient').toLowerCase()
+
+  // 1. Admin luôn có toàn bộ quyền (sao chép mảng cache an toàn, cực nhanh)
   if (normalizedRole === 'admin') {
-    return Object.values(AppPermission).map((p) => String(p))
+    return [...ALL_APP_PERMISSIONS]
   }
 
-  const basePermissions = new Set<string>(
-    (ROLE_DEFAULT_PERMISSIONS[normalizedRole] || []).map((p) => String(p)),
-  )
+  // 2. Lấy bộ quyền cơ sở theo vai trò (chỉ lấy các quyền còn hợp lệ)
+  const defaultList = ROLE_DEFAULT_PERMISSIONS[normalizedRole] || []
+  const effectiveSet = new Set<AppPermission>()
+  for (const perm of defaultList) {
+    if (VALID_PERMISSIONS_SET.has(perm)) {
+      effectiveSet.add(perm as AppPermission)
+    }
+  }
 
-  let grantedList: string[] = []
-  let revokedList: string[] = []
+  // 3. Chuẩn hóa payload customPermissions (hỗ trợ cả object lẫn stringified JSON)
+  let payload = customPermissions
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload)
+    } catch {
+      payload = null
+    }
+  }
 
-  if (customPermissions && typeof customPermissions === 'object') {
-    if (Array.isArray(customPermissions)) {
-      grantedList = customPermissions.map((x) => String(x))
-    } else {
-      if (Array.isArray(customPermissions.granted)) {
-        grantedList = customPermissions.granted.map((x: any) => String(x))
+  if (payload && typeof payload === 'object') {
+    if (Array.isArray(payload)) {
+      // Dạng mảng cũ: coi như danh sách granted
+      for (const p of payload) {
+        const code = String(p)
+        if (VALID_PERMISSIONS_SET.has(code)) {
+          effectiveSet.add(code as AppPermission)
+        }
       }
-      if (Array.isArray(customPermissions.revoked)) {
-        revokedList = customPermissions.revoked.map((x: any) => String(x))
+    } else {
+      // Dạng mới: Delta RBAC { granted, revoked }
+      if (Array.isArray(payload.granted)) {
+        for (const p of payload.granted) {
+          const code = String(p)
+          if (VALID_PERMISSIONS_SET.has(code)) {
+            effectiveSet.add(code as AppPermission)
+          }
+        }
+      }
+      if (Array.isArray(payload.revoked)) {
+        for (const p of payload.revoked) {
+          effectiveSet.delete(String(p) as AppPermission)
+        }
       }
     }
   }
 
-  for (const perm of grantedList) {
-    if (perm) basePermissions.add(perm)
-  }
-
-  for (const perm of revokedList) {
-    if (perm) basePermissions.delete(perm)
-  }
-
-  return Array.from(basePermissions)
+  return Array.from(effectiveSet)
 }

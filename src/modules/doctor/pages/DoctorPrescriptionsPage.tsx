@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/common/hooks/useAuth'
 import { useStaffLogout } from '@/common/hooks/useStaffLogout'
-import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/portal/components/RoleSidebar'
 import { listDoctorPrescriptions } from '../services/doctorService'
 import { printPrescription } from '@/modules/admin/utils/printPrescription'
 import { Printer, Search } from 'lucide-react'

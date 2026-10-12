@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, Zap } from 'lucide-react'
+import { useAuth } from '@/common/hooks/useAuth'
 import {
   CONFIG,
   EMPTY,
@@ -31,6 +32,11 @@ import BatchRoomModal from '../components/BatchRoomModal'
 
 export default function SystemCatalogCrudPage({ resource }: { resource: keyof typeof CONFIG }) {
   const cfg = CONFIG[resource]
+  const { role } = useAuth()
+  const isBranchManager = role === 'branch_manager'
+  const canCreate = !(isBranchManager && resource === 'branches')
+  const canRemove = !(isBranchManager && resource === 'branches')
+
   const [rows, setRows] = useState<any[]>([])
   const [options, setOptions] = useState<Record<string, any[]>>({})
   const [q, setQ] = useState('')
@@ -525,14 +531,16 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
               Gán phòng khám hàng loạt
             </button>
           )}
-          <button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex items-center gap-1.5 rounded bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 transition cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Thêm {cfg.singular}
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-1.5 rounded bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Thêm {cfg.singular}
+            </button>
+          )}
         </div>
       </div>
 
@@ -583,6 +591,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         onDetail={(row) => setDetailItem(row)}
         onEdit={(row) => openEdit(row)}
         onRemove={(row) => void remove(row)}
+        canRemove={canRemove}
         display={display}
       />
 

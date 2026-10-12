@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/portal/components/RoleSidebar'
 import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
 import { useStaffLogout } from '@/common/hooks/useStaffLogout'
 import {

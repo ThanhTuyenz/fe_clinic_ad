@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Edit2, Trash2, Lock, Unlock, Search, RefreshCw, AlertCircle, Plus, Calendar } from 'lucide-react'
+import { Edit2, Trash2, Lock, Unlock, Search, RefreshCw, AlertCircle, Plus, Calendar, Building2 } from 'lucide-react'
 import { useNavigate } from '@/common/hooks/useNextNavigation'
 import {
   AdminButton,
@@ -53,6 +53,8 @@ const EMPTY = {
   experienceYears: '5',
   biography: '',
   branchId: '',
+  branchIds: [] as string[],
+  primaryBranchId: '',
   specialtyId: '',
   roomId: '',
 }
@@ -130,9 +132,12 @@ export default function ClinicStaffPage() {
 
   const openCreate = () => {
     setSelected(null)
+    const initialBranchId = branches[0]?.id || ''
     setForm({
       ...EMPTY,
-      branchId: branches[0]?.id || '',
+      branchId: initialBranchId,
+      branchIds: initialBranchId ? [initialBranchId] : [],
+      primaryBranchId: initialBranchId,
       specialtyId: specialties[0]?.id ? String(specialties[0].id) : '',
     })
     setError('')
@@ -142,6 +147,11 @@ export default function ClinicStaffPage() {
   const openEdit = (row: any) => {
     setSelected(row)
     const doc = row.doctor || {}
+    const assignedBranchIds = (row.branchAssignments || []).map((b: any) => b.branchId || b.branch?.id).filter(Boolean)
+    const primaryObj = (row.branchAssignments || []).find((b: any) => b.isPrimary)
+    const primaryId = primaryObj?.branchId || primaryObj?.branch?.id || assignedBranchIds[0] || row.branchId || branches[0]?.id || ''
+    const finalBranchIds = assignedBranchIds.length > 0 ? assignedBranchIds : (primaryId ? [primaryId] : [])
+
     setForm({
       fullName: row.fullName || '',
       email: row.email || '',
@@ -154,7 +164,9 @@ export default function ClinicStaffPage() {
       licenseNumber: doc.licenseNumber || '',
       experienceYears: doc.experienceYears != null ? String(doc.experienceYears) : '5',
       biography: doc.biography || '',
-      branchId: row.branchAssignments?.[0]?.branchId || row.branchId || '',
+      branchId: primaryId,
+      branchIds: finalBranchIds,
+      primaryBranchId: primaryId,
       specialtyId: doc.specialties?.[0]?.specialtyId
         ? String(doc.specialties[0].specialtyId)
         : doc.specialtyId
@@ -166,15 +178,38 @@ export default function ClinicStaffPage() {
     setModal('edit')
   }
 
+  const toggleBranch = (bId: string) => {
+    const current: string[] = form.branchIds || []
+    let next: string[] = []
+    if (current.includes(bId)) {
+      next = current.filter((id: string) => id !== bId)
+    } else {
+      next = [...current, bId]
+    }
+    let nextPrimary = form.primaryBranchId
+    if (!next.includes(nextPrimary)) {
+      nextPrimary = next[0] || ''
+    }
+    setForm((prev: any) => ({
+      ...prev,
+      branchIds: next,
+      primaryBranchId: nextPrimary,
+      branchId: nextPrimary,
+    }))
+  }
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.fullName.trim() || !form.email.trim()) return setError('Vui lòng nhập họ tên và email.')
     if (modal === 'create' && form.password.length < 6)
       return setError('Mật khẩu phải có ít nhất 6 ký tự.')
+    if (!form.branchIds || form.branchIds.length === 0)
+      return setError('Vui lòng chọn ít nhất một cơ sở làm việc / quản lý.')
 
     setSaving(true)
     setError('')
     try {
+      const primaryId = form.primaryBranchId || form.branchIds[0] || form.branchId
       const payload: any = {
         fullName: form.fullName.trim(),
         email: form.email.trim(),
@@ -183,7 +218,9 @@ export default function ClinicStaffPage() {
         avatarUrl: form.avatarUrl || null,
         ...(form.phoneNumber ? { phoneNumber: form.phoneNumber.trim() } : {}),
         ...(form.password ? { password: form.password } : {}),
-        ...(form.branchId ? { branchId: form.branchId } : {}),
+        branchId: primaryId,
+        branchIds: form.branchIds,
+        primaryBranchId: primaryId,
       }
       if (form.role === 'doctor') {
         payload.academicRank = form.academicRank.trim()
@@ -344,7 +381,27 @@ export default function ClinicStaffPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-xs font-semibold text-slate-700 whitespace-nowrap">{bName}</td>
+                    <td className="px-5 py-3.5 text-xs text-slate-700 whitespace-nowrap">
+                      {(() => {
+                        const bList = (row.branchAssignments || [])
+                          .map((b: any) => b.branch?.name)
+                          .filter(Boolean)
+                        if (bList.length === 0) {
+                          return <span className="text-slate-400">{row.branchName || '—'}</span>
+                        }
+                        if (bList.length === 1) {
+                          return <span className="font-semibold text-slate-800">{bList[0]}</span>
+                        }
+                        return (
+                          <div className="flex items-center gap-1.5" title={bList.join(', ')}>
+                            <span className="font-semibold text-slate-800">{bList[0]}</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              +{bList.length - 1} cơ sở
+                            </span>
+                          </div>
+                        )
+                      })()}
+                    </td>
                     <td className="px-5 py-3.5 text-xs text-emerald-800 font-medium whitespace-nowrap">{specName}</td>
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200 whitespace-nowrap">
@@ -451,19 +508,12 @@ export default function ClinicStaffPage() {
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <AdminSelect
               label="Vai trò hệ thống"
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
               options={ROLES.slice(1)}
-            />
-            <AdminSelect
-              label="Chi nhánh làm việc"
-              value={form.branchId}
-              onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-              placeholder="-- Chọn chi nhánh --"
-              options={branches.map((b) => ({ value: b.id, label: b.name }))}
             />
             <AdminInput
               label={modal === 'edit' ? 'Mật khẩu (để trống nếu giữ nguyên)' : 'Mật khẩu'}
@@ -475,6 +525,83 @@ export default function ClinicStaffPage() {
               placeholder="••••••••"
               autoComplete="new-password"
             />
+          </div>
+
+          {/* Chọn cơ sở công tác / quản lý (Hỗ trợ đa chi nhánh) */}
+          <div className="p-3 rounded border border-slate-200 bg-slate-50/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-emerald-700" />
+                <span>
+                  {form.role === 'branch_manager'
+                    ? 'Chi nhánh quản lý'
+                    : form.role === 'doctor'
+                    ? 'Chi nhánh công tác & khám bệnh'
+                    : 'Chi nhánh làm việc'}
+                </span>
+                <span className="text-rose-500">*</span>
+              </label>
+              <span className="text-[11px] text-slate-500">
+                Đã chọn: <strong className="text-emerald-700">{form.branchIds?.length || 0}</strong> cơ sở
+              </span>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {branches.map((b) => {
+                const isChecked = form.branchIds?.includes(b.id)
+                const isPrimary = form.primaryBranchId === b.id
+
+                return (
+                  <div
+                    key={b.id}
+                    onClick={() => toggleBranch(b.id)}
+                    className={`flex items-center justify-between p-2.5 rounded border transition-colors cursor-pointer select-none ${
+                      isChecked
+                        ? 'bg-emerald-50/50 border-emerald-300'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <label
+                      className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleBranch(b.id)}
+                        className="w-4 h-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <span className={`text-xs truncate ${isChecked ? 'text-emerald-950 font-bold' : 'text-slate-700 font-medium'}`}>
+                        {b.name}
+                      </span>
+                    </label>
+
+                    {isChecked && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setForm((prev: any) => ({ ...prev, primaryBranchId: b.id, branchId: b.id }))
+                        }}
+                        title={isPrimary ? 'Cơ sở chính hiện tại' : 'Đặt cơ sở này làm cơ sở chính'}
+                        className={`text-[10px] px-2 py-0.5 rounded font-semibold border transition-all cursor-pointer shrink-0 ${
+                          isPrimary
+                            ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-500 hover:text-emerald-700'
+                        }`}
+                      >
+                        {isPrimary ? '★ Cơ sở chính' : 'Đặt làm chính'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {form.branchIds?.length > 1 && (
+              <p className="text-[11px] text-slate-500 italic mt-1">
+                * Bấm nút <strong>&quot;Đặt làm chính&quot;</strong> để chọn cơ sở mặc định ưu tiên phân ca và đón tiếp.
+              </p>
+            )}
           </div>
 
           {/* Nhóm chuyên môn Bác sĩ (chỉ hiển thị khi vai trò là Bác sĩ) */}

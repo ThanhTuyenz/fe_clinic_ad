@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react'
 import { ArrowRight, Copy, Check, AlertCircle, Info, Calendar } from 'lucide-react'
-import { copyWeekSchedules } from '../../services/schedules'
+import { copyWeekSchedules } from '@/modules/admin/services/schedules'
 import { AdminButton, AdminModal, AdminSelect } from '@/common/components/ui'
 
 interface Props {

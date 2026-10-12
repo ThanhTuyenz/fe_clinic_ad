@@ -23,3 +23,9 @@ export async function updateUser(id: string, payload: Record<string, any>) {
 export async function deleteUser(id: string) {
   await apiClient.delete(`/users/${id}`)
 }
+
+export async function getUserPermissions(id: string) {
+  const response = await apiClient.get(`/permissions/user/${id}`)
+  return unwrap(response.data)
+}
+

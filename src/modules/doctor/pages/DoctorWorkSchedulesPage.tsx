@@ -1,82 +1,71 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createSchedule, deleteSchedule, listSchedules, updateSchedule } from '@/modules/admin/services/schedules'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  createSchedule,
+  deleteSchedule,
+  listSchedules,
+  updateSchedule,
+} from '@/modules/admin/services/schedules'
+import { listDoctors } from '@/modules/admin/services/doctors'
+import { listBranches } from '@/modules/admin/services/branches'
+import { listSpecialties } from '@/modules/admin/services/specialties'
+import { listClinicRooms } from '@/modules/admin/services/clinicRooms'
 import { listUsers } from '@/modules/admin/services/users'
 import { listCatalog } from '@/modules/catalog/services/catalogService'
-import { listClinicRooms } from '@/modules/admin/services/clinicRooms'
-import DoctorLeaveModal from '@/modules/admin/components/schedules/DoctorLeaveModal'
-import BatchScheduleModal from '@/modules/admin/components/schedules/BatchScheduleModal'
-import CopyWeekModal from '@/modules/admin/components/schedules/CopyWeekModal'
+import { getStaffSession, staffRole } from '@/modules/admin/utils/staffSession'
 import {
-  Search,
-  Calendar,
-  List,
-  Plus,
-  RefreshCw,
-  CalendarOff,
-  Copy,
-  Layers,
-  AlertTriangle,
-  Building2,
-  Pencil,
-  Trash2,
-  Lock,
-  Unlock,
-} from 'lucide-react'
-import {
-  AdminButton,
-  AdminPageHeader,
-  AdminTableCard,
-  AdminTable,
-  AdminTableHead,
-  AdminTableLoading,
-  AdminTableEmpty,
-  AdminModal,
-  AdminInput,
-  AdminSelect,
-  StatusBadge,
-} from '@/common/components/ui'
+  BatchScheduleModal,
+  CopyWeekModal,
+  DoctorLeaveModal,
+  EditShiftModal,
+  EMPTY_FORM,
+  formatYMD,
+  getMonday,
+  ScheduleMonthView,
+  ScheduleTableView,
+  ScheduleToolbar,
+  ScheduleWeekGridView,
+  ShiftDetailModal,
+} from '../components/schedules'
+import { AlertTriangle, CalendarOff, Copy, Plus } from 'lucide-react'
+import { AdminButton, AdminPageHeader } from '@/common/components/ui'
 
-const SCHEDULE_TABLE_COLUMNS = [
-  { label: 'Bác sĩ' },
-  { label: 'Chi nhánh & Phòng' },
-  { label: 'Ngày' },
-  { label: 'Khung giờ' },
-  { label: 'Tiến độ đặt' },
-  { label: 'Thời lượng' },
-  { label: 'Trạng thái' },
-  { label: 'Thao tác', align: 'right' as const },
-]
-
-const SLOT_DURATIONS = [15, 20, 30, 45, 60]
-const EMPTY_FORM = {
-  doctorId: '',
-  branchId: '',
-  roomId: '',
-  workDate: new Date().toISOString().slice(0, 10),
-  startTime: '08:00',
-  endTime: '12:00',
-  slotDurationMin: '30',
-  status: 'OPEN',
+export interface DoctorWorkSchedulesPageProps {
+  initialDoctorId?: string
+  readOnly?: boolean
+  isDoctorRole?: boolean
+  initialBranchId?: string
 }
 
-const formatYMD = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+export default function DoctorWorkSchedulesPage({
+  initialDoctorId,
+  readOnly = false,
+  isDoctorRole = false,
+  initialBranchId,
+}: DoctorWorkSchedulesPageProps = {}) {
+  const session = getStaffSession()
+  const currentRole = staffRole(session?.user)
+  const isDoctor = Boolean(isDoctorRole || currentRole === 'doctor')
+  const isBranchManager = currentRole === 'branch_manager'
 
-const getMonday = (d: Date) => {
-  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  const day = date.getDay()
-  date.setDate(date.getDate() - (day === 0 ? 6 : day - 1))
-  return date
-}
+  const assignedBranch = useMemo(() => {
+    const user = session?.user
+    return (
+      user?.branchAssignments?.find((b: any) => b.isPrimary)?.branch ||
+      user?.branchAssignments?.[0]?.branch ||
+      null
+    )
+  }, [session?.user])
 
-const formatDayHeader = (d: Date) => {
-  const days = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
-  return `${days[d.getDay()]}\n${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-}
+  const assignedBranchId = useMemo(() => {
+    return assignedBranch?.id || session?.user?.branchAssignments?.[0]?.branchId || ''
+  }, [assignedBranch, session?.user])
 
-export default function DoctorWorkSchedulesPage() {
+  const defaultBranchId = isBranchManager
+    ? assignedBranchId || initialBranchId || ''
+    : initialBranchId || ''
+
   const [schedules, setSchedules] = useState<any[]>([])
   const [doctors, setDoctors] = useState<any[]>([])
   const [branches, setBranches] = useState<any[]>([])
@@ -84,13 +73,30 @@ export default function DoctorWorkSchedulesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const [filterBranch, setFilterBranch] = useState('')
+  const [filterBranch, setFilterBranch] = useState(defaultBranchId)
   const [filterSpecialty, setFilterSpecialty] = useState('')
-  const [filterDoctor, setFilterDoctor] = useState('')
+  const [filterDoctor, setFilterDoctor] = useState(initialDoctorId || '')
   const [searchTerm, setSearchTerm] = useState('')
   const [specialties, setSpecialties] = useState<any[]>([])
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
+  const [viewMode, setViewMode] = useState<'grid' | 'month' | 'table'>('grid')
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()))
+  const [currentMonthDate, setCurrentMonthDate] = useState(() => new Date())
+
+  useEffect(() => {
+    if (initialDoctorId) {
+      setFilterDoctor(initialDoctorId)
+    }
+  }, [initialDoctorId])
+
+  useEffect(() => {
+    if (isBranchManager && assignedBranchId) {
+      setFilterBranch(assignedBranchId)
+    } else if (initialBranchId) {
+      setFilterBranch(initialBranchId)
+    }
+  }, [isBranchManager, assignedBranchId, initialBranchId])
+
+  const effectiveBranch = isBranchManager && assignedBranchId ? assignedBranchId : filterBranch
 
   // Modals
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
@@ -99,6 +105,10 @@ export default function DoctorWorkSchedulesPage() {
   const [editModal, setEditModal] = useState(false)
   const [doctorLeaveOpen, setDoctorLeaveOpen] = useState(false)
   const [copyWeekModalOpen, setCopyWeekModalOpen] = useState(false)
+
+  // Shift Detail Modal
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [selectedDetailShift, setSelectedDetailShift] = useState<any>(null)
 
   const [selected, setSelected] = useState<any>(null)
   const [form, setForm] = useState<any>(EMPTY_FORM)
@@ -117,24 +127,107 @@ export default function DoctorWorkSchedulesPage() {
   const startDateStr = formatYMD(weekDays[0])
   const endDateStr = formatYMD(weekDays[6])
 
+  // Các ngày hiển thị trong lịch tháng (tròn các tuần từ thứ 2 đến CN)
+  const monthDays = useMemo(() => {
+    const year = currentMonthDate.getFullYear()
+    const month = currentMonthDate.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const startMonday = getMonday(firstDay)
+
+    const days: Date[] = []
+    const curr = new Date(startMonday)
+    while (days.length < 42) {
+      days.push(new Date(curr))
+      curr.setDate(curr.getDate() + 1)
+      if (curr.getMonth() !== month && curr.getDay() === 1 && days.length >= 28) {
+        break
+      }
+    }
+    return days
+  }, [currentMonthDate])
+
+  const monthStartDateStr = useMemo(() => formatYMD(monthDays[0]), [monthDays])
+  const monthEndDateStr = useMemo(() => formatYMD(monthDays[monthDays.length - 1]), [monthDays])
+
+  const currentDoctor = useMemo(() => {
+    if (!isDoctor) return null
+    const targetId = initialDoctorId || session?.user?.doctor?.id || session?.user?.doctorId || session?.user?.id || ''
+    return (
+      doctors.find((d: any) => {
+        const dId = d.doctor?.id || d.id
+        const uId = d.userId || d.user?.id || d.id
+        return (
+          (targetId && (dId === targetId || uId === targetId)) ||
+          (session?.user?.doctor?.id && (dId === session.user.doctor.id || uId === session.user.doctor.id)) ||
+          (session?.user?.id && (uId === session.user.id || dId === session.user.id)) ||
+          (session?.user?.email && (d.email === session.user.email || d.user?.email === session.user.email)) ||
+          (session?.user?.fullName && d.fullName?.toLowerCase() === session.user.fullName?.toLowerCase())
+        )
+      }) || null
+    )
+  }, [doctors, isDoctor, initialDoctorId, session?.user])
+
+  const targetDoctorId = useMemo(() => {
+    if (isDoctor) {
+      return (
+        currentDoctor?.id ||
+        currentDoctor?.doctor?.id ||
+        initialDoctorId ||
+        session?.user?.doctor?.id ||
+        session?.user?.doctorId ||
+        session?.user?.id ||
+        ''
+      )
+    }
+    return filterDoctor || ''
+  }, [isDoctor, currentDoctor, initialDoctorId, session?.user, filterDoctor])
+
   const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const [scRes, uRes, bRes, rRes, spRes] = await Promise.all([
+      const activeStartDate = viewMode === 'grid' ? startDateStr : viewMode === 'month' ? monthStartDateStr : undefined
+      const activeEndDate = viewMode === 'grid' ? endDateStr : viewMode === 'month' ? monthEndDateStr : undefined
+
+      const [scRes, docRes, bRes, rRes, spRes] = await Promise.all([
         listSchedules({
-          doctorId: filterDoctor || undefined,
-          branchId: filterBranch || undefined,
-          startDate: viewMode === 'grid' ? startDateStr : undefined,
-          endDate: viewMode === 'grid' ? endDateStr : undefined,
+          doctorId: targetDoctorId || undefined,
+          branchId: effectiveBranch || undefined,
+          startDate: activeStartDate,
+          endDate: activeEndDate,
+        }).catch(() => []),
+        listDoctors().catch(async () => {
+          if (!isDoctor) {
+            const u = await listUsers().catch(() => ({ data: [] }))
+            return u.data?.filter((x: any) => String(x.role || x.userType).toLowerCase() === 'doctor') || []
+          }
+          return []
         }),
-        listUsers(),
-        listCatalog('branches').catch(() => []),
+        listBranches().catch(() => listCatalog('branches')).catch(() => []),
         listClinicRooms().catch(() => []),
-        listCatalog('specialties').catch(() => []),
+        listSpecialties().catch(() => listCatalog('specialties')).catch(() => []),
       ])
+
+      const normalizedDoctors = (docRes || []).map((d: any) => ({
+        ...d,
+        id: d.id,
+        userId: d.userId || d.user?.id,
+        fullName: d.fullName || d.user?.fullName || 'Bác sĩ',
+        avatarUrl: d.avatarUrl || d.user?.avatarUrl,
+        academicRank: d.academicRank,
+        specialties: d.specialties || d.doctor?.specialties || [],
+        doctor: {
+          id: d.id,
+          userId: d.userId || d.user?.id,
+          fullName: d.fullName || d.user?.fullName || 'Bác sĩ',
+          academicRank: d.academicRank,
+          specialties: d.specialties || d.doctor?.specialties || [],
+        },
+        branchAssignments: d.branchAssignments || [],
+      }))
+
       setSchedules(scRes || [])
-      setDoctors(uRes.data?.filter((u: any) => String(u.role || u.userType).toLowerCase() === 'doctor') || [])
+      setDoctors(normalizedDoctors)
       setBranches(bRes || [])
       setRooms(rRes || [])
       setSpecialties(spRes || [])
@@ -143,21 +236,22 @@ export default function DoctorWorkSchedulesPage() {
     } finally {
       setLoading(false)
     }
-  }, [filterDoctor, filterBranch, viewMode, startDateStr, endDateStr])
+  }, [targetDoctorId, effectiveBranch, viewMode, startDateStr, endDateStr, monthStartDateStr, monthEndDateStr, isDoctor])
 
   useEffect(() => {
     void loadData()
   }, [loadData])
 
   const availableRooms = useMemo(() => {
-    if (!form.branchId) return rooms
-    return rooms.filter((rm) => rm.branchId === form.branchId || rm.branch?.id === form.branchId)
-  }, [rooms, form.branchId])
+    const bId = form.branchId || effectiveBranch
+    if (!bId) return rooms
+    return rooms.filter((rm) => rm.branchId === bId || rm.branch?.id === bId)
+  }, [rooms, form.branchId, effectiveBranch])
 
   const schedulesMap = useMemo(() => {
     const map: Record<string, any[]> = {}
     schedules.forEach((sc) => {
-      if (filterBranch && sc.branchId !== filterBranch) return
+      if (effectiveBranch && sc.branchId !== effectiveBranch) return
       const dStr = String(sc.workDate).slice(0, 10)
       const k1 = `${sc.doctorId}_${dStr}`
       if (!map[k1]) map[k1] = []
@@ -169,62 +263,98 @@ export default function DoctorWorkSchedulesPage() {
       }
     })
     return map
-  }, [schedules, filterBranch])
+  }, [schedules, effectiveBranch])
 
   const filteredDoctors = useMemo(() => {
+    let list = doctors
+    if (isDoctor) {
+      if (currentDoctor) {
+        list = [currentDoctor]
+      } else if (targetDoctorId) {
+        const matched = doctors.filter(
+          (d) => (d.doctor?.id || d.id) === targetDoctorId || (d.userId || d.id) === targetDoctorId
+        )
+        if (matched.length > 0) list = matched
+      }
+    }
+
     const q = searchTerm.trim().toLowerCase()
-    return doctors.filter((d) => {
+    return list.filter((d) => {
       const dId = d.doctor?.id || d.id
-      const uId = d.id
+      const uId = d.userId || d.id
       const name = (d.fullName || d.doctor?.fullName || '').toLowerCase()
       if (q && !name.includes(q)) return false
-      if (filterDoctor && dId !== filterDoctor && uId !== filterDoctor) return false
+      if (!isDoctor && filterDoctor && dId !== filterDoctor && uId !== filterDoctor) return false
       if (filterSpecialty) {
         const hasSpec =
           d.doctor?.specialties?.some(
             (sp: any) =>
               String(sp.specialtyId || sp.specialty?.id || sp.id) === String(filterSpecialty)
-          ) || String(d.doctor?.specialtyId) === String(filterSpecialty)
+          ) ||
+          d.specialties?.some(
+            (sp: any) =>
+              String(sp.specialtyId || sp.specialty?.id || sp.id) === String(filterSpecialty)
+          ) ||
+          String(d.doctor?.specialtyId) === String(filterSpecialty)
         if (!hasSpec) return false
       }
-      if (filterBranch) {
+      if (effectiveBranch) {
         const hasA = d.branchAssignments?.some(
-          (ba: any) => ba.branchId === filterBranch || ba.branch?.id === filterBranch
+          (ba: any) => ba.branchId === effectiveBranch || ba.branch?.id === effectiveBranch
         )
         const hasS = schedules.some(
-          (sc: any) => (sc.doctorId === dId || sc.doctor?.userId === uId) && sc.branchId === filterBranch
+          (sc: any) => (sc.doctorId === dId || sc.doctor?.userId === uId) && sc.branchId === effectiveBranch
         )
         if (!hasA && !hasS) return false
       }
       return true
     })
-  }, [doctors, schedules, filterDoctor, filterBranch, filterSpecialty, searchTerm])
+  }, [doctors, schedules, isDoctor, currentDoctor, targetDoctorId, filterDoctor, effectiveBranch, filterSpecialty, searchTerm])
 
   const availableDoctorsForSelect = useMemo(() => {
+    if (isDoctor) {
+      return currentDoctor ? [currentDoctor] : (filteredDoctors.length > 0 ? [filteredDoctors[0]] : [])
+    }
     if (!filterSpecialty) return doctors
     return doctors.filter((d) => {
       return (
         d.doctor?.specialties?.some(
           (sp: any) =>
             String(sp.specialtyId || sp.specialty?.id || sp.id) === String(filterSpecialty)
-        ) || String(d.doctor?.specialtyId) === String(filterSpecialty)
+        ) ||
+        d.specialties?.some(
+          (sp: any) =>
+            String(sp.specialtyId || sp.specialty?.id || sp.id) === String(filterSpecialty)
+        ) ||
+        String(d.doctor?.specialtyId) === String(filterSpecialty)
       )
     })
-  }, [doctors, filterSpecialty])
+  }, [doctors, filteredDoctors, currentDoctor, isDoctor, filterSpecialty])
 
   const filteredSchedules = useMemo(() => {
     return schedules.filter((row) => {
-      if (filterBranch && row.branchId !== filterBranch) return false
+      if (effectiveBranch && row.branchId !== effectiveBranch) return false
       const doc = doctors.find(
         (d) => (d.doctor?.id || d.id) === row.doctorId || d.id === row.doctor?.userId
       )
-      if (filterDoctor && row.doctorId !== filterDoctor && doc?.id !== filterDoctor) return false
+      if (isDoctor) {
+        const dId = doc?.doctor?.id || doc?.id || row.doctorId
+        const uId = doc?.userId || doc?.id || row.doctor?.userId
+        if (targetDoctorId && dId !== targetDoctorId && uId !== targetDoctorId) return false
+      } else if (filterDoctor && row.doctorId !== filterDoctor && doc?.id !== filterDoctor) {
+        return false
+      }
       if (filterSpecialty) {
         const hasSpec =
           doc?.doctor?.specialties?.some(
             (sp: any) =>
               String(sp.specialtyId || sp.specialty?.id || sp.id) === String(filterSpecialty)
-          ) || String(doc?.doctor?.specialtyId) === String(filterSpecialty)
+          ) ||
+          doc?.specialties?.some(
+            (sp: any) =>
+              String(sp.specialtyId || sp.specialty?.id || sp.id) === String(filterSpecialty)
+          ) ||
+          String(doc?.doctor?.specialtyId) === String(filterSpecialty)
         if (!hasSpec) return false
       }
       if (searchTerm.trim()) {
@@ -234,7 +364,38 @@ export default function DoctorWorkSchedulesPage() {
       }
       return true
     })
-  }, [schedules, filterBranch, filterDoctor, filterSpecialty, searchTerm, doctors])
+  }, [schedules, effectiveBranch, filterDoctor, targetDoctorId, isDoctor, filterSpecialty, searchTerm, doctors])
+
+  const activeBranchName = useMemo(() => {
+    if (!effectiveBranch) return 'Tất cả cơ sở'
+    return branches.find((b) => b.id === effectiveBranch)?.name || assignedBranch?.name || 'VitaCare Clinic'
+  }, [effectiveBranch, branches, assignedBranch])
+
+  const weekStats = useMemo(() => {
+    let morningCount = 0
+    let afternoonCount = 0
+    let eveningCount = 0
+    let totalOccupied = 0
+    let totalCapacity = 0
+
+    filteredSchedules.forEach((sc) => {
+      if (sc.startTime < '12:00') morningCount++
+      else if (sc.startTime >= '17:30') eveningCount++
+      else afternoonCount++
+
+      totalOccupied += sc.occupiedCount || 0
+      totalCapacity += sc.totalCapacity || sc.slots?.length || 0
+    })
+
+    return {
+      totalShifts: filteredSchedules.length,
+      morningCount,
+      afternoonCount,
+      eveningCount,
+      totalOccupied,
+      totalCapacity,
+    }
+  }, [filteredSchedules])
 
   const openScheduleModal = (doctorId?: string, dateStr?: string) => {
     setSelectedDoctorId(doctorId || filterDoctor || '')
@@ -242,11 +403,20 @@ export default function DoctorWorkSchedulesPage() {
     setScheduleModalOpen(true)
   }
 
+  const handleCardClick = (sc: any) => {
+    if (isDoctor) {
+      setSelectedDetailShift(sc)
+      setDetailModalOpen(true)
+    } else {
+      openEdit(sc)
+    }
+  }
+
   const openEdit = (row: any) => {
     setSelected(row)
     setForm({
       doctorId: row.doctorId,
-      branchId: row.branchId,
+      branchId: row.branchId || effectiveBranch,
       roomId: row.roomId || '',
       workDate: row.workDate,
       startTime: row.startTime,
@@ -308,39 +478,42 @@ export default function DoctorWorkSchedulesPage() {
 
   return (
     <>
-      <AdminPageHeader
-        eyebrow="Quản lý lịch làm việc"
-        title="Lịch làm việc & Ca trực Bác sĩ"
-        description="Phân ca trực định kỳ, điều phối phòng làm việc, theo dõi tiến độ đặt hẹn."
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <AdminButton
-            variant="outline"
-            icon={Copy}
-            onClick={() => setCopyWeekModalOpen(true)}
-            className="border-slate-200 text-slate-700 hover:bg-slate-50"
-          >
-            Sao chép tuần
-          </AdminButton>
+      {/* Header chỉ hiển thị với vai trò Quản trị viên / Quản lý */}
+      {!isDoctor && (
+        <AdminPageHeader
+          eyebrow="Quản lý lịch làm việc"
+          title="Lịch làm việc & Ca trực Bác sĩ"
+          description="Phân ca trực định kỳ, điều phối phòng làm việc, theo dõi tiến độ đặt hẹn."
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <AdminButton
+              variant="outline"
+              icon={Copy}
+              onClick={() => setCopyWeekModalOpen(true)}
+              className="border-slate-200 text-slate-700 hover:bg-slate-50"
+            >
+              Sao chép tuần
+            </AdminButton>
 
-          <AdminButton
-            variant="outline"
-            icon={CalendarOff}
-            onClick={() => setDoctorLeaveOpen(true)}
-            className="border-slate-200 text-slate-700 hover:bg-slate-50"
-          >
-            Báo bác sĩ nghỉ
-          </AdminButton>
+            <AdminButton
+              variant="outline"
+              icon={CalendarOff}
+              onClick={() => setDoctorLeaveOpen(true)}
+              className="border-slate-200 text-slate-700 hover:bg-slate-50"
+            >
+              Báo bác sĩ nghỉ
+            </AdminButton>
 
-          <AdminButton
-            variant="primary"
-            icon={Plus}
-            onClick={() => openScheduleModal()}
-          >
-            Phân ca làm việc
-          </AdminButton>
-        </div>
-      </AdminPageHeader>
+            <AdminButton
+              variant="primary"
+              icon={Plus}
+              onClick={() => openScheduleModal()}
+            >
+              Phân ca làm việc
+            </AdminButton>
+          </div>
+        </AdminPageHeader>
+      )}
 
       {error && (
         <div className="mt-4 flex items-center justify-between rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -357,586 +530,109 @@ export default function DoctorWorkSchedulesPage() {
         </div>
       )}
 
-      {/* Toolbar filters & Navigation */}
-      <div className="mt-5 flex items-center justify-between gap-2.5 rounded border border-slate-200 bg-white p-2.5 shadow-xs overflow-x-auto">
-        <div className="flex items-center gap-2 shrink-0">
-          {viewMode === 'grid' && (
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="flex items-center gap-0.5 rounded border border-slate-200 bg-slate-50 p-0.5">
-                <button
-                  type="button"
-                  title="Tuần trước"
-                  onClick={() =>
-                    setCurrentMonday(
-                      new Date(
-                        currentMonday.getFullYear(),
-                        currentMonday.getMonth(),
-                        currentMonday.getDate() - 7
-                      )
-                    )
-                  }
-                  className="rounded px-1.5 py-0.5 text-xs font-bold text-slate-600 hover:bg-white cursor-pointer"
-                >
-                  ‹
-                </button>
-                <span className="px-1.5 text-xs font-bold text-slate-800 whitespace-nowrap">
-                  {startDateStr.split('-').reverse().slice(0, 2).join('/')} – {endDateStr.split('-').reverse().join('/')}
-                </span>
-                <button
-                  type="button"
-                  title="Tuần sau"
-                  onClick={() =>
-                    setCurrentMonday(
-                      new Date(
-                        currentMonday.getFullYear(),
-                        currentMonday.getMonth(),
-                        currentMonday.getDate() + 7
-                      )
-                    )
-                  }
-                  className="rounded px-1.5 py-0.5 text-xs font-bold text-slate-600 hover:bg-white cursor-pointer"
-                >
-                  ›
-                </button>
-              </div>
+      {/* Toolbar bộ lọc & điều hướng tuần/tháng/danh sách */}
+      <ScheduleToolbar
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        currentMonday={currentMonday}
+        setCurrentMonday={setCurrentMonday}
+        currentMonthDate={currentMonthDate}
+        setCurrentMonthDate={setCurrentMonthDate}
+        weekDays={weekDays}
+        isDoctor={isDoctor}
+        isBranchManager={isBranchManager}
+        assignedBranch={assignedBranch}
+        branches={branches}
+        specialties={specialties}
+        availableDoctorsForSelect={availableDoctorsForSelect}
+        filterBranch={filterBranch}
+        setFilterBranch={setFilterBranch}
+        filterSpecialty={filterSpecialty}
+        setFilterSpecialty={setFilterSpecialty}
+        filterDoctor={filterDoctor}
+        setFilterDoctor={setFilterDoctor}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        loading={loading}
+        onRefresh={() => void loadData()}
+      />
 
-              <button
-                type="button"
-                onClick={() => setCurrentMonday(getMonday(new Date()))}
-                className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-emerald-600 hover:text-emerald-700 cursor-pointer shadow-2xs whitespace-nowrap"
-              >
-                Hôm nay
-              </button>
-            </div>
-          )}
-
-          <div className="h-4 w-px bg-slate-200 shrink-0" />
-
-          <div className="relative shrink-0">
-            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
-            <input
-              placeholder="Tìm bác sĩ..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-32 sm:w-36 rounded border border-slate-200 bg-white py-1 pl-7 pr-2 text-xs outline-none focus:border-emerald-600"
-            />
-          </div>
-
-          <select
-            value={filterBranch}
-            onChange={(e) => setFilterBranch(e.target.value)}
-            className="max-w-[135px] truncate rounded border border-slate-200 bg-white px-2 py-1 text-xs font-semibold outline-none focus:border-emerald-600 shrink-0"
-          >
-            <option value="">Tất cả Chi nhánh</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={filterSpecialty}
-            onChange={(e) => {
-              setFilterSpecialty(e.target.value)
-              setFilterDoctor('')
-            }}
-            className="max-w-[140px] truncate rounded border border-slate-200 bg-white px-2 py-1 text-xs font-semibold outline-none focus:border-emerald-600 shrink-0"
-          >
-            <option value="">Tất cả Chuyên khoa</option>
-            {specialties.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={filterDoctor}
-            onChange={(e) => setFilterDoctor(e.target.value)}
-            className="max-w-[135px] truncate rounded border border-slate-200 bg-white px-2 py-1 text-xs font-semibold outline-none focus:border-emerald-600 shrink-0"
-          >
-            <option value="">Tất cả Bác sĩ</option>
-            {availableDoctorsForSelect.map((d) => (
-              <option key={d.id} value={d.doctor?.id || d.id}>
-                {d.academicRank ? `${d.academicRank} ` : ''}
-                {d.fullName}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Legend for 3 shifts */}
-          <div className="flex items-center gap-2 text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200/80 rounded px-2 py-1">
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
-              <span>Sáng</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-sky-500" />
-              <span>Chiều</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-indigo-500" />
-              <span>Tối</span>
-            </span>
-          </div>
-
-          <div className="flex rounded border border-slate-200 p-0.5 bg-slate-50">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-bold cursor-pointer ${
-                viewMode === 'grid' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-500'
-              }`}
-            >
-              <Calendar className="h-3.5 w-3.5" /> Lịch Tuần
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-bold cursor-pointer ${
-                viewMode === 'table' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-500'
-              }`}
-            >
-              <List className="h-3.5 w-3.5" /> Danh Sách
-            </button>
-          </div>
-
-          <AdminButton
-            variant="secondary"
-            size="xs"
-            icon={RefreshCw}
-            loading={loading}
-            onClick={() => void loadData()}
-            title="Làm mới dữ liệu"
-          />
-        </div>
-      </div>
-
-      {/* WEEK GRID VIEW */}
+      {/* VIEW THEO CHẾ ĐỘ: LỊCH TUẦN / LỊCH THÁNG / BẢNG DANH SÁCH */}
       {viewMode === 'grid' ? (
-        <section className="mt-4 overflow-x-auto rounded border border-slate-200 bg-white shadow-xs">
-          <div className="grid min-w-[1150px] grid-cols-[250px_repeat(7,1fr)]">
-            <div className="bg-slate-100/90 p-3 text-[11px] font-bold uppercase tracking-wider text-slate-700 flex justify-between items-center border-r-2 border-slate-200 border-b-2 border-slate-200">
-              <span>Bác sĩ</span>
-              <span className="text-[10px] text-slate-500 font-semibold">({filteredDoctors.length})</span>
-            </div>
-
-            {weekDays.map((date) => {
-              const dStr = formatYMD(date)
-              const isToday = dStr === todayStr
-              return (
-                <div
-                  key={date.toISOString()}
-                  className={`p-2.5 text-center text-xs font-bold whitespace-pre-line relative border-r border-slate-200 border-b-2 border-slate-200 ${isToday
-                      ? 'bg-emerald-50/90 text-emerald-950 font-bold border-b-emerald-600'
-                      : 'bg-slate-50/90 text-slate-700'
-                    }`}
-                >
-                  {isToday && (
-                    <span className="absolute top-1 right-1 rounded bg-emerald-600 px-1 py-0.2 text-[8px] font-bold text-white uppercase shadow-2xs">
-                      Hôm nay
-                    </span>
-                  )}
-                  {formatDayHeader(date)}
-                </div>
-              )
-            })}
-
-            {loading ? (
-              <div className="col-span-8 p-12 text-center text-sm text-slate-400">
-                Đang tải lịch làm việc...
-              </div>
-            ) : filteredDoctors.length === 0 ? (
-              <div className="col-span-8 p-12 text-center text-sm text-slate-400">
-                Không tìm thấy bác sĩ phù hợp với bộ lọc.
-              </div>
-            ) : (
-              filteredDoctors.map((doc, docIdx) => {
-                const docId = doc.doctor?.id || doc.id
-                const isEvenRow = docIdx % 2 === 1
-                const totalDoctorShifts = weekDays.reduce(
-                  (acc, d) => acc + (schedulesMap[`${docId}_${formatYMD(d)}`]?.length || 0),
-                  0
-                )
-
-                return (
-                  <div key={docId} className="contents">
-                    {/* Doctor Info Column */}
-                    <div
-                      className={`p-3 flex items-start gap-2.5 border-r-2 border-slate-200 border-b-2 border-slate-200 ${
-                        isEvenRow ? 'bg-slate-50/70' : 'bg-white'
-                      }`}
-                    >
-                      {/* Avatar / Initials */}
-                      <div className="w-8 h-8 rounded bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center border border-emerald-200/80 shrink-0 mt-0.5 shadow-2xs">
-                        {doc.avatarUrl ? (
-                          <img src={doc.avatarUrl} alt={doc.fullName} className="w-full h-full object-cover rounded" />
-                        ) : (
-                          doc.fullName
-                            ?.split(' ')
-                            .slice(-2)
-                            .map((w: string) => w[0])
-                            .join('')
-                            .toUpperCase() || 'BS'
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <b className="block text-xs font-bold text-slate-900 leading-tight truncate" title={doc.fullName}>
-                          {doc.academicRank ? `${doc.academicRank} ` : ''}
-                          {doc.fullName}
-                        </b>
-
-                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70 truncate max-w-[110px]">
-                            {doc.doctor?.specialties?.[0]?.specialty?.name || 'Đa khoa'}
-                          </span>
-                          {totalDoctorShifts > 0 ? (
-                            <span className="text-[9px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
-                              {totalDoctorShifts} ca
-                            </span>
-                          ) : (
-                            <span className="text-[9px] text-slate-400">0 ca</span>
-                          )}
-                        </div>
-
-                        {!filterBranch && doc.branchAssignments?.[0]?.branch?.name && (
-                          <p
-                            className="text-[10px] text-slate-400 mt-1 flex items-center gap-1 truncate"
-                            title={doc.branchAssignments[0].branch.name}
-                          >
-                            <Building2 className="h-2.5 w-2.5 text-slate-400 shrink-0" />
-                            <span className="truncate">{doc.branchAssignments[0].branch.name}</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* 7 Days of the Week */}
-                    {weekDays.map((date) => {
-                      const dStr = formatYMD(date)
-                      const isToday = dStr === todayStr
-                      const daySc = schedulesMap[`${docId}_${dStr}`] || []
-
-                      return (
-                        <div
-                          key={dStr}
-                          className={`min-h-[110px] p-1.5 transition group relative border-r border-slate-200 border-b-2 border-slate-200 ${isToday
-                              ? 'bg-emerald-50/25 hover:bg-emerald-50/40'
-                              : isEvenRow
-                                ? 'bg-slate-50/40 hover:bg-slate-100/50'
-                                : 'bg-white hover:bg-slate-50/60'
-                            }`}
-                        >
-                          <div className="space-y-1.5">
-                            {daySc.map((sc) => {
-                              const isOpen = sc.status === 'OPEN'
-                              const isMorning = sc.startTime < '12:00'
-                              const isEvening = sc.startTime >= '17:30'
-                              const shiftConfig = isMorning
-                                ? {
-                                    tag: 'Sáng',
-                                    accentBorder: 'border-l-amber-500',
-                                    tagBadge: 'bg-amber-50 text-amber-800 border-amber-200/80',
-                                  }
-                                : isEvening
-                                ? {
-                                    tag: 'Tối',
-                                    accentBorder: 'border-l-indigo-500',
-                                    tagBadge: 'bg-indigo-50 text-indigo-800 border-indigo-200/80',
-                                  }
-                                : {
-                                    tag: 'Chiều',
-                                    accentBorder: 'border-l-sky-500',
-                                    tagBadge: 'bg-sky-50 text-sky-800 border-sky-200/80',
-                                  }
-
-                              const occupied = sc.occupiedCount || 0
-                              const capacity = sc.totalCapacity || sc.slots?.length || 0
-                              const isFull = occupied >= capacity && capacity > 0
-
-                              return (
-                                <div
-                                  key={sc.id}
-                                  onClick={() => openEdit(sc)}
-                                  className={`group/card relative rounded border border-slate-200/90 border-l-[3px] ${
-                                    shiftConfig.accentBorder
-                                  } bg-white p-2 text-[10px] transition cursor-pointer shadow-2xs hover:shadow-xs hover:border-slate-300 ${
-                                    !isOpen ? 'opacity-70 bg-rose-50/20' : ''
-                                  }`}
-                                >
-                                  {/* Row 1: Shift tag + Time + Hover Actions */}
-                                  <div className="flex items-center justify-between gap-1 mb-1.5">
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      <span
-                                        className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold border ${shiftConfig.tagBadge}`}
-                                      >
-                                        {shiftConfig.tag}
-                                      </span>
-                                      <span className="font-bold text-slate-800 text-[11px] whitespace-nowrap">
-                                        {sc.startTime} – {sc.endTime}
-                                      </span>
-                                    </div>
-
-                                    {/* Hover micro-toolbar */}
-                                    <div
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center gap-0.5 bg-white shadow-2xs border border-slate-200 rounded px-1 py-0.5"
-                                    >
-                                      <button
-                                        type="button"
-                                        title="Chỉnh sửa ca trực"
-                                        onClick={() => openEdit(sc)}
-                                        className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer transition"
-                                      >
-                                        <Pencil className="h-2.5 w-2.5" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        title={isOpen ? 'Khóa ca trực' : 'Mở ca trực'}
-                                        onClick={() => void toggleStatus(sc)}
-                                        className="p-1 rounded text-slate-500 hover:text-amber-700 hover:bg-amber-50 cursor-pointer transition"
-                                      >
-                                        {isOpen ? <Lock className="h-2.5 w-2.5" /> : <Unlock className="h-2.5 w-2.5" />}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        title="Xóa ca trực"
-                                        onClick={() => void remove(sc)}
-                                        className="p-1 rounded text-slate-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer transition"
-                                      >
-                                        <Trash2 className="h-2.5 w-2.5" />
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Row 2: Room name and Occupancy badge */}
-                                  <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-slate-100">
-                                    <span
-                                      className="font-medium text-slate-600 truncate max-w-[85px]"
-                                      title={sc.room?.name || sc.room?.code || 'Chưa xếp phòng'}
-                                    >
-                                      {sc.room?.name || sc.room?.code || 'Chưa xếp P.'}
-                                    </span>
-
-                                    <span
-                                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                        occupied === 0
-                                          ? 'bg-slate-50 text-slate-500 border border-slate-200/60'
-                                          : isFull
-                                          ? 'bg-rose-50 text-rose-800 border border-rose-200'
-                                          : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                      }`}
-                                      title={`Đã có ${occupied} / ${capacity} bệnh nhân đặt lịch`}
-                                    >
-                                      {occupied}/{capacity} slot
-                                    </span>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-
-                          {/* Quick add shift button */}
-                          <button
-                            onClick={() => openScheduleModal(docId, dStr)}
-                            className={`mt-1.5 w-full rounded border border-dashed py-1.5 text-[10px] font-semibold transition cursor-pointer ${daySc.length === 0
-                                ? 'border-slate-200 text-slate-400 hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-700'
-                                : 'border-transparent text-slate-400 opacity-0 group-hover:opacity-100 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700'
-                              }`}
-                          >
-                            + Ca
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })
-            )}
-          </div>
-        </section>
+        <ScheduleWeekGridView
+          weekDays={weekDays}
+          todayStr={todayStr}
+          filteredDoctors={filteredDoctors}
+          schedulesMap={schedulesMap}
+          isDoctor={isDoctor}
+          activeBranchName={activeBranchName}
+          weekStats={weekStats}
+          onCardClick={handleCardClick}
+          onOpenEdit={openEdit}
+          onToggleStatus={toggleStatus}
+          onRemove={remove}
+          onOpenScheduleModal={openScheduleModal}
+        />
+      ) : viewMode === 'month' ? (
+        <ScheduleMonthView
+          monthDays={monthDays}
+          todayStr={todayStr}
+          currentMonthDate={currentMonthDate}
+          schedules={schedules}
+          schedulesMap={schedulesMap}
+          isDoctor={isDoctor}
+          targetDoctorId={targetDoctorId}
+          filterDoctor={filterDoctor}
+          activeBranchName={activeBranchName}
+          weekStats={weekStats}
+          onCardClick={handleCardClick}
+          onOpenEdit={openEdit}
+          onToggleStatus={toggleStatus}
+          onRemove={remove}
+        />
       ) : (
-        /* TABLE VIEW */
-        <AdminTableCard className="mt-4">
-          <AdminTable minWidth="min-w-[950px]">
-            <AdminTableHead columns={SCHEDULE_TABLE_COLUMNS} />
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <AdminTableLoading colSpan={8} message="Đang tải lịch…" />
-              ) : filteredSchedules.length === 0 ? (
-                <AdminTableEmpty colSpan={8} message="Chưa có ca trực nào." />
-              ) : (
-                filteredSchedules.map((row) => {
-                  const occupied = row.occupiedCount || 0
-                  const capacity = row.totalCapacity || row.slots?.length || 0
-                  const isFull = occupied >= capacity && capacity > 0
-
-                  return (
-                    <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-5 py-3 text-xs font-semibold text-slate-900">
-                        {row.doctor?.academicRank ? `${row.doctor.academicRank} ` : ''}
-                        {row.doctor?.fullName || '—'}
-                      </td>
-                      <td className="px-5 py-3 text-xs">
-                        <p className="font-semibold text-slate-700">{row.branch?.name || 'Chi nhánh'}</p>
-                        <p className="text-emerald-800">{row.room?.name || 'Chưa xếp phòng'}</p>
-                      </td>
-                      <td className="px-5 py-3 text-xs font-semibold text-slate-800">{row.workDate}</td>
-                      <td className="px-5 py-3 text-xs font-bold text-emerald-900">
-                        {row.startTime} – {row.endTime}
-                      </td>
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${occupied === 0
-                              ? 'bg-slate-100 text-slate-600'
-                              : isFull
-                                ? 'bg-rose-100 text-rose-800'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}
-                        >
-                          {occupied}/{capacity} slot
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-xs text-slate-600">{row.slotDurationMin || 30} ph/ca</td>
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <StatusBadge
-                          status={row.status === 'OPEN' ? 'open' : 'closed'}
-                          label={row.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
-                          tone={row.status === 'OPEN' ? 'emerald' : 'rose'}
-                        />
-                      </td>
-                      <td className="px-5 py-3 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <AdminButton variant="secondary" size="xs" onClick={() => openEdit(row)}>
-                            Sửa
-                          </AdminButton>
-                          <AdminButton
-                            variant="outline"
-                            size="xs"
-                            className={
-                              row.status === 'OPEN'
-                                ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
-                                : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                            }
-                            onClick={() => void toggleStatus(row)}
-                          >
-                            {row.status === 'OPEN' ? 'Đóng' : 'Mở'}
-                          </AdminButton>
-                          <AdminButton
-                            variant="ghost"
-                            size="xs"
-                            className="text-rose-600 hover:bg-rose-50"
-                            onClick={() => void remove(row)}
-                          >
-                            Xóa
-                          </AdminButton>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </AdminTable>
-        </AdminTableCard>
+        <ScheduleTableView
+          filteredSchedules={filteredSchedules}
+          loading={loading}
+          isDoctor={isDoctor}
+          onCardClick={handleCardClick}
+          onOpenEdit={openEdit}
+          onToggleStatus={toggleStatus}
+          onRemove={remove}
+        />
       )}
 
-      {/* EDIT SINGLE SHIFT MODAL */}
-      <AdminModal
+      {/* MODAL CHI TIẾT CA TRỰC CHO BÁC SĨ HOẶC CHẾ ĐỘ XEM */}
+      <ShiftDetailModal
+        isOpen={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        shift={selectedDetailShift}
+      />
+
+      {/* MODAL CẬP NHẬT 1 CA TRỰC */}
+      <EditShiftModal
         isOpen={editModal}
         onClose={() => setEditModal(false)}
-        title="Cập nhật ca làm việc"
-        maxWidth="lg"
-        loading={saving}
-      >
-        <form onSubmit={submitEdit} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <AdminSelect
-              label="Chi nhánh"
-              required
-              value={form.branchId}
-              onChange={(e) =>
-                setForm((prev: any) => ({ ...prev, branchId: e.target.value, roomId: '' }))
-              }
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </AdminSelect>
-
-            <AdminSelect
-              label="Phòng khám"
-              value={form.roomId}
-              onChange={(e) => setForm((prev: any) => ({ ...prev, roomId: e.target.value }))}
-            >
-              <option value="">-- Để trống hoặc chọn phòng --</option>
-              {availableRooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name || r.code}
-                </option>
-              ))}
-            </AdminSelect>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <AdminInput
-              label="Ngày làm việc"
-              type="date"
-              required
-              value={form.workDate}
-              onChange={(e) => setForm((prev: any) => ({ ...prev, workDate: e.target.value }))}
-            />
-            <AdminInput
-              label="Bắt đầu"
-              type="time"
-              required
-              value={form.startTime}
-              onChange={(e) => setForm((prev: any) => ({ ...prev, startTime: e.target.value }))}
-            />
-            <AdminInput
-              label="Kết thúc"
-              type="time"
-              required
-              value={form.endTime}
-              onChange={(e) => setForm((prev: any) => ({ ...prev, endTime: e.target.value }))}
-            />
-          </div>
-
-          <AdminSelect
-            label="Thời lượng / lượt khám"
-            value={form.slotDurationMin}
-            onChange={(e) => setForm((prev: any) => ({ ...prev, slotDurationMin: e.target.value }))}
-          >
-            {SLOT_DURATIONS.map((d) => (
-              <option key={d} value={d}>
-                {d} phút / lượt {d === 30 ? '(Chuẩn)' : ''}
-              </option>
-            ))}
-          </AdminSelect>
-
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-            <AdminButton variant="secondary" disabled={saving} onClick={() => setEditModal(false)}>
-              Hủy
-            </AdminButton>
-            <AdminButton variant="primary" type="submit" loading={saving}>
-              Cập nhật ca làm việc
-            </AdminButton>
-          </div>
-        </form>
-      </AdminModal>
+        form={form}
+        setForm={setForm}
+        branches={branches}
+        availableRooms={availableRooms}
+        saving={saving}
+        onSubmit={submitEdit}
+      />
 
       {/* PRIMARY SCHEDULE CREATION MODAL */}
       <BatchScheduleModal
         isOpen={scheduleModalOpen}
         onClose={() => setScheduleModalOpen(false)}
         doctors={doctors}
-        branches={branches}
-        rooms={rooms}
-        initialBranchId={filterBranch}
+        branches={isBranchManager && assignedBranch ? [assignedBranch] : branches}
+        rooms={
+          isBranchManager && assignedBranch
+            ? rooms.filter((r) => r.branchId === assignedBranch.id || r.branch?.id === assignedBranch.id)
+            : rooms
+        }
+        initialBranchId={effectiveBranch}
         initialDoctorId={selectedDoctorId}
         initialDate={selectedDate}
         onSuccess={loadData}
@@ -947,8 +643,8 @@ export default function DoctorWorkSchedulesPage() {
         isOpen={copyWeekModalOpen}
         onClose={() => setCopyWeekModalOpen(false)}
         currentMonday={currentMonday}
-        branchId={filterBranch}
-        branches={branches}
+        branchId={effectiveBranch}
+        branches={isBranchManager && assignedBranch ? [assignedBranch] : branches}
         onSuccess={loadData}
       />
 

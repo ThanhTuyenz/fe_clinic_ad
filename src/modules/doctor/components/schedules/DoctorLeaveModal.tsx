@@ -6,7 +6,7 @@ import {
   analyzeDoctorLeaveImpact,
   executeSmartReschedule,
   type DoctorLeaveImpactResponse,
-} from '../../services/smartReschedule'
+} from '@/modules/admin/services/smartReschedule'
 
 interface Props {
   isOpen: boolean

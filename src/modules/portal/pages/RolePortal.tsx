@@ -22,6 +22,9 @@ import { AdminAppointmentsPage } from '@/modules/appointments'
 import { AdminPatientsPage } from '@/modules/patients'
 import { ReceptionPatientsPage } from '@/modules/reception'
 import { staffRole } from '@/modules/admin/utils/staffSession'
+import { AdminModal, AdminButton } from '@/common/components/ui'
+import SystemAdminDashboard from '../components/SystemAdminDashboard'
+import SystemLogsPage from '../components/SystemLogsPage'
 import {
   LayoutDashboard,
   BarChart3,
@@ -34,6 +37,7 @@ import {
   Cross,
   Package,
   Building2,
+  MapPin,
   SlidersHorizontal,
   Server,
   DoorOpen,
@@ -46,6 +50,9 @@ import {
   Menu,
   Shield,
   X,
+  Clock,
+  Eye,
+  Phone,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -58,33 +65,21 @@ const ROLE_LABELS: Record<string, string> = {
 
 const NAV: Record<string, [string, string, string][]> = {
   admin: [
-    ['dashboard', 'Tổng quan', '/dashboard'],
-    ['analytics', 'Báo cáo & Phân tích', '/analytics'],
-    ['appointments', 'Danh sách lịch hẹn', '/appointments'],
-    ['patients', 'Quản lý bệnh nhân', '/patients'],
+    ['dashboard', 'Tổng quan hệ thống', '/dashboard'],
+    ['branches', 'Chi nhánh phòng khám', '/branches'],
+    ['booking-methods', 'Hình thức đặt khám', '/booking-methods'],
     ['staff', 'Tài khoản & Nhân sự', '/staff'],
     ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
-    ['slots', 'Lịch làm việc & Slot', '/work-schedules'],
-    ['branches', 'Chi nhánh phòng khám', '/branches'],
-    ['rooms', 'Phòng khám', '/rooms'],
-    ['specialties', 'Chuyên khoa', '/specialties'],
-    ['booking-methods', 'Quản lý hình thức đặt khám', '/booking-methods'],
-    ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
-    ['billing', 'Thanh toán & Hóa đơn', '/billing'],
+    ['system-logs', 'Nhật ký & Lỗi hệ thống', '/system-logs'],
   ],
   branch_manager: [
-    ['dashboard', 'Thống kê & Tổng quan', '/dashboard'],
-    ['analytics', 'Báo cáo chi nhánh', '/analytics'],
+    ['dashboard', 'Tổng quan chi nhánh', '/dashboard'],
+    ['analytics', 'Báo cáo & Tăng trưởng', '/analytics'],
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
-    ['patients', 'Bệnh nhân', '/patients'],
-    ['staff', 'Nhân sự chi nhánh', '/staff'],
-    ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
-    ['slots', 'Lịch làm việc & Slot', '/work-schedules'],
-    ['branches', 'Chi nhánh phòng khám', '/branches'],
-    ['rooms', 'Phòng khám', '/rooms'],
-    ['specialties', 'Chuyên khoa', '/specialties'],
-    ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
-    ['billing', 'Thanh toán', '/billing'],
+    ['patients', 'Hồ sơ bệnh nhân', '/patients'],
+    ['slots', 'Lịch làm việc bác sĩ', '/work-schedules'],
+    ['billing', 'Thanh toán & Doanh thu', '/billing'],
+    ['branches', 'Thông tin chi nhánh', '/branches'],
   ],
   receptionist: [
     ['dashboard', 'Tổng quan tiếp đón', '/dashboard'],
@@ -95,11 +90,10 @@ const NAV: Record<string, [string, string, string][]> = {
     ['billing', 'Thanh toán', '/billing'],
   ],
   doctor: [
-    ['exam', 'Phòng khám bệnh', '/doctor'],
-    ['schedule', 'Lịch khám của tôi', '/doctor?view=schedule'],
+    ['schedule', 'Lịch khám', '/doctor'],
+    ['waiting', 'Chờ khám bệnh', '/doctor?view=waiting'],
+    ['slots', 'Lịch làm việc', '/doctor?view=schedule'],
     ['history', 'Lịch sử bệnh nhân', '/doctor?view=history'],
-    ['laboratory', 'Chỉ định cận lâm sàng', '/clinical-orders'],
-    ['prescription', 'Đơn thuốc', '/doctor/prescriptions'],
   ],
 }
 
@@ -138,49 +132,279 @@ function initials(user: any) {
   return name.split(/\s+/).slice(-2).map((x) => x[0]).join('').toUpperCase()
 }
 
-function ActivityTable({ title = 'Lịch hẹn hôm nay', items = [] }: { title?: string; items?: any[] }) {
-  const rows = items.length
-    ? items.map((it: any) => [
-      it.startTime || '08:00',
-      it.patientName || it.patientProfile?.fullName || 'Bệnh nhân',
-      it.doctorName || (it.doctor?.fullName ? `BS. ${it.doctor.fullName}` : 'Khám tổng quát'),
-      it.status === 'CHECKED_IN' ? 'Đã check-in' : it.status === 'COMPLETED' ? 'Đã khám' : 'Chờ xử lý',
-    ])
-    : []
+function ActivityTable({
+  title = 'Lịch hẹn hôm nay',
+  items = [],
+  actionHref = '/appointments',
+}: {
+  title?: string
+  items?: any[]
+  actionHref?: string
+}) {
+  const navigate = useNavigate()
+  const [selectedDetail, setSelectedDetail] = useState<any>(null)
+
+  const formatStatus = (status: string) => {
+    const s = String(status || '').toUpperCase()
+    if (s === 'COMPLETED' || s === 'EXAMINED') {
+      return { label: 'Đã khám', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+    }
+    if (s === 'CHECKED_IN' || s === 'WAITING') {
+      return { label: 'Đang chờ khám', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' }
+    }
+    if (s === 'CONFIRMED') {
+      return { label: 'Đã tiếp nhận', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' }
+    }
+    if (s === 'IN_CONSULTATION' || s === 'EXAMINING') {
+      return { label: 'Đang khám', badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200' }
+    }
+    if (s === 'CANCELLED') {
+      return { label: 'Đã hủy', badgeClass: 'bg-rose-50 text-rose-700 border-rose-200' }
+    }
+    return { label: 'Chờ xử lý', badgeClass: 'bg-amber-50 text-amber-700 border-amber-200' }
+  }
+
+  const actionNode = (
+    <button
+      type="button"
+      onClick={() => navigate(actionHref)}
+      className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer transition"
+    >
+      <span>Xem tất cả</span>
+      <span aria-hidden="true">→</span>
+    </button>
+  )
 
   return (
-    <Card title={title} action="Xem tất cả →">
-      {rows.length === 0 ? (
-        <p className="py-8 text-center text-xs text-slate-400">Chưa có lịch hẹn nào ghi nhận trong ca trực</p>
-      ) : (
-        <div className="-m-5 overflow-x-auto">
-          <table className="w-full min-w-[650px] text-left text-xs">
-            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
-              <tr>
-                {['Thời gian', 'Bệnh nhân', 'Dịch vụ / Bác sĩ', 'Trạng thái'].map((x) => (
-                  <th key={x} className="px-5 py-3">{x}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map((r: any, i: number) => (
-                <tr key={i} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="px-5 py-3 font-semibold text-slate-700">{r[0]}</td>
-                  <td className="px-5 py-3 font-bold text-slate-900">{r[1]}</td>
-                  <td className="px-5 py-3 text-slate-500">{r[2]}</td>
-                  <td className="px-5 py-3">
-                    <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${r[3] === 'Đã check-in' ? 'bg-emerald-50 text-emerald-700' : r[3] === 'Chờ xử lý' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'
-                      }`}>
-                      {r[3]}
-                    </span>
-                  </td>
+    <>
+      <Card title={title} action={actionNode}>
+        {items.length === 0 ? (
+          <p className="py-8 text-center text-xs text-slate-400">Chưa có lịch hẹn nào ghi nhận trong ca trực hôm nay</p>
+        ) : (
+          <div className="-m-5 overflow-x-auto">
+            <table className="w-full min-w-[950px] text-left text-xs">
+              <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                <tr>
+                  <th className="px-5 py-3">Mã vé / Đặt hẹn</th>
+                  <th className="px-5 py-3">Bệnh nhân</th>
+                  <th className="px-5 py-3">Thời gian</th>
+                  <th className="px-5 py-3">Bác sĩ & Phòng khám</th>
+                  <th className="px-5 py-3">Thanh toán</th>
+                  <th className="px-5 py-3 text-center">Trạng thái</th>
+                  <th className="px-5 py-3 text-right">Thao tác</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((it: any, i: number) => {
+                  const statusInfo = formatStatus(it.status)
+                  const bookingCode = it.bookingCode || it.ticket || '—'
+                  const patientName = it.patientName || it.patientProfile?.fullName || 'Bệnh nhân'
+                  const patientPhone = it.patientPhone || it.patientProfile?.phoneNumber || ''
+                  const doctorName = it.doctorName || (it.doctor?.fullName ? `BS. ${it.doctor.fullName}` : 'Khám tổng quát')
+                  const clinicRoom = it.clinicRoom || it.room?.name || it.room?.code || 'Chưa xếp phòng'
+                  const timeDisplay = it.startTime ? `${it.startTime}${it.endTime ? ` – ${it.endTime}` : ''}` : '08:00'
+                  const isPaid = it.isPaid ?? (it.invoice?.status === 'PAID')
+                  const amount = it.amount || it.invoice?.totalAmount || 0
+
+                  return (
+                    <tr
+                      key={it.id || i}
+                      onClick={() => setSelectedDetail(it)}
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                    >
+                      {/* Cột 1: Mã vé / Đặt hẹn */}
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-xs">
+                            {bookingCode}
+                          </span>
+                          {it.queueNumber != null && (
+                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
+                              STT: #{it.queueNumber}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Cột 2: Bệnh nhân */}
+                      <td className="px-5 py-3.5">
+                        <strong className="text-xs font-semibold text-slate-900 block group-hover:text-emerald-800 transition-colors">
+                          {patientName}
+                        </strong>
+                        {patientPhone ? (
+                          <p className="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                            <Phone className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                            <span>{patientPhone}</span>
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 mt-0.5">Bệnh nhân tiếp đón</p>
+                        )}
+                      </td>
+
+                      {/* Cột 3: Thời gian */}
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1 font-semibold text-slate-800">
+                          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{timeDisplay}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-medium mt-0.5 block">
+                          {it.startTime && it.startTime < '12:00' ? 'Ca sáng' : it.startTime && it.startTime >= '17:30' ? 'Ca tối' : 'Ca chiều'}
+                        </span>
+                      </td>
+
+                      {/* Cột 4: Bác sĩ & Phòng khám */}
+                      <td className="px-5 py-3.5">
+                        <p className="font-semibold text-slate-800 text-xs">{doctorName}</p>
+                        <p className="text-[11px] text-emerald-700 font-medium mt-0.5 flex items-center gap-1">
+                          <DoorOpen className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span className="truncate max-w-[150px]" title={clinicRoom}>{clinicRoom}</span>
+                        </p>
+                      </td>
+
+                      {/* Cột 5: Thanh toán */}
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                            isPaid
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}
+                        >
+                          {isPaid ? 'Đã thu' : 'Chưa thu'}
+                        </span>
+                        {amount > 0 && (
+                          <p className="text-[11px] text-slate-500 font-medium mt-0.5 font-mono">
+                            {amount.toLocaleString('vi-VN')} đ
+                          </p>
+                        )}
+                      </td>
+
+                      {/* Cột 6: Trạng thái */}
+                      <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold border ${statusInfo.badgeClass}`}>
+                          {statusInfo.label}
+                        </span>
+                      </td>
+
+                      {/* Cột 7: Thao tác */}
+                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedDetail(it)
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 hover:border-emerald-200 text-xs font-semibold cursor-pointer transition shadow-2xs"
+                          title="Xem chi tiết ca hẹn"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Chi tiết</span>
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* DETAIL MODAL */}
+      {selectedDetail && (
+        <AdminModal
+          isOpen={Boolean(selectedDetail)}
+          onClose={() => setSelectedDetail(null)}
+          title={`Chi tiết lịch hẹn: ${selectedDetail.bookingCode || selectedDetail.ticket || '—'}`}
+          maxWidth="md"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Mã đặt hẹn</span>
+                <p className="text-sm font-mono font-bold text-emerald-800">
+                  {selectedDetail.bookingCode || selectedDetail.ticket || '—'}
+                </p>
+              </div>
+              {selectedDetail.queueNumber != null && (
+                <div className="text-right">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Số thứ tự khám</span>
+                  <p className="text-sm font-bold text-slate-800">
+                    STT: #{selectedDetail.queueNumber}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-2.5 rounded border border-slate-200 bg-white">
+                <p className="text-slate-400 text-[11px]">Bệnh nhân</p>
+                <p className="font-bold text-slate-900 mt-0.5">{selectedDetail.patientName || 'Bệnh nhân'}</p>
+                {selectedDetail.patientPhone && (
+                  <p className="text-[11px] text-slate-500 font-mono mt-0.5">{selectedDetail.patientPhone}</p>
+                )}
+              </div>
+
+              <div className="p-2.5 rounded border border-slate-200 bg-white">
+                <p className="text-slate-400 text-[11px]">Bác sĩ phụ trách</p>
+                <p className="font-bold text-slate-900 mt-0.5">{selectedDetail.doctorName || 'BS. Trực'}</p>
+                <p className="text-[11px] text-emerald-700 mt-0.5">{selectedDetail.clinicRoom || 'Chưa xếp phòng'}</p>
+              </div>
+
+              <div className="p-2.5 rounded border border-slate-200 bg-white">
+                <p className="text-slate-400 text-[11px]">Khung giờ khám</p>
+                <p className="font-bold text-emerald-800 mt-0.5">
+                  {selectedDetail.startTime ? `${selectedDetail.startTime}${selectedDetail.endTime ? ` – ${selectedDetail.endTime}` : ''}` : '08:00'}
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded border border-slate-200 bg-white">
+                <p className="text-slate-400 text-[11px]">Cơ sở khám bệnh</p>
+                <p className="font-bold text-slate-900 mt-0.5 truncate">{selectedDetail.branchName || 'VitaCare Clinic'}</p>
+              </div>
+
+              <div className="p-2.5 rounded border border-slate-200 bg-white">
+                <p className="text-slate-400 text-[11px]">Tình trạng viện phí</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border ${selectedDetail.isPaid ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                    {selectedDetail.isPaid ? 'Đã thu tiền' : 'Chưa thu tiền'}
+                  </span>
+                  {selectedDetail.amount > 0 && (
+                    <span className="font-semibold text-slate-700 font-mono">{selectedDetail.amount.toLocaleString('vi-VN')} đ</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded border border-slate-200 bg-white">
+                <p className="text-slate-400 text-[11px]">Trạng thái lịch hẹn</p>
+                <div className="mt-0.5">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${formatStatus(selectedDetail.status).badgeClass}`}>
+                    {formatStatus(selectedDetail.status).label}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDetail(null)
+                  navigate('/appointments')
+                }}
+                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <span>Mở trong Quản lý lịch hẹn</span>
+                <span aria-hidden="true">→</span>
+              </button>
+              <AdminButton variant="secondary" onClick={() => setSelectedDetail(null)}>
+                Đóng
+              </AdminButton>
+            </div>
+          </div>
+        </AdminModal>
       )}
-    </Card>
+    </>
   )
 }
 
@@ -472,20 +696,62 @@ function AdminDashboard({ stats, loading }: any) {
 }
 
 
-function ManagerDashboard({ stats, loading }: any) {
+function ManagerDashboard({ stats, loading, user }: any) {
   const t = stats?.appointments?.today || stats?.today || {}
   const rev = stats?.revenue?.today?.total != null
     ? `${Math.round(stats.revenue.today.total).toLocaleString('vi-VN')} đ`
     : '—'
   const todayRows = stats?.todayRows || []
 
+  const assignedBranch =
+    stats?.currentBranch ||
+    user?.branchAssignments?.find((b: any) => b.isPrimary)?.branch ||
+    user?.branchAssignments?.[0]?.branch ||
+    null
+
   return (
     <>
-      <div className="border-b border-slate-200 pb-4">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Chi nhánh quản lý</p>
-        <h1 className="mt-0.5 text-2xl font-bold text-slate-900">Tổng quan chi nhánh</h1>
-        <p className="text-xs text-slate-500">Hoạt động vận hành và lịch khám hôm nay theo thời gian thực.</p>
+      <div className="rounded border border-slate-200/90 bg-white p-5 shadow-xs">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Chi nhánh quản lý</span>
+              {assignedBranch ? (
+                <span className="inline-flex items-center gap-1.5 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800 border border-emerald-200">
+                  <Building2 className="w-3 h-3 text-emerald-700" />
+                  Mã CS: {assignedBranch.code}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                  Toàn hệ thống
+                </span>
+              )}
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Tổng quan: {assignedBranch?.name || 'Chi nhánh phòng khám'}
+            </h1>
+            <p className="text-xs text-slate-500 flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>{assignedBranch?.address || 'Hoạt động vận hành và lịch khám hôm nay theo thời gian thực.'}</span>
+            </p>
+          </div>
+
+          {assignedBranch && (
+            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200/90 rounded px-4 py-3 shrink-0">
+              <div className="grid h-10 w-10 place-items-center rounded bg-emerald-100 text-emerald-800 shrink-0">
+                <Building2 className="w-5 h-5 text-emerald-700" />
+              </div>
+              <div className="text-xs">
+                <div className="font-bold text-slate-800">{assignedBranch.name}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {assignedBranch.phoneNumber ? `Hotline: ${assignedBranch.phoneNumber}` : 'Phạm vi quản lý cơ sở'} · VitaCare Clinic
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiMetricCard label="Lịch hẹn hôm nay" value={loading ? '—' : `${t.total ?? 0} ca`} detail={`Đã khám: ${t.examined ?? 0} · Đang chờ: ${t.checkedIn ?? 0}`} tone="blue" />
         <KpiMetricCard label="Doanh thu hôm nay" value={loading ? '—' : rev} detail="Thu tiền mặt & chuyển khoản" tone="emerald" />
@@ -493,7 +759,7 @@ function ManagerDashboard({ stats, loading }: any) {
         <KpiMetricCard label="Hoàn thành" value={loading ? '—' : `${t.examined ?? 0} ca`} detail="Đã hoàn tất ca khám và kê đơn" tone="emerald" />
       </div>
       <div className="mt-5">
-        <ActivityTable title="Lịch hẹn tại chi nhánh hôm nay" items={todayRows} />
+        <ActivityTable title={`Lịch hẹn tại ${assignedBranch?.name || 'chi nhánh'} hôm nay`} items={todayRows} />
       </div>
     </>
   )
@@ -525,56 +791,44 @@ function GenericPage({ section, role }: any) {
 
 const ADMIN_NAV_SECTIONS = [
   {
-    category: 'Vận hành phòng khám',
+    category: 'Hệ thống & Cơ sở',
     items: [
-      { id: 'dashboard', label: 'Tổng quan vận hành', href: '/dashboard', icon: 'dashboard' },
-      { id: 'analytics', label: 'Báo cáo & Thống kê', href: '/analytics', icon: 'analytics' },
-      { id: 'appointments', label: 'Danh sách lịch hẹn', href: '/appointments', icon: 'appointments' },
-      { id: 'slots', label: 'Lịch làm việc bác sĩ', href: '/work-schedules', icon: 'schedule' },
-      { id: 'patients', label: 'Hồ sơ bệnh nhân', href: '/patients', icon: 'patients' },
-      { id: 'billing', label: 'Thanh toán & Hóa đơn', href: '/billing', icon: 'billing' },
+      { id: 'dashboard', label: 'Tổng quan hệ thống', href: '/dashboard', icon: 'dashboard' },
+      { id: 'branches', label: 'Chi nhánh phòng khám', href: '/branches', icon: 'branches' },
+      { id: 'booking-methods', label: 'Hình thức đặt khám', href: '/booking-methods', icon: 'methods' },
     ],
   },
   {
-    category: 'Chuyên môn & Dịch vụ',
-    items: [
-      { id: 'rooms', label: 'Phòng khám', href: '/rooms', icon: 'rooms' },
-      { id: 'specialties', label: 'Chuyên khoa khám', href: '/specialties', icon: 'specialties' },
-      { id: 'booking-packages', label: 'Dịch vụ khám bệnh', href: '/booking-packages', icon: 'packages' },
-    ],
-  },
-  {
-    category: 'Quản trị & Hệ thống',
+    category: 'Tài khoản & Bảo mật',
     items: [
       { id: 'staff', label: 'Tài khoản & Nhân sự', href: '/staff', icon: 'staff' },
       { id: 'roles', label: 'Vai trò & Phân quyền', href: '/roles-permissions', icon: 'roles' },
-      { id: 'branches', label: 'Chi nhánh phòng khám', href: '/branches', icon: 'branches' },
-      { id: 'booking-methods', label: 'Hình thức đặt khám', href: '/booking-methods', icon: 'methods' },
+    ],
+  },
+  {
+    category: 'Giám sát & Vận hành',
+    items: [
+      { id: 'system-logs', label: 'Nhật ký & Lỗi hệ thống', href: '/system-logs', icon: 'server' },
     ],
   },
 ]
 
 const MANAGER_NAV_SECTIONS = [
   {
-    category: 'Vận hành chi nhánh',
+    category: 'Giám sát & Doanh thu',
     items: [
       { id: 'dashboard', label: 'Tổng quan chi nhánh', href: '/dashboard', icon: 'dashboard' },
-      { id: 'analytics', label: 'Báo cáo & Thống kê', href: '/analytics', icon: 'analytics' },
-      { id: 'appointments', label: 'Danh sách lịch hẹn', href: '/appointments', icon: 'appointments' },
-      { id: 'slots', label: 'Lịch làm việc & Ca trực', href: '/work-schedules', icon: 'schedule' },
-      { id: 'patients', label: 'Hồ sơ bệnh nhân', href: '/patients', icon: 'patients' },
-      { id: 'billing', label: 'Thanh toán & Hóa đơn', href: '/billing', icon: 'billing' },
+      { id: 'analytics', label: 'Báo cáo & Tăng trưởng', href: '/analytics', icon: 'analytics' },
+      { id: 'billing', label: 'Thanh toán & Doanh thu', href: '/billing', icon: 'billing' },
       { id: 'branches', label: 'Thông tin chi nhánh', href: '/branches', icon: 'branches' },
     ],
   },
   {
-    category: 'Chuyên môn & Nhân sự',
+    category: 'Vận hành khám chữa bệnh',
     items: [
-      { id: 'staff', label: 'Nhân sự chi nhánh', href: '/staff', icon: 'staff' },
-      { id: 'roles', label: 'Vai trò & Phân quyền', href: '/roles-permissions', icon: 'roles' },
-      { id: 'rooms', label: 'Phòng khám', href: '/rooms', icon: 'rooms' },
-      { id: 'specialties', label: 'Chuyên khoa khám', href: '/specialties', icon: 'specialties' },
-      { id: 'booking-packages', label: 'Dịch vụ khám bệnh', href: '/booking-packages', icon: 'packages' },
+      { id: 'appointments', label: 'Danh sách lịch hẹn', href: '/appointments', icon: 'appointments' },
+      { id: 'slots', label: 'Lịch làm việc bác sĩ', href: '/work-schedules', icon: 'schedule' },
+      { id: 'patients', label: 'Hồ sơ bệnh nhân', href: '/patients', icon: 'patients' },
     ],
   },
 ]
@@ -584,6 +838,13 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
   const roleTitle = ROLE_LABELS[role] || 'Quản trị viên'
   const go = (href: string) => { navigate(href); setMenu(false) }
 
+  const assignedBranch =
+    user?.branchAssignments?.find((b: any) => b.isPrimary)?.branch ||
+    user?.branchAssignments?.[0]?.branch ||
+    null
+  const branchName = assignedBranch?.name || null
+  const branchCode = assignedBranch?.code || null
+
   return (
     <div className="min-h-screen bg-[#f5f8f5] text-slate-800">
       <aside className={`fixed inset-y-0 left-0 z-30 flex w-[264px] flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -592,7 +853,13 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
             <img src="/imgs/logo/logo2.png" alt="VitaCare Clinic" className="h-11 w-11 object-contain shrink-0" />
             <div className="min-w-0 flex-1">
               <strong className="text-sm font-extrabold text-emerald-800 tracking-tight block truncate">VitaCare Clinic</strong>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate">{roleTitle}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate">
+                {role === 'branch_manager' && branchName ? (
+                  <span className="text-emerald-700 font-bold truncate block">{branchName}</span>
+                ) : (
+                  roleTitle
+                )}
+              </p>
             </div>
           </div>
           <button
@@ -632,10 +899,19 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
 
         <div className="border-t border-slate-100 p-3 bg-white space-y-2">
           <div className="flex items-center gap-3 rounded bg-slate-50 p-2.5 border border-slate-200/80">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800 shrink-0">{initials(user)}</span>
+            <span className="grid h-8 w-8 place-items-center rounded bg-emerald-100 text-xs font-bold text-emerald-800 shrink-0">{initials(user)}</span>
             <div className="min-w-0 flex-1">
               <strong className="text-xs font-bold text-slate-800 truncate block">{user?.fullName || user?.displayName || 'Nhân viên'}</strong>
-              <p className="text-[10px] text-slate-400 truncate">{roleTitle} · VitaCare</p>
+              <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                {role === 'branch_manager' && branchName ? (
+                  <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 truncate">
+                    <Building2 className="w-3 h-3 text-emerald-700 shrink-0" />
+                    <span className="truncate">{branchName}</span>
+                  </span>
+                ) : (
+                  `${roleTitle} · VitaCare`
+                )}
+              </p>
             </div>
           </div>
           <button
@@ -654,12 +930,25 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
       <div className="lg:pl-[264px]">
         <div className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
           <div className="flex items-center gap-2.5">
-            <button onClick={() => setMenu(true)} className="rounded border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"><Menu className="h-5 w-5" /></button>
+            <button onClick={() => setMenu(true)} className="rounded border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 cursor-pointer" aria-label="Mở menu"><Menu className="h-5 w-5" /></button>
             <span className="text-sm font-bold text-slate-800">VitaCare Clinic</span>
           </div>
-          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">{roleTitle}</span>
+          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded">
+            {role === 'branch_manager' && branchName ? branchName : roleTitle}
+          </span>
         </div>
-        <main className="mx-auto max-w-[1440px] p-4 sm:p-6 lg:p-7">{content}</main>
+        <main className="mx-auto max-w-[1440px] p-4 sm:p-6 lg:p-7">
+          {role === 'branch_manager' && branchName && section !== 'dashboard' && (
+            <div className="mb-4 flex items-center justify-between rounded bg-emerald-50/70 border border-emerald-200/90 px-4 py-2.5 text-xs text-emerald-900">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                <span>Đang thao tác tại cơ sở: <strong>{branchName}</strong> {branchCode ? `(${branchCode})` : ''}</span>
+              </div>
+              <span className="text-[11px] font-semibold text-emerald-700 hidden sm:inline">Phạm vi dữ liệu chi nhánh được phân công</span>
+            </div>
+          )}
+          {content}
+        </main>
       </div>
     </div>
   )
@@ -685,19 +974,28 @@ export default function RolePortal({ section = 'dashboard' }: { section?: string
 
   const nav = NAV[role] || NAV.admin
 
+  const managerBranchId =
+    role === 'branch_manager'
+      ? (user?.branchAssignments?.find((b: any) => b.isPrimary)?.branchId ||
+         user?.branchAssignments?.[0]?.branchId ||
+         user?.branchAssignments?.[0]?.branch?.id ||
+         '')
+      : undefined
+
   const content =
-    section === 'analytics' ? <AdminAnalyticsPage stats={stats} loading={loading} /> :
-      section === 'roles' ? <RolesPermissionsPage /> :
-        section === 'patients' ? (role === 'receptionist' ? <ReceptionPatientsPage /> : <AdminPatientsPage />) :
-          section === 'appointments' ? <AdminAppointmentsPage /> :
-            section === 'billing' ? <BillingPage /> :
-              section === 'booking-methods' ? <BookingMethodsPage /> :
-                section === 'booking-packages' ? <BookingPackagesPage /> :
-                  ['branches', 'rooms', 'specialties', 'service-packages', 'services', 'inventory'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <SystemCatalogCrudPage resource={section === 'inventory' ? 'medicines' : section} /> :
-                    ['doctors', 'staff'].includes(section) ? (['admin', 'branch_manager'].includes(role) ? <ClinicStaffPage /> : <StaffCrudPage role="doctor" />) :
-                      ['schedule', 'slots', 'work-schedules'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <DoctorWorkSchedulesPage /> :
-                        section === 'dashboard' ? (role === 'branch_manager' ? <ManagerDashboard stats={stats} loading={loading} /> : <AdminDashboard stats={stats} loading={loading} />) :
-                          <GenericPage section={section} role={role} />
+    section === 'system-logs' ? <SystemLogsPage /> :
+      section === 'analytics' ? (role === 'admin' ? <SystemAdminDashboard /> : <AdminAnalyticsPage stats={stats} loading={loading} />) :
+        section === 'roles' ? <RolesPermissionsPage /> :
+          section === 'patients' ? (role === 'receptionist' ? <ReceptionPatientsPage /> : <AdminPatientsPage />) :
+            section === 'appointments' ? <AdminAppointmentsPage /> :
+              section === 'billing' ? <BillingPage /> :
+                section === 'booking-methods' ? <BookingMethodsPage /> :
+                  section === 'booking-packages' ? <BookingPackagesPage /> :
+                    ['branches', 'rooms', 'specialties', 'service-packages', 'services', 'inventory'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <SystemCatalogCrudPage resource={section === 'inventory' ? 'medicines' : section} /> :
+                      ['doctors', 'staff'].includes(section) ? (['admin', 'branch_manager'].includes(role) ? <ClinicStaffPage /> : <StaffCrudPage role="doctor" />) :
+                        ['schedule', 'slots', 'work-schedules'].includes(section) && ['admin', 'branch_manager'].includes(role) ? <DoctorWorkSchedulesPage initialBranchId={managerBranchId} /> :
+                          section === 'dashboard' ? (role === 'branch_manager' ? <ManagerDashboard stats={stats} loading={loading} user={user} /> : (role === 'admin' ? <SystemAdminDashboard /> : <AdminDashboard stats={stats} loading={loading} />)) :
+                            <GenericPage section={section} role={role} />
 
   if (['admin', 'branch_manager'].includes(role)) {
     return <GroupedPortal section={section} user={user} role={role} content={content} menu={menu} setMenu={setMenu} navigate={navigate} logout={logout} />

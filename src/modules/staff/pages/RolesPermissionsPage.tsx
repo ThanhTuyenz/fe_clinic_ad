@@ -71,7 +71,7 @@ type RoleDef = {
 const SYSTEM_STAFF_ROLES: RoleDef[] = [
   {
     id: 'admin',
-    label: 'Quản trị viên (Admin)',
+    label: 'Quản trị viên',
     shortLabel: 'Admin',
     scope: 'Toàn hệ thống chuỗi',
     icon: Shield,
@@ -87,7 +87,7 @@ const SYSTEM_STAFF_ROLES: RoleDef[] = [
   },
   {
     id: 'branch_manager',
-    label: 'Quản lý chi nhánh (Manager)',
+    label: 'Quản lý chi nhánh',
     shortLabel: 'Quản lý',
     scope: 'Tại cơ sở chi nhánh',
     icon: Building2,
@@ -103,7 +103,7 @@ const SYSTEM_STAFF_ROLES: RoleDef[] = [
   },
   {
     id: 'doctor',
-    label: 'Bác sĩ chuyên môn (Doctor)',
+    label: 'Bác sĩ chuyên môn',
     shortLabel: 'Bác sĩ',
     scope: 'Phòng khám & Kê đơn',
     icon: Stethoscope,
@@ -120,7 +120,7 @@ const SYSTEM_STAFF_ROLES: RoleDef[] = [
   },
   {
     id: 'receptionist',
-    label: 'Lễ tân tiếp đón (Receptionist)',
+    label: 'Lễ tân tiếp đón',
     shortLabel: 'Lễ tân',
     scope: 'Bàn tiếp đón & Quầy',
     icon: DoorOpen,
@@ -140,16 +140,34 @@ const SYSTEM_STAFF_ROLES: RoleDef[] = [
 const TABLE_COLUMNS = [
   'Nhân viên',
   'Cơ sở & Chuyên môn',
-  { label: 'Vai trò & Phân quyền (RBAC)', align: 'right' as const },
+  'Vai trò',
+  { label: 'Phân quyền', align: 'right' as const },
 ]
+
+const ROLE_BADGE_MAP: Record<string, { badge: string; iconColor: string }> = {
+  admin: {
+    badge: 'bg-slate-100 text-slate-700 border-slate-200/90',
+    iconColor: 'text-slate-500',
+  },
+  branch_manager: {
+    badge: 'bg-slate-100 text-slate-700 border-slate-200/90',
+    iconColor: 'text-slate-500',
+  },
+  doctor: {
+    badge: 'bg-slate-100 text-slate-700 border-slate-200/90',
+    iconColor: 'text-slate-500',
+  },
+  receptionist: {
+    badge: 'bg-slate-100 text-slate-700 border-slate-200/90',
+    iconColor: 'text-slate-500',
+  },
+}
 
 const roleOf = (row: StaffUser) => String(row.role || '').toLowerCase()
 
 export default function RolesPermissionsPage() {
   const { user } = useAuth()
-  const currentRole = staffRole(user)
   const currentId = String(user?.id || '')
-  const canAssignAdmin = currentRole === 'admin'
 
   const [rows, setRows] = useState<StaffUser[]>([])
   const [query, setQuery] = useState('')
@@ -208,33 +226,6 @@ export default function RolesPermissionsPage() {
     })
   }, [rows, query, filter])
 
-  const changeRole = async (row: StaffUser, nextRole: string) => {
-    if (roleOf(row) === nextRole) return
-    if (
-      row.id === currentId &&
-      !confirm('Đổi vai trò của chính bạn có thể làm thay đổi quyền truy cập các trang. Tiếp tục?')
-    )
-      return
-    const label = SYSTEM_STAFF_ROLES.find((r) => r.id === nextRole)?.label || nextRole
-    if (!confirm(`Xác nhận gán vai trò “${label}” cho tài khoản ${row.fullName || row.email}?`))
-      return
-
-    setSavingId(row.id)
-    setError('')
-    try {
-      await updateUser(row.id, { role: nextRole })
-      setRows((items) =>
-        items.map((it) => (it.id === row.id ? { ...it, role: nextRole } : it))
-      )
-      setSuccessMsg(`Đã cập nhật vai trò của ${row.fullName || row.email} thành ${label}.`)
-      setTimeout(() => setSuccessMsg(''), 3500)
-    } catch (e) {
-      setError(apiErrorMessage(e, 'Không cập nhật được vai trò người dùng.'))
-    } finally {
-      setSavingId('')
-    }
-  }
-
   const handleSaveCustomPermissions = async (payload: { granted: string[]; revoked: string[] }) => {
     if (!customPermTargetUser) return
     setSavingId(customPermTargetUser.id)
@@ -257,10 +248,6 @@ export default function RolesPermissionsPage() {
       setSavingId('')
     }
   }
-
-  const assignableRoles = SYSTEM_STAFF_ROLES.filter(
-    (r) => canAssignAdmin || r.id !== 'admin'
-  )
 
   const filterTabs = [
     { id: 'all', label: 'Tất cả nhân sự', count: rows.length },
@@ -321,13 +308,18 @@ export default function RolesPermissionsPage() {
           <AdminTableHead columns={TABLE_COLUMNS} />
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <AdminTableLoading colSpan={3} message="Đang tải dữ liệu nhân sự…" />
+              <AdminTableLoading colSpan={4} message="Đang tải dữ liệu nhân sự…" />
             ) : filtered.length === 0 ? (
-              <AdminTableEmpty colSpan={3} message="Không có nhân viên phù hợp." />
+              <AdminTableEmpty colSpan={4} message="Không có nhân viên phù hợp." />
             ) : (
               filtered.map((row) => {
                 const cur = roleOf(row)
                 const roleDef = SYSTEM_STAFF_ROLES.find((r) => r.id === cur)
+                const roleStyle = ROLE_BADGE_MAP[cur] || {
+                  badge: 'bg-slate-50 text-slate-700 border-slate-200',
+                  iconColor: 'text-slate-500',
+                }
+                const RoleIcon = roleDef?.icon || Shield
 
                 // Lấy thông tin cơ sở chi nhánh
                 const branchName =
@@ -375,7 +367,7 @@ export default function RolesPermissionsPage() {
                           <span>{branchName}</span>
                         </div>
                         {specialtyName && (
-                          <div className="text-[11px] text-purple-700 font-medium">
+                          <div className="text-[11px] text-slate-500 font-medium">
                             {docRank ? `${docRank} • ` : ''}Chuyên khoa {specialtyName}
                           </div>
                         )}
@@ -388,7 +380,17 @@ export default function RolesPermissionsPage() {
                       </div>
                     </td>
 
-                    {/* Cột 3: Dropdown Phân quyền vai trò (RBAC) & Tùy biến quyền */}
+                    {/* Cột 3: Vai trò */}
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium ${roleStyle.badge}`}
+                      >
+                        <RoleIcon className={`w-3.5 h-3.5 ${roleStyle.iconColor}`} />
+                        <span>{roleDef?.label || cur}</span>
+                      </span>
+                    </td>
+
+                    {/* Cột 4: Phân quyền & Thao tác */}
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-2">
                         {Boolean(
@@ -397,32 +399,19 @@ export default function RolesPermissionsPage() {
                               row.customPermissions.revoked?.length > 0 ||
                               (Array.isArray(row.customPermissions) && row.customPermissions.length > 0)),
                         ) && (
-                          <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-1 rounded border border-emerald-200">
-                            Đã tùy biến quyền
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                            Đã tùy biến
                           </span>
                         )}
-
-                        <select
-                          value={cur}
-                          disabled={savingId === row.id}
-                          onChange={(e) => void changeRole(row, e.target.value)}
-                          className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:border-slate-300 focus:outline-none focus:border-emerald-600 disabled:opacity-50 cursor-pointer"
-                        >
-                          {assignableRoles.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.label}
-                            </option>
-                          ))}
-                        </select>
 
                         <button
                           type="button"
                           onClick={() => setCustomPermTargetUser(row)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer shadow-2xs"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer shadow-2xs"
                           title="Tùy biến quyền hạn chi tiết (Cấp thêm / Tước quyền)"
                         >
-                          <Shield className="w-3.5 h-3.5 text-emerald-700" />
-                          <span className="hidden md:inline">Tùy biến quyền</span>
+                          <Shield className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Tùy biến quyền</span>
                         </button>
                       </div>
                     </td>

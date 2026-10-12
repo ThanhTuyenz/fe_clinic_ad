@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react'
 import { Calendar, Clock, Layers, Check, AlertCircle } from 'lucide-react'
-import { createBatchSchedules } from '../../services/schedules'
+import { createBatchSchedules } from '@/modules/admin/services/schedules'
 import { AdminButton, AdminInput, AdminModal, AdminSelect } from '@/common/components/ui'
 
 interface Props {

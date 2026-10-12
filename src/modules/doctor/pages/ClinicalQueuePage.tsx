@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useAuth } from '@/common/hooks/useAuth'
 import { useStaffLogout } from '@/common/hooks/useStaffLogout'
-import RoleSidebar, { StaffMobileHeader } from '@/modules/admin/components/RoleSidebar'
+import RoleSidebar, { StaffMobileHeader } from '@/modules/portal/components/RoleSidebar'
 import { staffRole } from '@/modules/admin/utils/staffSession'
 import {
   completeClinicalOrderMock,
