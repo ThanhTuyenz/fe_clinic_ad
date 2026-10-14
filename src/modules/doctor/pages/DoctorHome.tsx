@@ -26,6 +26,7 @@ import {
   DoorOpen,
   CalendarCheck,
   UserCheck,
+  Video,
 } from 'lucide-react'
 import {
   listDoctorAppointments,
@@ -132,6 +133,14 @@ function paymentBadge(payment?: any, invoice?: any) {
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
       <CreditCard className="w-3 h-3 shrink-0" /> Chưa thu phí
     </span>
+  )
+}
+
+function isTelehealthDoctorAppt(item: any) {
+  if (!item) return false
+  return Boolean(
+    item.isTelehealth ||
+    item.bookingMethod?.code === 'ONLINE_CONSULTATION'
   )
 }
 
@@ -341,10 +350,10 @@ export default function DoctorHome() {
   const activeHeaderTab = isHistoryView
     ? 'history'
     : isScheduleView
-    ? 'schedule'
-    : isWaitingView
-    ? 'waiting'
-    : 'calendar'
+      ? 'schedule'
+      : isWaitingView
+        ? 'waiting'
+        : 'calendar'
 
   return (
     <div className="min-h-screen bg-[#f5f8f5] relative text-slate-800">
@@ -360,11 +369,10 @@ export default function DoctorHome() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded border border-slate-200/90 shadow-xs">
             <div>
               <div className="flex items-center gap-2">
-                <span className={`p-2 rounded border shrink-0 ${
-                  isWaitingView
+                <span className={`p-2 rounded border shrink-0 ${isWaitingView
                     ? 'bg-blue-50 text-blue-700 border-blue-200'
                     : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                }`}>
+                  }`}>
                   {isHistoryView ? (
                     <Users className="w-5 h-5" />
                   ) : isWaitingView ? (
@@ -378,15 +386,15 @@ export default function DoctorHome() {
                     {isHistoryView
                       ? 'Lịch sử bệnh nhân'
                       : isWaitingView
-                      ? 'Chờ khám bệnh'
-                      : 'Lịch khám của bác sĩ'}
+                        ? 'Chờ khám bệnh'
+                        : 'Lịch khám của bác sĩ'}
                   </h1>
                   <p className="text-xs text-slate-500 mt-0.5">
                     {isHistoryView
                       ? 'Danh sách hồ sơ bệnh nhân đã hoàn thành khám tại phòng khám.'
                       : isWaitingView
-                      ? 'Danh sách bệnh nhân đã hoàn tất tiếp nhận (Checked In) tại quầy và đang chờ khám.'
-                      : 'Danh sách toàn bộ lịch hẹn khám bệnh của bác sĩ.'}
+                        ? 'Danh sách bệnh nhân đã hoàn tất tiếp nhận (Checked In) tại quầy và đang chờ khám.'
+                        : 'Danh sách toàn bộ lịch hẹn khám bệnh của bác sĩ.'}
                   </p>
                 </div>
               </div>
@@ -431,9 +439,8 @@ export default function DoctorHome() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div
                 onClick={() => setStatusFilter('')}
-                className={`bg-white p-4 rounded border transition-all cursor-pointer ${
-                  !statusFilter ? 'border-emerald-300 bg-emerald-50/20 shadow-2xs' : 'border-slate-200/80 shadow-2xs hover:border-slate-300'
-                } flex items-center justify-between`}
+                className={`bg-white p-4 rounded border transition-all cursor-pointer ${!statusFilter ? 'border-emerald-300 bg-emerald-50/20 shadow-2xs' : 'border-slate-200/80 shadow-2xs hover:border-slate-300'
+                  } flex items-center justify-between`}
                 title="Bấm để xem tất cả lịch khám"
               >
                 <div>
@@ -447,9 +454,8 @@ export default function DoctorHome() {
 
               <div
                 onClick={() => setStatusFilter(statusFilter === 'CHECKED_IN' ? '' : 'CHECKED_IN')}
-                className={`bg-white p-4 rounded border transition-all cursor-pointer ${
-                  statusFilter === 'CHECKED_IN' ? 'border-blue-300 bg-blue-50/20 shadow-2xs' : 'border-slate-200/80 shadow-2xs hover:border-slate-300'
-                } flex items-center justify-between`}
+                className={`bg-white p-4 rounded border transition-all cursor-pointer ${statusFilter === 'CHECKED_IN' ? 'border-blue-300 bg-blue-50/20 shadow-2xs' : 'border-slate-200/80 shadow-2xs hover:border-slate-300'
+                  } flex items-center justify-between`}
                 title="Bấm để lọc ca đã tiếp nhận"
               >
                 <div>
@@ -463,9 +469,8 @@ export default function DoctorHome() {
 
               <div
                 onClick={() => setStatusFilter(statusFilter === 'COMPLETED' ? '' : 'COMPLETED')}
-                className={`bg-white p-4 rounded border transition-all cursor-pointer ${
-                  statusFilter === 'COMPLETED' ? 'border-emerald-300 bg-emerald-50/20 shadow-2xs' : 'border-slate-200/80 shadow-2xs hover:border-slate-300'
-                } flex items-center justify-between`}
+                className={`bg-white p-4 rounded border transition-all cursor-pointer ${statusFilter === 'COMPLETED' ? 'border-emerald-300 bg-emerald-50/20 shadow-2xs' : 'border-slate-200/80 shadow-2xs hover:border-slate-300'
+                  } flex items-center justify-between`}
                 title="Bấm để lọc ca đã khám xong"
               >
                 <div>
@@ -479,9 +484,8 @@ export default function DoctorHome() {
 
               <div
                 onClick={() => setStatusFilter(statusFilter === 'CANCELLED' ? '' : 'CANCELLED')}
-                className={`bg-white p-4 rounded border transition-all cursor-pointer ${
-                  statusFilter === 'CANCELLED' ? 'border-rose-300 bg-rose-50/20 shadow-2xs' : 'border-slate-200/80 shadow-2xs hover:border-slate-300'
-                } flex items-center justify-between`}
+                className={`bg-white p-4 rounded border transition-all cursor-pointer ${statusFilter === 'CANCELLED' ? 'border-rose-300 bg-rose-50/20 shadow-2xs' : 'border-slate-200/80 shadow-2xs hover:border-slate-300'
+                  } flex items-center justify-between`}
                 title="Bấm để lọc ca đã hủy"
               >
                 <div>
@@ -563,14 +567,14 @@ export default function DoctorHome() {
                   {isHistoryView
                     ? 'Danh sách bệnh nhân đã khám'
                     : isWaitingView
-                    ? 'Danh sách bệnh nhân chờ khám (Checked In)'
-                    : statusFilter === 'CHECKED_IN'
-                    ? 'Danh sách bệnh nhân đã tiếp nhận (Checked In)'
-                    : statusFilter === 'COMPLETED'
-                    ? 'Danh sách bệnh nhân đã khám xong'
-                    : statusFilter === 'CANCELLED'
-                    ? 'Danh sách lịch hẹn đã hủy'
-                    : 'Danh sách toàn bộ lịch khám'}
+                      ? 'Danh sách bệnh nhân chờ khám (Checked In)'
+                      : statusFilter === 'CHECKED_IN'
+                        ? 'Danh sách bệnh nhân đã tiếp nhận (Checked In)'
+                        : statusFilter === 'COMPLETED'
+                          ? 'Danh sách bệnh nhân đã khám xong'
+                          : statusFilter === 'CANCELLED'
+                            ? 'Danh sách lịch hẹn đã hủy'
+                            : 'Danh sách toàn bộ lịch khám'}
                 </h2>
                 <span className="text-xs text-slate-500 whitespace-nowrap">
                   Tổng số: <b>{filteredList.length}</b> lịch hẹn
@@ -672,6 +676,17 @@ export default function DoctorHome() {
                             )}
                             <td className="py-2.5 px-3 text-right whitespace-nowrap">
                               <div className="inline-flex items-center justify-end gap-1.5">
+                                {isTelehealthDoctorAppt(item) && (
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 transition-colors cursor-pointer whitespace-nowrap shadow-xs"
+                                    onClick={() => navigate(`/doctor/telehealth/${item.id}`)}
+                                    title="Vào phòng khám trực tuyến với bệnh nhân này"
+                                  >
+                                    <Video className="w-3.5 h-3.5 shrink-0" />
+                                    <span>Tư vấn từ xa</span>
+                                  </button>
+                                )}
                                 {canFinish && (
                                   <button
                                     type="button"

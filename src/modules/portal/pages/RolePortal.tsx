@@ -68,6 +68,8 @@ const NAV: Record<string, [string, string, string][]> = {
     ['dashboard', 'Tổng quan hệ thống', '/dashboard'],
     ['branches', 'Chi nhánh phòng khám', '/branches'],
     ['booking-methods', 'Hình thức đặt khám', '/booking-methods'],
+    ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
+    ['specialties', 'Danh mục chuyên khoa', '/specialties'],
     ['staff', 'Tài khoản & Nhân sự', '/staff'],
     ['roles', 'Vai trò & Phân quyền', '/roles-permissions'],
     ['system-logs', 'Nhật ký & Lỗi hệ thống', '/system-logs'],
@@ -76,6 +78,7 @@ const NAV: Record<string, [string, string, string][]> = {
     ['dashboard', 'Tổng quan chi nhánh', '/dashboard'],
     ['analytics', 'Báo cáo & Tăng trưởng', '/analytics'],
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
+    ['booking-packages', 'Quản lý gói khám', '/booking-packages'],
     ['patients', 'Hồ sơ bệnh nhân', '/patients'],
     ['slots', 'Lịch làm việc bác sĩ', '/work-schedules'],
     ['billing', 'Thanh toán & Doanh thu', '/billing'],
@@ -799,6 +802,13 @@ const ADMIN_NAV_SECTIONS = [
     ],
   },
   {
+    category: 'Dịch vụ & Gói khám',
+    items: [
+      { id: 'booking-packages', label: 'Quản lý gói khám', href: '/booking-packages', icon: 'packages' },
+      { id: 'specialties', label: 'Danh mục chuyên khoa', href: '/specialties', icon: 'specialties' },
+    ],
+  },
+  {
     category: 'Tài khoản & Bảo mật',
     items: [
       { id: 'staff', label: 'Tài khoản & Nhân sự', href: '/staff', icon: 'staff' },
@@ -829,6 +839,7 @@ const MANAGER_NAV_SECTIONS = [
       { id: 'appointments', label: 'Danh sách lịch hẹn', href: '/appointments', icon: 'appointments' },
       { id: 'slots', label: 'Lịch làm việc bác sĩ', href: '/work-schedules', icon: 'schedule' },
       { id: 'patients', label: 'Hồ sơ bệnh nhân', href: '/patients', icon: 'patients' },
+      { id: 'booking-packages', label: 'Quản lý gói khám', href: '/booking-packages', icon: 'packages' },
     ],
   },
 ]
