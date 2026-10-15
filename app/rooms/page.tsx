@@ -3,7 +3,7 @@ import { RolePortal } from '@/modules/portal'
 
 export default function RoomsPage() {
   return (
-    <AuthGuard allowedRoles={['admin', 'branch_manager']}>
+    <AuthGuard allowedRoles={['chain_manager', 'branch_manager']}>
       <RolePortal section="rooms" />
     </AuthGuard>
   )

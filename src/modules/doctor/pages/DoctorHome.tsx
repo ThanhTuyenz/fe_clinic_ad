@@ -144,6 +144,19 @@ function isTelehealthDoctorAppt(item: any) {
   )
 }
 
+function isWaitingDoctorAppt(item: any) {
+  const status = String(item.workflowStatus || item.status || '').toUpperCase()
+  return status === 'CHECKED_IN' || (
+    isTelehealthDoctorAppt(item) && ['CONFIRMED', 'IN_EXAMINATION'].includes(status)
+  )
+}
+
+function canFinishDoctorAppt(item: any) {
+  if (isTelehealthDoctorAppt(item)) return false
+  const status = String(item.workflowStatus || item.status || '').toUpperCase()
+  return !['EXAMINED', 'COMPLETED', 'CANCELLED'].includes(status)
+}
+
 export default function DoctorHome() {
   const { performLogout } = useStaffLogout()
   const navigate = useNavigate()
@@ -175,6 +188,7 @@ export default function DoctorHome() {
   const [finishingId, setFinishingId] = useState<string | null>(null)
 
   const handleFinishExam = async (item: any) => {
+    if (!canFinishDoctorAppt(item)) return
     const patientName = item.patient?.fullName || 'bệnh nhân'
     if (!window.confirm(`Xác nhận hoàn thành lượt khám cho ${patientName}?`)) {
       return
@@ -252,13 +266,12 @@ export default function DoctorHome() {
         // Tab Lịch sử: chỉ hiển thị lịch đã khám xong
         if (!(st === 'examined' || st === 'completed' || wf === 'COMPLETED')) return false
       } else if (isWaitingView) {
-        // Tab Chờ khám bệnh: CHỈ hiển thị các bệnh nhân ĐÃ TIẾP NHẬN / CHECKED IN tại phòng khám
-        const isCheckedIn = wf === 'CHECKED_IN' || st === 'checked_in'
-        if (!isCheckedIn) return false
+        // Online consultations are ready after confirmation, without reception check-in.
+        if (!isWaitingDoctorAppt(item)) return false
       } else if (statusFilter) {
         // Tab Lịch khám: nếu người dùng chủ động chọn lọc trạng thái
         if (statusFilter === 'CHECKED_IN') {
-          if (wf !== 'CHECKED_IN' && st !== 'checked_in') return false
+          if (!isWaitingDoctorAppt(item)) return false
         } else if (statusFilter === 'COMPLETED') {
           if (st !== 'examined' && st !== 'completed' && wf !== 'COMPLETED') return false
         } else if (statusFilter === 'CANCELLED') {
@@ -291,12 +304,28 @@ export default function DoctorHome() {
       return true
     })
 
+    if (isHistoryView) {
+      return [...list].sort((a, b) => {
+        const dateOrder = String(b.appointmentDate || '').localeCompare(String(a.appointmentDate || ''))
+        if (dateOrder) return dateOrder
+        const timeOrder = String(b.startTime || '').localeCompare(String(a.startTime || ''))
+        if (timeOrder) return timeOrder
+        return String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
+      })
+    }
+
     if (isWaitingView) {
       // Ưu tiên sắp xếp danh sách chờ khám:
       // 1. Thời gian check-in tại quầy (checkedInAt) tăng dần (ai check-in trước khám trước)
       // 2. Số thứ tự khám (visitQueueNumber / queueNumber)
       // 3. Khung giờ khám (startTime)
       return [...list].sort((a, b) => {
+        const dateOrder = String(a.appointmentDate || '').localeCompare(String(b.appointmentDate || ''))
+        if (dateOrder) return dateOrder
+        if (isTelehealthDoctorAppt(a) || isTelehealthDoctorAppt(b)) {
+          const timeOrder = String(a.startTime || '').localeCompare(String(b.startTime || ''))
+          if (timeOrder) return timeOrder
+        }
         if (a.checkedInAt && b.checkedInAt) {
           const tA = new Date(a.checkedInAt).getTime()
           const tB = new Date(b.checkedInAt).getTime()
@@ -329,11 +358,7 @@ export default function DoctorHome() {
 
   // Thống kê nhanh
   const stats = useMemo(() => {
-    const checkedIn = appointments.filter((a) => {
-      const st = String(a.status || '').toLowerCase()
-      const wf = String(a.workflowStatus || '').toUpperCase()
-      return wf === 'CHECKED_IN' || st === 'checked_in'
-    }).length
+    const checkedIn = appointments.filter(isWaitingDoctorAppt).length
     const completed = appointments.filter((a) => {
       const st = String(a.status || '').toLowerCase()
       const wf = String(a.workflowStatus || '').toUpperCase()
@@ -393,7 +418,7 @@ export default function DoctorHome() {
                     {isHistoryView
                       ? 'Danh sách hồ sơ bệnh nhân đã hoàn thành khám tại phòng khám.'
                       : isWaitingView
-                        ? 'Danh sách bệnh nhân đã hoàn tất tiếp nhận (Checked In) tại quầy và đang chờ khám.'
+                        ? 'Ca khám tại cơ sở đã tiếp nhận và lịch tư vấn online đã xác nhận. Lọc ngày để xem lịch cần xử lý.'
                         : 'Danh sách toàn bộ lịch hẹn khám bệnh của bác sĩ.'}
                   </p>
                 </div>
@@ -459,7 +484,7 @@ export default function DoctorHome() {
                 title="Bấm để lọc ca đã tiếp nhận"
               >
                 <div>
-                  <p className="text-xs font-medium text-slate-500">Đã tiếp nhận (Chờ khám)</p>
+                  <p className="text-xs font-medium text-slate-500">Chờ khám / Tư vấn online</p>
                   <p className="text-2xl font-extrabold text-blue-700 mt-1">{stats.checkedIn}</p>
                 </div>
                 <span className="p-2.5 rounded bg-blue-50 text-blue-700 border border-blue-200/70 shrink-0">
@@ -526,7 +551,7 @@ export default function DoctorHome() {
                     className="px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer"
                   >
                     <option value="">Tất cả trạng thái</option>
-                    <option value="CHECKED_IN">Đã tiếp nhận (Chờ khám)</option>
+                    <option value="CHECKED_IN">Chờ khám / Tư vấn online</option>
                     <option value="COMPLETED">Đã khám xong</option>
                     <option value="CONFIRMED">Chờ khám / Đã xác nhận</option>
                     <option value="PENDING">Chờ xử lý</option>
@@ -567,9 +592,9 @@ export default function DoctorHome() {
                   {isHistoryView
                     ? 'Danh sách bệnh nhân đã khám'
                     : isWaitingView
-                      ? 'Danh sách bệnh nhân chờ khám (Checked In)'
+                      ? 'Danh sách chờ khám / tư vấn online'
                       : statusFilter === 'CHECKED_IN'
-                        ? 'Danh sách bệnh nhân đã tiếp nhận (Checked In)'
+                        ? 'Danh sách chờ khám / tư vấn online'
                         : statusFilter === 'COMPLETED'
                           ? 'Danh sách bệnh nhân đã khám xong'
                           : statusFilter === 'CANCELLED'
@@ -615,7 +640,7 @@ export default function DoctorHome() {
                             <span className="text-[11px] text-slate-400">
                               {isWaitingView
                                 ? 'Hiện không có bệnh nhân nào đang chờ khám.'
-                                : 'Chỉ các bệnh nhân đã check-in tại quầy lễ tân mới hiển thị ở đây.'}
+                                : 'Ca khám tại cơ sở cần được tiếp nhận; lịch online cần được xác nhận.'}
                             </span>
                           </div>
                         </td>
@@ -626,13 +651,7 @@ export default function DoctorHome() {
                         const patient = item.patient
                         const st = String(item.status || '').toLowerCase()
                         const wf = String(item.workflowStatus || '').toUpperCase()
-                        const isDone =
-                          st === 'examined' ||
-                          st === 'completed' ||
-                          wf === 'COMPLETED' ||
-                          st === 'cancelled' ||
-                          wf === 'CANCELLED'
-                        const canFinish = !isDone
+                        const canFinish = canFinishDoctorAppt(item)
 
                         return (
                           <tr key={item.id || idx} className="hover:bg-slate-50/60 transition-colors">
@@ -641,7 +660,9 @@ export default function DoctorHome() {
                             </td>
                             <td className="py-2.5 px-3 whitespace-nowrap">
                               <span className="font-bold text-slate-900 block">{item.ticket || item.bookingCode || '—'}</span>
-                              {item.visitQueueNumber ? (
+                              {isTelehealthDoctorAppt(item) ? (
+                                <span className="text-[10px] text-blue-700 font-semibold block">Tư vấn online</span>
+                              ) : item.visitQueueNumber ? (
                                 <span className="text-[10px] text-emerald-700 font-semibold block">
                                   STT khám: {item.visitQueueNumber}
                                 </span>
@@ -676,7 +697,7 @@ export default function DoctorHome() {
                             )}
                             <td className="py-2.5 px-3 text-right whitespace-nowrap">
                               <div className="inline-flex items-center justify-end gap-1.5">
-                                {isTelehealthDoctorAppt(item) && (
+                                {isTelehealthDoctorAppt(item) && ['CONFIRMED', 'CHECKED_IN', 'IN_EXAMINATION'].includes(wf || st.toUpperCase()) && (
                                   <button
                                     type="button"
                                     className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 transition-colors cursor-pointer whitespace-nowrap shadow-xs"
@@ -870,15 +891,7 @@ export default function DoctorHome() {
                 Đóng
               </button>
               {(() => {
-                const st = String(detailAppt.status || '').toLowerCase()
-                const wf = String(detailAppt.workflowStatus || '').toUpperCase()
-                const isDoneDetail =
-                  st === 'examined' ||
-                  st === 'completed' ||
-                  wf === 'COMPLETED' ||
-                  st === 'cancelled' ||
-                  wf === 'CANCELLED'
-                if (isDoneDetail) return null
+                if (!canFinishDoctorAppt(detailAppt)) return null
                 return (
                   <button
                     type="button"

@@ -5,6 +5,7 @@ import { useAuth } from './useAuth'
 import {
   AppPermission,
   calculateEffectivePermissions,
+  normalizePermissionCodes,
 } from '../constants/permissions.constant'
 
 /**
@@ -19,27 +20,22 @@ export function usePermission() {
 
   const permissions = useMemo(() => {
     if (!user) return []
-    if (isSuperAdmin) {
-      return Object.values(AppPermission).map((p) => String(p))
-    }
+
     if (Array.isArray(user.effectivePermissions) && user.effectivePermissions.length > 0) {
-      return user.effectivePermissions.map((p: any) => String(p))
+      return normalizePermissionCodes(user.effectivePermissions)
     }
     return calculateEffectivePermissions(user.role, user.customPermissions)
   }, [user, isSuperAdmin])
 
   const hasPermission = (permission: AppPermission | string): boolean => {
-    if (isSuperAdmin) return true
     return permissions.includes(String(permission))
   }
 
   const hasAnyPermission = (requiredPermissions: (AppPermission | string)[]): boolean => {
-    if (isSuperAdmin) return true
     return requiredPermissions.some((p) => permissions.includes(String(p)))
   }
 
   const hasAllPermissions = (requiredPermissions: (AppPermission | string)[]): boolean => {
-    if (isSuperAdmin) return true
     return requiredPermissions.every((p) => permissions.includes(String(p)))
   }
 

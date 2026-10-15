@@ -22,6 +22,9 @@ interface ScheduleWeekGridViewProps {
   todayStr: string
   filteredDoctors: any[]
   schedulesMap: Record<string, any[]>
+  canCreate?: boolean
+  canUpdate?: boolean
+  canDelete?: boolean
   isDoctor: boolean
   activeBranchName: string
   weekStats: {
@@ -45,6 +48,9 @@ export default function ScheduleWeekGridView({
   filteredDoctors,
   schedulesMap,
   isDoctor,
+  canCreate = true,
+  canUpdate = true,
+  canDelete = true,
   activeBranchName,
   weekStats,
   onCardClick,
@@ -248,7 +254,8 @@ export default function ScheduleWeekGridView({
                                         <button
                                           type="button"
                                           title="Chỉnh sửa ca trực"
-                                          onClick={() => onOpenEdit(sc)}
+                                          disabled={!canUpdate}
+                                onClick={() => onOpenEdit(sc)}
                                           className="p-0.5 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer transition"
                                         >
                                           <Pencil className="h-2.5 w-2.5" />
@@ -256,7 +263,8 @@ export default function ScheduleWeekGridView({
                                         <button
                                           type="button"
                                           title={isOpen ? 'Khóa ca trực' : 'Mở ca trực'}
-                                          onClick={() => onToggleStatus(sc)}
+                                          disabled={!canUpdate}
+                                onClick={() => onToggleStatus(sc)}
                                           className="p-0.5 rounded text-slate-500 hover:text-amber-700 hover:bg-amber-50 cursor-pointer transition"
                                         >
                                           {isOpen ? (
@@ -268,7 +276,8 @@ export default function ScheduleWeekGridView({
                                         <button
                                           type="button"
                                           title="Xóa ca trực"
-                                          onClick={() => onRemove(sc)}
+                                          disabled={!canDelete}
+                                onClick={() => onRemove(sc)}
                                           className="p-0.5 rounded text-slate-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer transition"
                                         >
                                           <Trash2 className="h-2.5 w-2.5" />
@@ -302,6 +311,7 @@ export default function ScheduleWeekGridView({
                         {/* Nút thêm ca nhanh chỉ dành cho Quản trị viên / Quản lý */}
                         {!isDoctor && (
                           <button
+                            disabled={!canCreate}
                             onClick={() => onOpenScheduleModal(docId, dStr)}
                             className={`mt-1 w-full rounded border border-dashed py-0.5 text-[9px] font-semibold transition cursor-pointer ${
                               daySc.length === 0

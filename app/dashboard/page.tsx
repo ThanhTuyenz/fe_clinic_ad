@@ -19,7 +19,7 @@ function DashboardByRole() {
 
   if (role === 'doctor') return null
 
-  return ['admin', 'branch_manager'].includes(role)
+  return ['admin', 'chain_manager', 'branch_manager'].includes(role)
     ? <RolePortal />
     : <Dashboard />
 }

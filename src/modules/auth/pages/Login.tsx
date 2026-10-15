@@ -41,7 +41,7 @@ function redirectPathForUser(user) {
 
 function isStaffUser(user) {
   const t = userTypeLower(user)
-  return ['admin', 'branch_manager', 'doctor', 'receptionist'].includes(t)
+  return ['admin', 'chain_manager', 'branch_manager', 'doctor', 'receptionist'].includes(t)
 }
 
 export default function Login() {

@@ -151,6 +151,7 @@ export function mergeReceptionDetail(cached: any, row: any) {
     specialty: row.specialty ?? cached.specialty,
     servicePackage: row.servicePackage ?? cached.servicePackage,
     bookingMethod: row.bookingMethod ?? cached.bookingMethod,
+    isTelehealth: row.isTelehealth ?? cached.isTelehealth,
     branch: row.branch ?? cached.branch,
     clinicRoomName: row.clinicRoomName || cached.clinicRoomName,
     ticket: row.ticket || cached.ticket,
@@ -289,7 +290,7 @@ export function statusLabelVi(st: string): string {
 export function receptionStatusMeta(row: any): { label: string; tone: string } {
   const workflow = String(row?.workflowStatus || '').toUpperCase()
   if (workflow === 'HOLD') return { label: 'Chờ thanh toán', tone: 'pending' }
-  if (workflow === 'CONFIRMED') return { label: 'Chờ check-in', tone: 'booked' }
+  if (workflow === 'CONFIRMED') return { label: row?.isTelehealth || row?.bookingMethod?.code === 'ONLINE_CONSULTATION' ? 'Chờ tư vấn online' : 'Chờ check-in', tone: 'booked' }
   if (workflow === 'CHECKED_IN') return { label: 'Đã check-in', tone: 'checked-in' }
   if (workflow === 'COMPLETED') return { label: 'Đã khám', tone: 'completed' }
   if (workflow === 'CANCELLED') return { label: 'Đã hủy', tone: 'cancelled' }
@@ -424,6 +425,7 @@ export function normalizeLookup(raw: any) {
     ticket: ap.ticket,
     status: ap.status,
     workflowStatus: ap.workflowStatus,
+    isTelehealth: ap.isTelehealth,
     appointmentDate: ap.appointmentDate,
     startTime: ap.startTime,
     endTime: ap.endTime,

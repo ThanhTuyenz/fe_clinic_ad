@@ -4,6 +4,7 @@ import React from 'react'
 import { Config, SESSION_LABELS, at, formatDaysOfWeek, money } from '../types/catalog.types'
 
 interface CatalogDetailModalProps {
+  canEdit?: boolean
   detailItem: any | null
   cfg: Config
   resource: string
@@ -13,6 +14,7 @@ interface CatalogDetailModalProps {
 }
 
 export default function CatalogDetailModal({
+  canEdit = true,
   detailItem,
   cfg,
   resource,
@@ -226,7 +228,7 @@ export default function CatalogDetailModal({
           >
             Đóng
           </button>
-          <button
+          {canEdit && (<button
             type="button"
             onClick={() => {
               const item = detailItem
@@ -236,7 +238,7 @@ export default function CatalogDetailModal({
             className="rounded bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 transition-colors cursor-pointer"
           >
             Chỉnh sửa
-          </button>
+          </button>)}
         </footer>
       </div>
     </div>

@@ -1,420 +1,155 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
-import {
-  Building2,
-  Users,
-  Shield,
-  SlidersHorizontal,
-  Server,
-  ArrowRight,
-  UserCheck,
-  CheckCircle2,
-  Clock,
-  Phone,
-  MapPin,
-  Loader2,
-  Cpu,
-  Database,
-  Layers,
-  AlertTriangle,
-} from 'lucide-react'
+import React, { useCallback, useEffect, useState } from 'react'
+import { Building2, Users, Shield, SlidersHorizontal, Server, ArrowRight, UserCheck, Clock, Phone, MapPin, Cpu, Database, Layers, AlertTriangle, RefreshCw, LockKeyhole } from 'lucide-react'
 import { useNavigate } from '@/common/hooks/useNextNavigation'
 import { apiClient, unwrapApiData } from '@/lib/api-client'
 
+type DashboardData = {
+  checkedAt: string
+  summary: {
+    branchesCount: number; managersCount: number; chainManagersCount: number
+    doctorsCount: number; staffCount: number; lockedAccountsCount: number; errorCount24h: number
+  }
+  services: Record<'database' | 'redis' | 'outbox', {
+    name: string; status: string; latency?: string; pendingCount?: number; failedCount?: number
+  }>
+  recentWarnings: { id: string; eventType: string; status: string; attempts: number; createdAt: string }[]
+}
+type Branch = { id: string; code: string; name: string; address?: string; phoneNumber?: string; operatingHours?: string; isActive: boolean }
+const formatTime = (value?: string) => value ? new Date(value).toLocaleString('vi-VN') : 'Chưa cập nhật'
+const panel = 'min-w-0 rounded border border-slate-200 bg-white'
+const heading = 'flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-800'
+
 export default function SystemAdminDashboard() {
   const navigate = useNavigate()
-  const [data, setData] = useState<any>(null)
-  const [branches, setBranches] = useState<any[]>([])
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
+  const [errors, setErrors] = useState<string[]>([])
+  const [branchesLoaded, setBranchesLoaded] = useState(false)
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      try {
-        const [logsRes, branchesRes] = await Promise.allSettled([
-          apiClient.get('/stats/system-logs'),
-          apiClient.get('/admin/catalog/branches'),
-        ])
-        if (logsRes.status === 'fulfilled') {
-          setData(unwrapApiData(logsRes.value.data))
-        }
-        if (branchesRes.status === 'fulfilled') {
-          const resData = branchesRes.value.data
-          const bList = Array.isArray(resData)
-            ? resData
-            : Array.isArray(resData?.items)
-            ? resData.items
-            : Array.isArray(resData?.data?.items)
-            ? resData.data.items
-            : Array.isArray(resData?.data)
-            ? resData.data
-            : []
-          setBranches(bList)
-        }
-      } catch (err) {
-        console.error('Failed to load system dashboard data', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
+  const load = useCallback(async () => {
+    setLoading(true)
+    const messages: string[] = []
+    const [logsRes, branchesRes] = await Promise.allSettled([
+      apiClient.get('/stats/system-logs'),
+      apiClient.get('/admin/catalog/branches'),
+    ])
+    if (logsRes.status === 'fulfilled') setData(unwrapApiData(logsRes.value.data))
+    else messages.push('Không tải được dữ liệu giám sát hệ thống.')
+    if (branchesRes.status === 'fulfilled') {
+      const result = unwrapApiData(branchesRes.value.data)
+      setBranches(Array.isArray(result) ? result : result?.items ?? [])
+      setBranchesLoaded(true)
+    } else messages.push('Không tải được danh sách chi nhánh.')
+    setErrors(messages)
+    setLoading(false)
   }, [])
 
-  const branchList = Array.isArray(branches) ? branches : []
-  const summary = data?.summary || {
-    branchesCount: branchList.length,
-    managersCount: 0,
-    doctorsCount: 0,
-    staffCount: 0,
-    bookingMethodsCount: 0,
-    errorCount: 0,
-  }
+  useEffect(() => { void load() }, [load])
+  const summary = data?.summary
+  const count = (value?: number) => value == null ? '—' : value
+  const outbox = data?.services?.outbox
+  const shortcuts = [
+    { path: '/staff', title: 'Tài khoản & Nhân sự', description: 'Tài khoản toàn chuỗi và chi nhánh', icon: UserCheck, color: 'bg-blue-50 text-blue-700' },
+    { path: '/roles-permissions', title: 'Vai trò & Phân quyền', description: 'Ma trận phân quyền truy cập', icon: Shield, color: 'bg-violet-50 text-violet-700' },
+    { path: '/system-logs', title: 'Nhật ký & Lỗi hệ thống', description: 'Nhật ký truy cập và sự kiện hệ thống', icon: Server, color: 'bg-rose-50 text-rose-700' },
+    { path: '/integrations', title: 'Cấu hình tích hợp', description: 'Thanh toán, Email, SMS và Push', icon: SlidersHorizontal, color: 'bg-amber-50 text-amber-700' },
+  ]
+  const metrics = [
+    { title: 'Chi nhánh hoạt động', value: summary ? `${summary.branchesCount} cơ sở` : '—', detail: 'Cơ sở đang được kích hoạt', icon: Building2, color: 'bg-blue-50 text-blue-700' },
+    { title: 'Tài khoản quản lý', value: summary ? `${summary.managersCount + summary.chainManagersCount} tài khoản` : '—', detail: summary ? `${summary.chainManagersCount} Toàn chuỗi · ${summary.managersCount} Chi nhánh` : 'Chưa có dữ liệu', icon: UserCheck, color: 'bg-violet-50 text-violet-700' },
+    { title: 'Bác sĩ & Nhân sự', value: summary ? `${summary.doctorsCount + summary.staffCount} nhân sự` : '—', detail: summary ? `${summary.doctorsCount} Bác sĩ · ${summary.staffCount} Lễ tân` : 'Chưa có dữ liệu', icon: Users, color: 'bg-slate-100 text-slate-700' },
+    { title: 'Sự kiện lỗi / cảnh báo', value: summary ? `${summary.errorCount24h} sự kiện` : '—', detail: 'Outbox tạo trong 24 giờ qua, còn lỗi', icon: AlertTriangle, color: 'bg-rose-50 text-rose-700' },
+  ]
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-              <Server className="w-3.5 h-3.5 text-emerald-700" /> Quản trị hệ thống
-            </span>
-            <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-              Toàn hệ thống
-            </span>
-          </div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-            Tổng quan hệ thống phòng khám
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Giám sát quy mô chi nhánh, tài khoản điều hành và tình trạng dịch vụ kỹ thuật VitaCare Clinic.
-          </p>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
+        <div className="min-w-0">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-600"><Server className="h-3.5 w-3.5" />Quản trị hệ thống · Toàn hệ thống</span>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Tổng quan hệ thống phòng khám</h1>
+          <p className="mt-1 text-xs text-slate-500">Giám sát tài khoản, chi nhánh và các dịch vụ kỹ thuật VitaCare Clinic.</p>
+        </div>
+        <div className="flex flex-col items-start gap-1.5 sm:items-end">
+          <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />{loading ? 'Đang tải...' : 'Làm mới dữ liệu'}
+          </button>
+          <span className="text-[10px] text-slate-500">Cập nhật: {formatTime(data?.checkedAt)}</span>
         </div>
       </div>
 
-      {/* KPI Cards: Hệ thống & Hạ tầng */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {/* Thẻ 1: Chi nhánh */}
-        <div className="rounded border border-slate-200/90 bg-white p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Cơ sở & Chi nhánh</span>
-            <div className="grid h-8 w-8 place-items-center rounded bg-emerald-50 text-emerald-700">
-              <Building2 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-            {loading ? '—' : `${summary.branchesCount || branches.length} cơ sở`}
-          </div>
-          <p className="mt-1 text-[11px] text-slate-500 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>Đang tiếp nhận và vận hành</span>
-          </p>
-        </div>
+      {errors.length > 0 && <div role="alert" className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">{errors.join(' ')} {data && 'Dữ liệu giám sát đang giữ lần tải thành công gần nhất.'}</div>}
 
-        {/* Thẻ 2: Quản lý chi nhánh */}
-        <div className="rounded border border-slate-200/90 bg-white p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Quản lý chi nhánh</span>
-            <div className="grid h-8 w-8 place-items-center rounded bg-blue-50 text-blue-700">
-              <UserCheck className="w-4 h-4" />
-            </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map(({ title, value, detail, icon: Icon, color }) => (
+          <div key={title} className={`${panel} p-4`}>
+            <div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-slate-500">{title}</span><span className={`grid h-8 w-8 shrink-0 place-items-center rounded ${color}`}><Icon className="h-4 w-4" /></span></div>
+            <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{value}</div>
+            <p className="mt-1 text-[11px] text-slate-500">{detail}</p>
           </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-            {loading ? '—' : `${summary.managersCount} tài khoản`}
-          </div>
-          <p className="mt-1 text-[11px] text-slate-500 flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-            <span>Phụ trách điều hành cơ sở</span>
-          </p>
-        </div>
-
-        {/* Thẻ 3: Đội ngũ Bác sĩ & Nhân viên */}
-        <div className="rounded border border-slate-200/90 bg-white p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Bác sĩ & Nhân sự</span>
-            <div className="grid h-8 w-8 place-items-center rounded bg-slate-100 text-slate-700">
-              <Users className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-            {loading ? '—' : `${summary.doctorsCount + summary.staffCount} nhân sự`}
-          </div>
-          <p className="mt-1 text-[11px] text-slate-500">
-            {summary.doctorsCount} Bác sĩ · {summary.staffCount} Lễ tân / Điều dưỡng
-          </p>
-        </div>
-
-        {/* Thẻ 4: Hình thức đặt khám */}
-        <div className="rounded border border-slate-200/90 bg-white p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Hình thức đặt khám</span>
-            <div className="grid h-8 w-8 place-items-center rounded bg-purple-50 text-purple-700">
-              <SlidersHorizontal className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-            {loading ? '—' : `${summary.bookingMethodsCount} phương thức`}
-          </div>
-          <p className="mt-1 text-[11px] text-slate-500 flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
-            <span>Kênh tiếp nhận toàn hệ thống</span>
-          </p>
-        </div>
+        ))}
       </div>
 
-      {/* Grid: Danh sách chi nhánh & Lối tắt quản trị & Trạng thái dịch vụ kỹ thuật */}
-      <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr] items-start">
-        {/* Cột trái: Danh sách chi nhánh cơ sở + Trạng thái hạ tầng kỹ thuật */}
-        <div className="space-y-6">
-          {/* Card: Cơ sở & Chi nhánh phòng khám */}
-          <div className="rounded border border-slate-200 bg-white shadow-xs overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-emerald-700" />
-                <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                  Cơ sở & Chi nhánh phòng khám
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate('/branches')}
-                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
-              >
-                <span>Xem tất cả</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {loading ? (
-              <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
-                <Loader2 className="w-5 h-5 animate-spin text-emerald-700" />
-                <span className="text-xs">Đang tải danh sách chi nhánh...</span>
-              </div>
-            ) : branchList.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400">
-                Chưa có chi nhánh nào trong hệ thống.
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {branchList.slice(0, 5).map((b) => (
-                  <div key={b.id} className="p-4 hover:bg-slate-50/80 transition-colors">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
-                            {b.code || 'BRC'}
-                          </span>
-                          <h3 className="font-bold text-slate-900 text-xs truncate">{b.name}</h3>
-                        </div>
-                        <p className="mt-1.5 text-[11px] text-slate-500 flex items-center gap-1.5 truncate">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate">{b.address || 'Chưa cập nhật địa chỉ'}</span>
-                        </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
-                          {b.phoneNumber && (
-                            <span className="flex items-center gap-1">
-                              <Phone className="w-3 h-3 text-slate-400" />
-                              <span>{b.phoneNumber}</span>
-                            </span>
-                          )}
-                          {b.operatingHours && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-slate-400" />
-                              <span>{b.operatingHours}</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-bold text-emerald-700 shrink-0">
-                        <CheckCircle2 className="w-3 h-3" /> Hoạt động
-                      </span>
-                    </div>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-4">
+          <section className={`${panel} overflow-hidden`}>
+            <div className="border-b border-slate-200 bg-slate-50/60 px-4 py-3"><h2 className={heading}><Building2 className="h-4 w-4 text-blue-600" />Cơ sở & Chi nhánh</h2></div>
+            {!branchesLoaded ? <p className="p-6 text-center text-xs text-slate-500">{loading ? 'Đang tải chi nhánh...' : 'Chưa tải được dữ liệu chi nhánh.'}</p> : branches.length === 0 ? <p className="p-6 text-center text-xs text-slate-500">Chưa có chi nhánh.</p> :
+              <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+                {branches.map(b => <div key={b.id} className="p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2"><span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{b.code || 'BRC'}</span><h3 className="break-words text-xs font-bold text-slate-900">{b.name}</h3></div>
+                    <span className={`shrink-0 rounded border px-2 py-0.5 text-[10px] font-semibold ${b.isActive ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>{b.isActive ? 'Hoạt động' : 'Tạm ngừng'}</span>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <p className="mt-2 flex items-start gap-1.5 text-[11px] text-slate-500"><MapPin className="h-3.5 w-3.5 shrink-0" />{b.address || 'Chưa cập nhật địa chỉ'}</p>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                    {b.phoneNumber && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{b.phoneNumber}</span>}
+                    {b.operatingHours && <span className="flex items-center gap-1"><Clock className="h-3 w-3 shrink-0" />{b.operatingHours}</span>}
+                  </div>
+                </div>)}
+              </div>}
+          </section>
 
-          {/* Card: Trạng thái hạ tầng kỹ thuật */}
-          <div className="rounded border border-slate-200 bg-white p-4 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                <Server className="w-4 h-4 text-emerald-700" />
-                Tình trạng Hạ tầng Kỹ thuật
-              </h2>
-              <span className="text-[10px] text-slate-400 font-medium">Thời gian thực</span>
+          <section className={`${panel} p-4`}>
+            <h2 className={heading}><Server className="h-4 w-4 text-slate-600" />Tình trạng hạ tầng kỹ thuật</h2>
+            <div className="mt-3 divide-y divide-slate-100 text-xs">
+              {(['database', 'redis'] as const).map(key => {
+                const service = data?.services?.[key]
+                const Icon = key === 'database' ? Database : Cpu
+                const online = service?.status === 'ONLINE'
+                const label = !service ? 'Chưa có dữ liệu' : online ? 'Trực tuyến' : service.status === 'STANDBY' ? 'Đã tắt / Bypass' : service.status === 'DEGRADED' ? 'Suy giảm' : 'Mất kết nối'
+                return <div key={key} className="flex flex-wrap items-center justify-between gap-2 py-2.5"><span className="flex items-center gap-2 text-slate-600"><Icon className="h-3.5 w-3.5 shrink-0 text-blue-600" />{service?.name || (key === 'database' ? 'PostgreSQL (Prisma ORM)' : 'Redis Cache & Pub/Sub')}</span><span className={`text-[11px] font-semibold ${online ? 'text-blue-700' : !service || service.status === 'STANDBY' ? 'text-slate-500' : 'text-rose-600'}`}>{label}{online && service?.latency ? ` (${service.latency})` : ''}</span></div>
+              })}
+              <div className="flex flex-wrap items-center justify-between gap-2 py-2.5"><span className="flex items-center gap-2 text-slate-600"><Layers className="h-3.5 w-3.5 text-violet-600" />Hàng đợi sự kiện (Outbox)</span><span className="text-[11px] font-semibold text-slate-700">{outbox ? `${outbox.pendingCount} chờ · ${outbox.failedCount} thất bại` : 'Chưa có dữ liệu'}</span></div>
             </div>
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
-                <span className="flex items-center gap-2 text-slate-600">
-                  <Database className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>{data?.services?.database?.name || 'PostgreSQL (Prisma ORM)'}</span>
-                </span>
-                {loading ? (
-                  <span className="text-slate-400 text-[11px]">—</span>
-                ) : data?.services?.database?.status === 'ONLINE' ? (
-                  <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Trực tuyến
-                    {data?.services?.database?.latency && (
-                      <span className="text-[10px] font-normal text-slate-500">
-                        ({data.services.database.latency})
-                      </span>
-                    )}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 font-bold text-rose-600">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Mất kết nối
-                  </span>
-                )}
-              </div>
+            <p className="mt-1 text-[10px] text-slate-400">Trạng thái tại lần cập nhật gần nhất. Số lượng Outbox không xác nhận worker đang chạy.</p>
+          </section>
 
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
-                <span className="flex items-center gap-2 text-slate-600">
-                  <Cpu className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>{data?.services?.redis?.name || 'Redis Cache & Pub/Sub'}</span>
-                </span>
-                {loading ? (
-                  <span className="text-slate-400 text-[11px]">—</span>
-                ) : data?.services?.redis?.status === 'ONLINE' ? (
-                  <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Hoạt động
-                    {data?.services?.redis?.latency && (
-                      <span className="text-[10px] font-normal text-slate-500">
-                        ({data.services.redis.latency})
-                      </span>
-                    )}
-                  </span>
-                ) : data?.services?.redis?.status === 'STANDBY' ? (
-                  <span className="inline-flex items-center gap-1 font-semibold text-slate-500">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" /> Chế độ chờ (Bypass)
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 font-bold text-rose-600">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Mất kết nối
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between py-1.5">
-                <span className="flex items-center gap-2 text-slate-600">
-                  <Layers className="w-3.5 h-3.5 text-blue-700" />
-                  <span>{data?.services?.outbox?.name || 'Transactional Outbox Worker'}</span>
-                </span>
-                {loading ? (
-                  <span className="text-slate-400 text-[11px]">—</span>
-                ) : (data?.services?.outbox?.failedCount ?? 0) > 0 ? (
-                  <span className="inline-flex items-center gap-1 font-bold text-rose-600">
-                    <AlertTriangle className="w-3.5 h-3.5" /> {data.services.outbox.failedCount} lỗi
-                  </span>
-                ) : (data?.services?.outbox?.pendingCount ?? 0) > 0 ? (
-                  <span className="inline-flex items-center gap-1 font-bold text-blue-700">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {data.services.outbox.pendingCount} việc chờ
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Đang chạy
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
+          <section className={`${panel} overflow-hidden`}>
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><h2 className={heading}><AlertTriangle className="h-4 w-4 text-amber-600" />Cảnh báo gần đây</h2><button type="button" onClick={() => navigate('/system-logs')} className="shrink-0 text-[11px] font-semibold text-blue-700 hover:underline">Xem nhật ký</button></div>
+            {!data ? <p className="p-4 text-xs text-slate-500">Chưa có dữ liệu cảnh báo.</p> : !data.recentWarnings?.length ? <p className="p-4 text-xs text-slate-500">Không có sự kiện Outbox đang lỗi hoặc chờ thử lại.</p> :
+              <div className="divide-y divide-slate-100">{data.recentWarnings.map(w => <div key={w.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                <div className="min-w-0"><p className="break-all text-xs font-semibold text-slate-800">{w.eventType}</p><p className="mt-1 text-[10px] text-slate-500">{formatTime(w.createdAt)} · {w.attempts} lần thử</p></div>
+                <span className="rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">{w.status === 'FAILED' ? 'Thất bại' : 'Chờ thử lại'}</span>
+              </div>)}</div>}
+          </section>
         </div>
 
-        {/* Cột phải: Lối tắt quản trị hệ thống */}
-        <div className="space-y-6">
-          <div className="rounded border border-slate-200 bg-white p-4 shadow-xs">
-            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-3 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-emerald-700" />
-              Lối tắt Quản trị Hệ thống
-            </h2>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => navigate('/branches')}
-                className="w-full flex items-center justify-between rounded border border-slate-200/80 bg-slate-50/60 hover:bg-slate-50 p-2.5 text-xs text-left cursor-pointer transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="grid h-7 w-7 place-items-center rounded bg-emerald-100 text-emerald-800">
-                    <Building2 className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-800 block">Chi nhánh & Cơ sở</span>
-                    <span className="text-[10px] text-slate-500">Thêm mới, chỉnh sửa thông tin phòng khám</span>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-400" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate('/staff')}
-                className="w-full flex items-center justify-between rounded border border-slate-200/80 bg-slate-50/60 hover:bg-slate-50 p-2.5 text-xs text-left cursor-pointer transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="grid h-7 w-7 place-items-center rounded bg-blue-100 text-blue-800">
-                    <UserCheck className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-800 block">Tài khoản & Nhân sự</span>
-                    <span className="text-[10px] text-slate-500">Cấp tài khoản Quản lý chi nhánh, Bác sĩ</span>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-400" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate('/roles-permissions')}
-                className="w-full flex items-center justify-between rounded border border-slate-200/80 bg-slate-50/60 hover:bg-slate-50 p-2.5 text-xs text-left cursor-pointer transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="grid h-7 w-7 place-items-center rounded bg-purple-100 text-purple-800">
-                    <Shield className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-800 block">Vai trò & Phân quyền</span>
-                    <span className="text-[10px] text-slate-500">Cấu hình ma trận phân quyền RBAC</span>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-400" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate('/booking-methods')}
-                className="w-full flex items-center justify-between rounded border border-slate-200/80 bg-slate-50/60 hover:bg-slate-50 p-2.5 text-xs text-left cursor-pointer transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="grid h-7 w-7 place-items-center rounded bg-amber-100 text-amber-800">
-                    <SlidersHorizontal className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-800 block">Hình thức đặt khám</span>
-                    <span className="text-[10px] text-slate-500">Cấu hình các kênh tiếp nhận bệnh nhân</span>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-400" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate('/system-logs')}
-                className="w-full flex items-center justify-between rounded border border-slate-200/80 bg-slate-50/60 hover:bg-slate-50 p-2.5 text-xs text-left cursor-pointer transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="grid h-7 w-7 place-items-center rounded bg-rose-100 text-rose-800">
-                    <Server className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-800 block">Nhật ký & Lỗi hệ thống</span>
-                    <span className="text-[10px] text-slate-500">Xem Audit Log và sự cố kỹ thuật</span>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-400" />
-              </button>
-            </div>
-          </div>
+        <div className="min-w-0 space-y-4">
+          <section className={`${panel} p-4`}>
+            <h2 className={heading}><Shield className="h-4 w-4 text-violet-600" />Lối tắt quản trị hệ thống</h2>
+            <div className="mt-3 space-y-2">{shortcuts.map(({ path, title, description, icon: Icon, color }) => <button type="button" key={path} onClick={() => navigate(path)} className="flex w-full items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50/50 p-2.5 text-left hover:bg-slate-100">
+              <div className="flex min-w-0 items-center gap-2.5"><span className={`grid h-8 w-8 shrink-0 place-items-center rounded ${color}`}><Icon className="h-4 w-4" /></span><div><span className="block text-xs font-bold text-slate-800">{title}</span><span className="text-[10px] text-slate-500">{description}</span></div></div><ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
+            </button>)}</div>
+          </section>
+          <section className={`${panel} p-4`}>
+            <h2 className={heading}><LockKeyhole className="h-4 w-4 text-amber-600" />Tài khoản & Bảo mật</h2>
+            <div className="mt-3 flex items-center justify-between gap-3 rounded border border-slate-200 bg-slate-50 px-3 py-2.5"><span className="text-xs text-slate-600">Tài khoản đang bị khóa</span><span className="text-lg font-bold text-slate-900">{count(summary?.lockedAccountsCount)}</span></div>
+            <p className="mt-2 text-[10px] text-slate-500">Toàn hệ thống, không gồm tài khoản đã xóa.</p>
+            <button type="button" onClick={() => navigate('/staff')} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:underline">Quản lý tài khoản<ArrowRight className="h-3.5 w-3.5" /></button>
+          </section>
         </div>
       </div>
     </div>

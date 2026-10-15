@@ -5,6 +5,9 @@ import { Download, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/common/hooks/useAuth'
 import { fetchAnalyticsData } from '../services/analyticsService'
 import { listCatalog } from '@/modules/catalog'
+import { staffRole } from '@/modules/admin/utils/staffSession'
+import { useLocation } from '@/common/hooks/useNextNavigation'
+import AnalyticsBranchComparisonTab from '../components/AnalyticsBranchComparisonTab'
 import {
   AnalyticsRevenueTimelineTab,
   AnalyticsRevenueSourcesTab,
@@ -16,13 +19,19 @@ import {
 interface AdminAnalyticsPageProps {
   stats?: any
   loading?: boolean
+  embedded?: boolean
 }
 
-type TabType = 'revenue_timeline' | 'revenue_sources' | 'operations' | 'doctors' | 'demand_ai'
+type TabType = 'revenue_timeline' | 'revenue_sources' | 'operations' | 'doctors' | 'demand_ai' | 'branch_comparison'
 
-export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPageProps) {
-  const { token } = useAuth()
+export default function AdminAnalyticsPage({ stats, loading, embedded = false }: AdminAnalyticsPageProps) {
+  const { token, user } = useAuth()
+  const location = useLocation()
+  const isChainManager = staffRole(user) === 'chain_manager'
   const [activeTab, setActiveTab] = useState<TabType>('revenue_timeline')
+  useEffect(() => {
+    if (isChainManager && new URLSearchParams(location.search).get('tab') === 'branches') setActiveTab('branch_comparison')
+  }, [location.search, isChainManager])
   const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | 'quarter'>('month')
   const [branchFilter, setBranchFilter] = useState<string>('all')
   const [startDate, setStartDate] = useState<string>('')
@@ -40,6 +49,7 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
   }, [])
 
   const loadAnalytics = useCallback(async () => {
+    if (activeTab === 'branch_comparison') { setFetching(false); return }
     setFetching(true)
     try {
       const res = await fetchAnalyticsData({
@@ -55,7 +65,7 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
     } finally {
       setFetching(false)
     }
-  }, [token, timeFilter, branchFilter, startDate, endDate])
+  }, [token, timeFilter, branchFilter, startDate, endDate, activeTab])
 
   useEffect(() => {
     void loadAnalytics()
@@ -102,6 +112,7 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
     { id: 'operations' as TabType, label: 'Lượt khám & Vận hành' },
     { id: 'doctors' as TabType, label: 'Hiệu suất Bác sĩ' },
     { id: 'demand_ai' as TabType, label: 'Phân tích nhu cầu Khám' },
+    ...(isChainManager ? [{ id: 'branch_comparison' as TabType, label: 'So sánh chi nhánh' }] : []),
   ]
 
   return (
@@ -110,19 +121,21 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
       <div className="space-y-3.5 border-b border-slate-200 bg-white p-4 sm:p-5 rounded border shadow-2xs">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
+            {!embedded && <>
             <p className="text-[11px] font-bold uppercase tracking-[.12em] text-slate-500">
               Hệ thống Báo cáo & Điều hành
             </p>
             <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">
               Báo cáo & Thống kê
             </h1>
+            </>}
             <p className="mt-0.5 text-xs text-slate-500">
               Theo dõi dòng tiền, phân bổ nguồn thu chuyên khoa, tình hình vận hành và hiệu suất bác sĩ.
             </p>
           </div>
 
           {/* Cụm Nút Xuất Báo Cáo & Nút Làm Mới */}
-          <div className="flex items-center gap-2">
+          <div className={activeTab === 'branch_comparison' ? 'hidden' : 'flex items-center gap-2'}>
             <button
               type="button"
               onClick={() => void loadAnalytics()}
@@ -179,7 +192,7 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
           <div className="flex flex-wrap items-center gap-2.5 text-xs">
             {/* Bộ lọc cơ sở */}
-            <div className="flex items-center rounded border border-slate-200 bg-slate-50/70 px-2.5 py-1.5">
+            <div className={activeTab === 'branch_comparison' ? 'hidden' : 'flex items-center rounded border border-slate-200 bg-slate-50/70 px-2.5 py-1.5'}>
               <span className="mr-2 text-slate-400 font-medium">Cơ sở:</span>
               <select
                 value={branchFilter}
@@ -225,12 +238,12 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
                 month: 'Tháng này',
                 quarter: 'Quý này',
               }
-              const isActive = timeFilter === filter
+              const isActive = timeFilter === filter && !startDate && !endDate
               return (
                 <button
                   key={filter}
                   type="button"
-                  onClick={() => setTimeFilter(filter)}
+                  onClick={() => { setTimeFilter(filter); setStartDate(''); setEndDate('') }}
                   className={`rounded px-3 py-1.5 font-semibold transition-colors cursor-pointer ${isActive
                     ? 'bg-slate-900 text-white font-bold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -279,6 +292,9 @@ export default function AdminAnalyticsPage({ stats, loading }: AdminAnalyticsPag
       </div>
 
       {/* Render từng Tab theo phân hệ độc lập */}
+      {activeTab === 'branch_comparison' && isChainManager && (
+        <AnalyticsBranchComparisonTab timeFilter={timeFilter} startDate={startDate} endDate={endDate} />
+      )}
       {activeTab === 'revenue_timeline' && <AnalyticsRevenueTimelineTab data={data} />}
 
       {activeTab === 'revenue_sources' && (

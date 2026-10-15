@@ -302,12 +302,14 @@ export default function ReceptionAppointmentTable({
                   </td>
 
                   <td className="py-3 px-4 whitespace-nowrap">
-                    {row.clinicRoomName || row.clinicRoom ? (
+                    {row.isTelehealth || row.bookingMethod?.code === 'ONLINE_CONSULTATION' ? (
+                      <span className="font-semibold text-blue-700">Tư vấn trực tuyến</span>
+                    ) : row.clinicRoomName || row.clinicRoom ? (
                       <span className="font-semibold text-slate-800">{row.clinicRoomName || row.clinicRoom}</span>
                     ) : (
                       <span className="text-slate-400 italic">Chưa chọn</span>
                     )}
-                    {row.visitQueueNumber != null && row.visitQueueNumber !== '' && (
+                    {!row.isTelehealth && row.bookingMethod?.code !== 'ONLINE_CONSULTATION' && row.visitQueueNumber != null && row.visitQueueNumber !== '' && (
                       <div className="text-[11px] font-bold text-blue-700">STT: {row.visitQueueNumber}</div>
                     )}
                   </td>
@@ -319,11 +321,7 @@ export default function ReceptionAppointmentTable({
                           <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
                             Đã thanh toán trước (Online)
                           </span>
-                          {row.payment?.transactionId && (
-                            <span className="text-[9px] font-mono text-slate-400 mt-0.5" title={`Mã GD: ${row.payment.transactionId}`}>
-                              Mã GD: {row.payment.transactionId}
-                            </span>
-                          )}
+
                         </div>
                       ) : (
                         <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -332,7 +330,7 @@ export default function ReceptionAppointmentTable({
                       )
                     ) : (
                       <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                        Chưa thu phí
+                        {row.isTelehealth || row.bookingMethod?.code === 'ONLINE_CONSULTATION' ? 'Chưa xác nhận thanh toán' : 'Chưa thu phí'}
                       </span>
                     )}
                   </td>

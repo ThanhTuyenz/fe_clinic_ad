@@ -14,7 +14,6 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/common/hooks/useAuth'
 import { fetchDemandInsights, fetchAiExecutiveReport } from '@/modules/admin/services/stats'
-import { Sparkline } from './Charts'
 import { SearchAnalyticsChart } from './SearchAnalyticsChart'
 
 interface AnalyticsDemandAiTabProps {
@@ -36,11 +35,13 @@ export default function AnalyticsDemandAiTab({
   const [metrics, setMetrics] = useState<any>(null)
   const [aiReport, setAiReport] = useState<any>(null)
   const [loadingMetrics, setLoadingMetrics] = useState(true)
+  const [metricsError, setMetricsError] = useState('')
   const [generatingAi, setGeneratingAi] = useState(false)
 
   // 1. Tải số liệu thống kê (Demand Metrics)
   const loadMetrics = useCallback(async () => {
     setLoadingMetrics(true)
+    setMetricsError('')
     try {
       const res = await fetchDemandInsights({
         token: token || undefined,
@@ -52,6 +53,8 @@ export default function AnalyticsDemandAiTab({
       if (res) setMetrics(res)
     } catch (err) {
       console.warn('Failed to load demand metrics:', err)
+      setMetrics(null)
+      setMetricsError('Không thể tải số liệu. Vui lòng thử lại.')
     } finally {
       setLoadingMetrics(false)
     }
@@ -89,14 +92,9 @@ export default function AnalyticsDemandAiTab({
     totalSearches: 0,
     totalPackageViews: 0,
     totalBookings: 0,
-    overallConversionRate: 0,
+    overallConversionRate: null,
     topSpecialtyDemand: 'Đang tải...',
   }
-
-  // Tính max search count để vẽ biểu đồ thanh ngang
-  const maxSearchCount = useMemo(() => {
-    return Math.max(1, ...(metrics?.topSearches || []).map((s: any) => s.searchCount || 0))
-  }, [metrics?.topSearches])
 
   const maxUnmatchedCount = useMemo(() => {
     return Math.max(1, ...(metrics?.unmatchedSearches || []).map((s: any) => s.searchCount || 0))
@@ -128,6 +126,8 @@ export default function AnalyticsDemandAiTab({
     return sum
   }, [metrics?.demographics])
 
+  if (loadingMetrics) return <div className="p-8 text-center text-sm text-slate-500">Đang tải số liệu thực tế...</div>
+  if (metricsError) return <div role="alert" className="p-4 rounded border border-rose-200 text-rose-700">{metricsError}<button className="ml-3 underline" onClick={() => void loadMetrics()}>Thử lại</button></div>
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* ── THANH ĐIỀU KHIỂN & NÚT GỌI AI GEMINI ──────────────────────── */}
@@ -148,10 +148,10 @@ export default function AnalyticsDemandAiTab({
                 : timeFilter === 'today'
                   ? 'Hôm nay'
                   : timeFilter === 'week'
-                    ? 'Tuần này (7 ngày)'
+                    ? '7 ngày gần nhất'
                     : timeFilter === 'quarter'
-                      ? 'Quý này (90 ngày)'
-                      : 'Tháng này (30 ngày)'}
+                      ? '90 ngày gần nhất'
+                      : '30 ngày gần nhất'}
             </span>
           </div>
         </div>
@@ -168,18 +168,28 @@ export default function AnalyticsDemandAiTab({
       </div>
 
       {/* ── HÀNG 1: THẺ CHỈ SỐ TỔNG QUAN (KPIS) VỚI SPARKLINE MINI ────── */}
+      <p className="text-[11px] text-slate-500">
+        Báo cáo theo giờ Việt Nam. {metrics?.trackingStartedAt ? `Tracking chi tiết từ ${new Date(metrics.trackingStartedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}.` : 'Chưa có dữ liệu tracking chi tiết.'}
+        {' '}CVR dùng cùng tập lượt xem trong kỳ; dữ liệu cũ chưa liên kết được giữ riêng, không suy ra chuyển đổi.
+        {' '}Có {kpis.totalBookings} lịch thành công trong kỳ; {kpis.unattributedBookings || 0} lịch chưa liên kết lượt xem/tìm kiếm.
+      </p>
+      {metrics?.searchFunnel && <p className="text-[11px] text-slate-500">Phễu bên dưới đếm lượt tìm kiếm có hành động tương ứng. Mỗi lượt tìm chỉ được tính một lần ở mỗi bước, kể cả khi nhấn nhiều kết quả hoặc đặt cho nhiều người.</p>}
+      {metrics?.searchFunnel && <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+        {[['Tìm kiếm', metrics.searchFunnel.executed], ['Nhấn kết quả', metrics.searchFunnel.clicked], ['Có lịch thành công', metrics.searchFunnel.booked], ['Đã thanh toán', metrics.searchFunnel.paid], ['Không có kết quả', metrics.searchFunnel.empty], ['Lỗi / tải một phần', metrics.searchFunnel.errors + metrics.searchFunnel.partial]].map(([label, count]) => (
+          <div key={String(label)} className="rounded border border-slate-200 bg-white p-3"><div className="text-slate-500">{label}</div><strong className="text-lg text-slate-900">{count}</strong></div>
+        ))}
+      </div>}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Tìm kiếm */}
         <div className="p-4 rounded bg-white border border-slate-200/90 shadow-2xs flex items-start justify-between">
           <div className="space-y-1">
-            <span className="text-xs font-semibold text-slate-500">Tìm kiếm triệu chứng</span>
+            <span className="text-xs font-semibold text-slate-500">Lượt tìm kiếm</span>
             <div className="text-2xl font-bold text-slate-900 tracking-tight">
               {kpis.totalSearches.toLocaleString('vi-VN')}
             </div>
-            <p className="text-[11px] text-blue-700 font-medium">Lượt tìm kiếm từ cộng đồng</p>
+            <p className="text-[11px] text-blue-700 font-medium">Lượt tìm kiếm đã ghi nhận trong kỳ</p>
           </div>
           <div className="pt-1">
-            <Sparkline data={[5, 8, 12, 10, 16, 20, 24]} color="#0284c7" fillColor="#e0f2fe" height={24} width={56} />
           </div>
         </div>
 
@@ -193,7 +203,6 @@ export default function AnalyticsDemandAiTab({
             <p className="text-[11px] text-emerald-700 font-medium">Tổng quan tâm ban đầu</p>
           </div>
           <div className="pt-1">
-            <Sparkline data={[8, 14, 11, 18, 22, 28, 30]} color="#047857" fillColor="#d1fae5" height={24} width={56} />
           </div>
         </div>
 
@@ -202,25 +211,24 @@ export default function AnalyticsDemandAiTab({
           <div className="space-y-1">
             <span className="text-xs font-semibold text-slate-500">Tỷ lệ chuyển đổi (CVR)</span>
             <div className="text-2xl font-bold text-slate-900 tracking-tight">
-              {kpis.overallConversionRate}%
+              {kpis.overallConversionRate == null ? '—' : `${kpis.overallConversionRate}%`}
             </div>
             <p className="text-[11px] text-amber-700 font-medium">
-              {kpis.totalBookings} lịch khám chốt thành công
+              {kpis.totalPackageViews ? `${kpis.convertedViewCount || 0}/${kpis.totalPackageViews} lượt xem tạo lịch thành công${kpis.totalPackageViews < 30 ? ' (ít dữ liệu)' : ''}` : 'Chưa có lượt xem được ghi nhận'}
             </p>
           </div>
           <div className="pt-1">
-            <Sparkline data={[15, 20, 18, 25, 30, 35, 40]} color="#d97706" fillColor="#fef3c7" height={24} width={56} />
           </div>
         </div>
 
         {/* KPI 4: Chuyên khoa dẫn đầu */}
         <div className="p-4 rounded bg-white border border-slate-200/90 shadow-2xs flex items-start justify-between">
           <div className="space-y-1 min-w-0 pr-2">
-            <span className="text-xs font-semibold text-slate-500">Nhu cầu cao nhất</span>
+            <span className="text-xs font-semibold text-slate-500">Chuyên khoa được đặt nhiều nhất</span>
             <div className="text-base font-bold text-slate-900 truncate" title={kpis.topSpecialtyDemand}>
               {kpis.topSpecialtyDemand}
             </div>
-            <p className="text-[11px] text-indigo-700 font-medium">Chuyên khoa dẫn đầu lượt khám</p>
+            <p className="text-[11px] text-indigo-700 font-medium">Theo lịch đặt thành công trong kỳ</p>
           </div>
           <div className="shrink-0 pt-1">
             <span className="grid h-8 w-8 place-items-center rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -240,7 +248,7 @@ export default function AnalyticsDemandAiTab({
               count: Number(s.searchCount) || 0,
             }))}
             title="Top Từ khóa tìm kiếm"
-            description="Tần suất tìm kiếm triệu chứng bệnh nhân"
+            description="Các truy vấn tìm kiếm hoàn tất trong kỳ"
             layout="vertical"
           />
 
@@ -249,7 +257,7 @@ export default function AnalyticsDemandAiTab({
             <div className="flex items-center justify-between">
               <h4 className="text-[11.5px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
                 <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                <span>Nhu cầu chưa đáp ứng</span>
+                <span>Tìm kiếm chưa có kết quả</span>
               </h4>
               <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                 {(metrics?.unmatchedSearches || []).length} kết quả
@@ -281,7 +289,7 @@ export default function AnalyticsDemandAiTab({
                 })
               ) : (
                 <div className="py-2.5 text-center text-[11px] text-amber-800/70">
-                  Không có từ khóa tìm kiếm bị thiếu gói khám
+                  Chưa ghi nhận lượt tìm kiếm không có kết quả trong kỳ
                 </div>
               )}
             </div>
@@ -296,11 +304,11 @@ export default function AnalyticsDemandAiTab({
                 <TrendingUp className="w-3.5 h-3.5 text-indigo-600" />
                 <span>Hiệu quả Đặt khám & Phễu Chuyển đổi Gói khám</span>
               </h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">Tỷ lệ bệnh nhân chốt lịch khám (Xanh) vs Rời bỏ giữa chừng (Cam/Đỏ)</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Lượt xem trong kỳ có lịch thành công được liên kết. Không suy ra rời bỏ từ lượt xem.</p>
             </div>
             <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
               <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600" />Đã đặt</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" />Chưa hoàn tất</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" />Chưa ghi nhận lịch</span>
             </div>
           </div>
 
@@ -311,7 +319,7 @@ export default function AnalyticsDemandAiTab({
                   <th className="pb-2">Gói khám dịch vụ</th>
                   <th className="pb-2">Chuyên khoa</th>
                   <th className="pb-2 text-right">Lượt xem</th>
-                  <th className="pb-2 text-right">Đã đặt</th>
+                  <th className="pb-2 text-right">Xem → đặt thành công</th>
                   <th className="pb-2 pl-4">Phễu chuyển đổi</th>
                   <th className="pb-2 text-right">CVR</th>
                 </tr>
@@ -328,7 +336,7 @@ export default function AnalyticsDemandAiTab({
                         </td>
                         <td className="py-2.5 text-slate-500">{p.specialtyName}</td>
                         <td className="py-2.5 text-right font-semibold tabular-nums">{p.views}</td>
-                        <td className="py-2.5 text-right font-bold text-emerald-700 tabular-nums">{p.bookings}</td>
+                        <td className="py-2.5 text-right font-bold text-emerald-700 tabular-nums">{p.bookings}<div className="text-[10px] font-normal text-slate-400">{p.successfulBookings} lịch trong kỳ</div></td>
                         <td className="py-2.5 pl-4 min-w-[140px]">
                           {/* Thanh tỷ lệ chuyển đổi trực quan kép */}
                           <div className="flex items-center gap-2">
@@ -341,7 +349,7 @@ export default function AnalyticsDemandAiTab({
                               <div
                                 className="h-full bg-rose-400 transition-all"
                                 style={{ width: `${drop}%` }}
-                                title={`Chưa hoàn tất: ${drop}%`}
+                                title={`Chưa ghi nhận lịch thành công: ${drop}%`}
                               />
                             </div>
                           </div>
@@ -354,8 +362,9 @@ export default function AnalyticsDemandAiTab({
                               ? 'bg-blue-50 text-blue-700 border border-blue-200'
                               : 'bg-slate-100 text-slate-600'
                           }`}>
-                            {conv}%
+                            {p.conversionRate == null ? '—' : `${conv}%`}
                           </span>
+                          {p.lowSample && <div className="mt-1 text-[10px] text-slate-400">Ít dữ liệu</div>}
                         </td>
                       </tr>
                     )
@@ -413,7 +422,7 @@ export default function AnalyticsDemandAiTab({
                 metrics.demographics.map((d: any, idx: number) => {
                   const total = Math.max(1, Number(d.totalPatients || 0))
                   const malePct = Math.round((Number(d.maleCount || 0) / total) * 100)
-                  const femalePct = 100 - malePct
+                  const femalePct = Math.round((Number(d.femaleCount || 0) / total) * 100)
 
                   const u12Pct = Math.round((Number(d.ageGroups?.under12 || 0) / total) * 100)
                   const t18Pct = Math.round((Number(d.ageGroups?.teens12to18 || 0) / total) * 100)
@@ -568,12 +577,10 @@ export default function AnalyticsDemandAiTab({
             <div className="p-4 rounded border border-amber-200 bg-amber-50/40 space-y-2.5">
               <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wide">
                 <ShieldAlert className="w-4 h-4 text-amber-600" />
-                <span>Nhu cầu chưa đáp ứng</span>
+                <span>Phân tích tìm kiếm chưa có kết quả</span>
               </div>
               <ul className="text-xs text-amber-950 space-y-1.5 pl-4 list-disc leading-relaxed font-medium">
-                {(aiReport?.unmetDemandInsights || [
-                  'Theo dõi các từ khóa người dùng tìm kiếm nhưng chưa có gói khám để phát triển dịch vụ mới.',
-                ]).map((item: string, idx: number) => (
+                {(aiReport?.unmetDemandInsights || []).map((item: string, idx: number) => (
                   <li key={idx}>{item}</li>
                 ))}
               </ul>

@@ -5,7 +5,7 @@ import { RolePortal } from '@/modules/portal'
 
 export default function AnalyticsPage() {
   return (
-    <AuthGuard allowedRoles={['admin', 'branch_manager']}>
+    <AuthGuard allowedRoles={['chain_manager', 'branch_manager']}>
       <RolePortal section="analytics" />
     </AuthGuard>
   )

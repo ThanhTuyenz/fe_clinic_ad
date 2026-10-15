@@ -1,33 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import {
-  RotateCcw,
-  Check,
-  X,
-  AlertTriangle,
-  Loader2,
-  Calendar,
-  Stethoscope,
-  Building2,
-  Coins,
-  Users,
-  Search,
-  Database,
-} from 'lucide-react'
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import { RotateCcw, X, AlertTriangle, Loader2, Calendar, Stethoscope, Building2, Coins, Users, Search, FileText, BarChart3, Package, type LucideIcon } from 'lucide-react'
 import {
   AppPermission,
   PERMISSION_CATALOG,
   PERMISSION_GROUP_CONFIG,
-  PermissionGroup,
-  PermissionItem,
+  type PermissionGroup,
   ROLE_DEFAULT_PERMISSIONS,
+  VALID_PERMISSIONS_SET,
+  normalizeCustomPermissions,
 } from '@/common/constants/permissions.constant'
-import {
-  AdminButton,
-  StatusBadge,
-  AdminTableCard,
-  AdminTable,
-  AdminTableHead,
-} from '@/common/components/ui'
+import { AdminButton, StatusBadge } from '@/common/components/ui'
 import { getUserPermissions } from '@/modules/admin/services/users'
 
 export interface CustomPermissionsModalProps {
@@ -36,10 +20,7 @@ export interface CustomPermissionsModalProps {
     fullName?: string
     email?: string
     role?: string
-    customPermissions?: {
-      granted?: string[]
-      revoked?: string[]
-    } | string[] | any
+    customPermissions?: { granted?: string[]; revoked?: string[] } | string[] | any
   }
   isOpen: boolean
   onClose: () => void
@@ -47,607 +28,236 @@ export interface CustomPermissionsModalProps {
   saving?: boolean
 }
 
-const GROUP_ICONS: Record<PermissionGroup, any> = {
+const GROUP_ICONS: Record<PermissionGroup, LucideIcon> = {
   appointment: Calendar,
+  patient: FileText,
   clinical: Stethoscope,
   operation: Building2,
+  service: Package,
   finance: Coins,
+  report: BarChart3,
   system: Users,
 }
+const MATRIX_COLUMNS = [
+  { id: 'read', label: 'Xem' },
+  { id: 'create', label: 'Tạo mới' },
+  { id: 'update', label: 'Sửa' },
+  { id: 'delete', label: 'Xóa' },
+  { id: 'execute', label: 'Nghiệp vụ' },
+] as const
+type MatrixColumn = (typeof MATRIX_COLUMNS)[number]['id']
+type MatrixRow = { id: string; label: string; group: PermissionGroup; cells: Partial<Record<MatrixColumn, AppPermission>> }
+const MATRIX_ROWS: MatrixRow[] = [
+  { id: 'user', label: "Tài khoản", group: 'system', cells: { read: AppPermission.USER_READ, create: AppPermission.USER_CREATE, update: AppPermission.USER_UPDATE, delete: AppPermission.USER_DELETE } },
+  { id: 'branch', label: "Chi nhánh", group: 'operation', cells: { read: AppPermission.BRANCH_READ, create: AppPermission.BRANCH_CREATE, update: AppPermission.BRANCH_UPDATE, delete: AppPermission.BRANCH_DELETE } },
+  { id: 'room', label: "Phòng khám", group: 'operation', cells: { read: AppPermission.ROOM_READ, create: AppPermission.ROOM_CREATE, update: AppPermission.ROOM_UPDATE, delete: AppPermission.ROOM_DELETE } },
+  { id: 'specialty', label: "Chuyên khoa", group: 'service', cells: { read: AppPermission.SPECIALTY_READ, create: AppPermission.SPECIALTY_CREATE, update: AppPermission.SPECIALTY_UPDATE, delete: AppPermission.SPECIALTY_DELETE } },
+  { id: 'service', label: "Dịch vụ & gói khám", group: 'service', cells: { read: AppPermission.SERVICE_READ, create: AppPermission.SERVICE_CREATE, update: AppPermission.SERVICE_UPDATE, delete: AppPermission.SERVICE_DELETE } },
+  { id: 'booking_method', label: "Hình thức đặt khám", group: 'service', cells: { read: AppPermission.BOOKING_METHOD_READ, create: AppPermission.BOOKING_METHOD_CREATE, update: AppPermission.BOOKING_METHOD_UPDATE, delete: AppPermission.BOOKING_METHOD_DELETE } },
+  { id: 'schedule', label: "Lịch làm việc", group: 'operation', cells: { read: AppPermission.SCHEDULE_READ, create: AppPermission.SCHEDULE_CREATE, update: AppPermission.SCHEDULE_UPDATE, delete: AppPermission.SCHEDULE_DELETE } },
+  { id: 'patient', label: "Hồ sơ bệnh nhân", group: 'patient', cells: { read: AppPermission.PATIENT_READ, create: AppPermission.PATIENT_CREATE, update: AppPermission.PATIENT_UPDATE } },
+  { id: 'appointments', label: 'Lịch hẹn', group: 'appointment', cells: { read: AppPermission.APPOINTMENT_READ, create: AppPermission.APPOINTMENT_CREATE } },
+  { id: 'checkin', label: 'Tiếp nhận bệnh nhân', group: 'appointment', cells: { execute: AppPermission.APPOINTMENT_CHECKIN } },
+  { id: 'cancel', label: 'Hủy lịch hẹn', group: 'appointment', cells: { execute: AppPermission.APPOINTMENT_CANCEL } },
+  { id: 'clinical', label: 'Bệnh án', group: 'clinical', cells: { read: AppPermission.CLINICAL_READ } },
+  { id: 'finance', label: 'Giao dịch & Doanh thu', group: 'finance', cells: { read: AppPermission.FINANCE_READ } },
+  { id: 'collect', label: 'Thu viện phí', group: 'finance', cells: { execute: AppPermission.FINANCE_COLLECT } },
+  { id: 'branch-reports', label: 'Báo cáo chi nhánh', group: 'report', cells: { read: AppPermission.REPORT_BRANCH_READ } },
+  { id: 'chain-reports', label: 'Báo cáo toàn chuỗi', group: 'report', cells: { read: AppPermission.REPORT_SYSTEM_READ } },
+  { id: 'roles', label: 'Vai trò & Phân quyền', group: 'system', cells: { execute: AppPermission.ROLE_MANAGE } },
+  { id: 'integrations', label: 'Cấu hình tích hợp', group: 'system', cells: { read: AppPermission.INTEGRATION_READ, execute: AppPermission.INTEGRATION_VERIFY } },
+  { id: 'logs', label: 'Nhật ký hệ thống', group: 'system', cells: { read: AppPermission.SYSTEM_LOG_READ } },
+]
+type Selection = { granted: Set<string>; revoked: Set<string> }
 
-export function CustomPermissionsModal({
-  user,
-  isOpen,
-  onClose,
-  onSave,
-  saving = false,
-}: CustomPermissionsModalProps) {
+function readSelection(payload: any, base: Set<string>): Selection {
+  const normalized = normalizeCustomPermissions(payload)
+  const rawGranted = normalized.granted
+  const rawRevoked = normalized.revoked
+  const revoked = new Set<string>(rawRevoked.map(String).filter((code: string) => VALID_PERMISSIONS_SET.has(code)))
+  return {
+    granted: new Set(rawGranted.map(String).filter((code: string) => VALID_PERMISSIONS_SET.has(code) && !base.has(code) && !revoked.has(code))),
+    revoked: new Set([...revoked].filter((code) => base.has(code))),
+  }
+}
+
+export function CustomPermissionsModal({ user, isOpen, onClose, onSave, saving = false }: CustomPermissionsModalProps) {
+  const [roleNormalized, setRoleNormalized] = useState(String(user.role || 'patient').toLowerCase())
+  const roleBasePermissions = useMemo(() => new Set<string>(ROLE_DEFAULT_PERMISSIONS[roleNormalized] || []), [roleNormalized])
+  const [selection, setSelection] = useState<Selection>(() => readSelection(user.customPermissions, roleBasePermissions))
   const [searchTerm, setSearchTerm] = useState('')
-  const [loadingDb, setLoadingDb] = useState(false)
-  const [dbSynced, setDbSynced] = useState(false)
-
-  const roleNormalized = String(user.role || 'patient').toLowerCase()
+  const [loadingDb, setLoadingDb] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const isTargetAdmin = roleNormalized === 'admin'
+  const disabled = saving || loadingDb || isTargetAdmin
 
-  // Quyền cơ bản mặc định theo Role
-  const roleBasePermissions = useMemo(() => {
-    return new Set<string>((ROLE_DEFAULT_PERMISSIONS[roleNormalized] || []).map((p) => String(p)))
-  }, [roleNormalized])
-
-  // Trích xuất danh sách granted và revoked ban đầu từ customPermissions
-  const initialGranted = useMemo(() => {
-    const cp = user.customPermissions
-    if (!cp) return new Set<string>()
-    if (Array.isArray(cp)) {
-      return new Set<string>(cp.map((x) => String(x)).filter((p) => !roleBasePermissions.has(p)))
-    }
-    return new Set<string>((cp.granted || []).map((x: any) => String(x)))
-  }, [user.customPermissions, roleBasePermissions])
-
-  const initialRevoked = useMemo(() => {
-    const cp = user.customPermissions
-    if (!cp || Array.isArray(cp)) return new Set<string>()
-    return new Set<string>((cp.revoked || []).map((x: any) => String(x)))
-  }, [user.customPermissions])
-
-  const [granted, setGranted] = useState<Set<string>>(initialGranted)
-  const [revoked, setRevoked] = useState<Set<string>>(initialRevoked)
-
-  // Nạp quyền thực tế trực tiếp từ Database PostgreSQL khi mở modal
   useEffect(() => {
-    if (!isOpen || !user.id) return
-
-    let isMounted = true
+    if (!isOpen) return
+    let active = true
+    const fallbackRole = String(user.role || 'patient').toLowerCase()
+    const fallbackBase = new Set<string>(ROLE_DEFAULT_PERMISSIONS[fallbackRole] || [])
+    setRoleNormalized(fallbackRole)
+    setSelection(readSelection(user.customPermissions, fallbackBase))
+    setSearchTerm('')
     setLoadingDb(true)
-    setDbSynced(false)
-
+    setLoadFailed(false)
     getUserPermissions(user.id)
       .then((data: any) => {
-        if (!isMounted) return
-        const cp = data?.customPermissions
-        const role = String(data?.role || user.role || 'patient').toLowerCase()
-        const baseSet = new Set<string>((ROLE_DEFAULT_PERMISSIONS[role] || []).map((p) => String(p)))
+        if (!active) return
+        const role = String(data?.role || fallbackRole).toLowerCase()
+        const base = new Set<string>(ROLE_DEFAULT_PERMISSIONS[role] || [])
+        setRoleNormalized(role)
+        setSelection(readSelection(data?.customPermissions, base))
+      })
+      .catch(() => { if (active) setLoadFailed(true) })
+      .finally(() => { if (active) setLoadingDb(false) })
+    return () => { active = false }
+  }, [isOpen, user.id, user.role, user.customPermissions])
 
-        if (!cp) {
-          setGranted(new Set())
-          setRevoked(new Set())
-        } else if (Array.isArray(cp)) {
-          setGranted(new Set(cp.map((x) => String(x)).filter((p) => !baseSet.has(p))))
-          setRevoked(new Set())
+  const filteredCatalog = useMemo(() => {
+    const term = searchTerm.trim().toLocaleLowerCase('vi')
+    return PERMISSION_CATALOG.filter((item) => {
+      const groupLabel = PERMISSION_GROUP_CONFIG[item.group].label
+      return !term || [item.label, item.code, item.description, groupLabel].some((value) => value.toLocaleLowerCase('vi').includes(term))
+    })
+  }, [searchTerm])
+  const visibleCodes = new Set(filteredCatalog.map((item) => item.code))
+  const matrixRows = MATRIX_ROWS.filter((row) =>
+    Object.values(row.cells).some((code) => visibleCodes.has(code)),
+  )
+
+  const isPermissionActive = (code: string) => isTargetAdmin
+    ? roleBasePermissions.has(code)
+    : !selection.revoked.has(code) && (roleBasePermissions.has(code) || selection.granted.has(code))
+  const activeCount = PERMISSION_CATALOG.filter((item) => isPermissionActive(item.code)).length
+  const visibleCount = filteredCatalog.filter((item) => isPermissionActive(item.code)).length
+  const allVisibleChecked = filteredCatalog.length > 0 && visibleCount === filteredCatalog.length
+
+  const setCodes = (codes: string[], enabled: boolean) => {
+    if (disabled) return
+    setSelection((previous) => {
+      const granted = new Set(previous.granted)
+      const revoked = new Set(previous.revoked)
+      codes.forEach((code) => {
+        if (!VALID_PERMISSIONS_SET.has(code)) return
+        if (roleBasePermissions.has(code)) {
+          granted.delete(code)
+          if (enabled) revoked.delete(code)
+          else revoked.add(code)
         } else {
-          setGranted(new Set((cp.granted || []).map((x: any) => String(x))))
-          setRevoked(new Set((cp.revoked || []).map((x: any) => String(x))))
-        }
-        setDbSynced(true)
-      })
-      .catch((err) => {
-        if (!isMounted) return
-        console.warn('Không thể nạp quyền trực tiếp từ DB, sử dụng dữ liệu cục bộ:', err)
-        // Dùng fallback từ prop nếu xảy ra lỗi mạng
-        setGranted(initialGranted)
-        setRevoked(initialRevoked)
-      })
-      .finally(() => {
-        if (isMounted) {
-          setLoadingDb(false)
+          revoked.delete(code)
+          if (enabled) granted.add(code)
+          else granted.delete(code)
         }
       })
-
-    return () => {
-      isMounted = false
-    }
-  }, [isOpen, user.id])
+      return { granted, revoked }
+    })
+  }
 
   if (!isOpen) return null
 
-
-  // Lọc quyền theo tìm kiếm
-  const filteredCatalog = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase()
-    if (!q) return PERMISSION_CATALOG
-    return PERMISSION_CATALOG.filter(
-      (item) =>
-        item.label.toLowerCase().includes(q) ||
-        item.code.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q),
-    )
-  }, [searchTerm])
-
-  // Nhóm các quyền theo category
-  const groupedCatalog = filteredCatalog.reduce((acc, item) => {
-    if (!acc[item.group]) acc[item.group] = []
-    acc[item.group].push(item)
-    return acc
-  }, {} as Record<PermissionGroup, PermissionItem[]>)
-
-  const isPermissionActive = (code: string) => {
-    const isBase = roleBasePermissions.has(code)
-    const isRevoked = revoked.has(code)
-    const isGranted = granted.has(code)
-    return (isBase && !isRevoked) || isGranted
-  }
-
-  const togglePermission = (code: string) => {
-    const isBase = roleBasePermissions.has(code)
-
-    if (isBase) {
-      // Quyền mặc định của Role: Nếu bỏ chọn -> thêm vào revoked; Nếu chọn lại -> bỏ khỏi revoked
-      setRevoked((prev) => {
-        const next = new Set(prev)
-        if (next.has(code)) {
-          next.delete(code)
-        } else {
-          next.add(code)
-        }
-        return next
-      })
-    } else {
-      // Quyền ngoài Role: Nếu chọn -> thêm vào granted; Nếu bỏ chọn -> bỏ khỏi granted
-      setGranted((prev) => {
-        const next = new Set(prev)
-        if (next.has(code)) {
-          next.delete(code)
-        } else {
-          next.add(code)
-        }
-        return next
-      })
-    }
-  }
-
-  // Chọn / Bỏ chọn toàn bộ quyền trong một nhóm
-  const toggleGroup = (items: PermissionItem[]) => {
-    const allActive = items.every((it) => isPermissionActive(String(it.code)))
-
-    if (allActive) {
-      // Tắt tất cả trong nhóm
-      items.forEach((it) => {
-        const code = String(it.code)
-        if (roleBasePermissions.has(code)) {
-          setRevoked((prev) => new Set(prev).add(code))
-        } else {
-          setGranted((prev) => {
-            const next = new Set(prev)
-            next.delete(code)
-            return next
-          })
-        }
-      })
-    } else {
-      // Bật tất cả trong nhóm
-      items.forEach((it) => {
-        const code = String(it.code)
-        if (roleBasePermissions.has(code)) {
-          setRevoked((prev) => {
-            const next = new Set(prev)
-            next.delete(code)
-            return next
-          })
-        } else {
-          setGranted((prev) => new Set(prev).add(code))
-        }
-      })
-    }
-  }
-
-  const resetToDefault = () => {
-    setGranted(new Set())
-    setRevoked(new Set())
-  }
-
-  const handleFormSubmit = async () => {
-    await onSave({
-      granted: Array.from(granted),
-      revoked: Array.from(revoked),
-    })
-  }
-
-  // Đếm tổng số quyền đang hoạt động
-  const activeCount = PERMISSION_CATALOG.filter((it) => isPermissionActive(String(it.code))).length
-
-  const MATRIX_MODULES = useMemo(
-    () => [
-      {
-        id: 'appointment',
-        label: 'Lịch hẹn & Tiếp đón',
-        read: AppPermission.APPOINTMENT_READ,
-        create: AppPermission.APPOINTMENT_CREATE,
-        update: AppPermission.APPOINTMENT_CHECKIN,
-        delete: AppPermission.APPOINTMENT_CANCEL,
-      },
-      {
-        id: 'patient',
-        label: 'Hồ sơ Bệnh nhân',
-        read: AppPermission.PATIENT_READ,
-        create: null,
-        update: AppPermission.PATIENT_MANAGE,
-        delete: null,
-      },
-      {
-        id: 'clinical_exam',
-        label: 'Khám bệnh & Bệnh án',
-        read: AppPermission.CLINICAL_READ,
-        create: null,
-        update: AppPermission.CLINICAL_WRITE,
-        delete: null,
-      },
-      {
-        id: 'schedules',
-        label: 'Lịch làm việc & Ca trực',
-        read: AppPermission.SCHEDULE_READ,
-        create: null,
-        update: AppPermission.SCHEDULE_MANAGE,
-        delete: null,
-      },
-      {
-        id: 'branch_room',
-        label: 'Cơ sở & Phòng khám',
-        read: AppPermission.BRANCH_READ,
-        create: AppPermission.BRANCH_MANAGE,
-        update: AppPermission.ROOM_MANAGE,
-        delete: null,
-      },
-      {
-        id: 'medical_services',
-        label: 'Chuyên môn & Dịch vụ y tế',
-        read: null,
-        create: AppPermission.SPECIALTY_MANAGE,
-        update: AppPermission.SERVICE_MANAGE,
-        delete: null,
-      },
-      {
-        id: 'finance',
-        label: 'Tài chính & Viện phí',
-        read: AppPermission.FINANCE_READ,
-        create: AppPermission.FINANCE_COLLECT,
-        update: null,
-        delete: null,
-      },
-      {
-        id: 'reports',
-        label: 'Báo cáo & Thống kê',
-        read: AppPermission.REPORT_BRANCH_READ,
-        create: null,
-        update: AppPermission.REPORT_SYSTEM_READ,
-        delete: null,
-      },
-      {
-        id: 'users',
-        label: 'Nhân sự & Phân quyền',
-        read: AppPermission.USER_READ,
-        create: AppPermission.USER_MANAGE,
-        update: AppPermission.ROLE_MANAGE,
-        delete: null,
-      },
-      {
-        id: 'system_config',
-        label: 'Cấu hình Hệ thống',
-        read: null,
-        create: null,
-        update: AppPermission.SYSTEM_CONFIG_MANAGE,
-        delete: null,
-      },
-    ],
-    [],
-  )
-
-  // Danh sách mã quyền cho từng cột
-  const allCodes = useMemo(() => PERMISSION_CATALOG.map((p) => String(p.code)), [])
-  const readCodes = useMemo(
-    () => MATRIX_MODULES.map((m) => m.read).filter(Boolean).map(String),
-    [MATRIX_MODULES],
-  )
-  const createCodes = useMemo(
-    () => MATRIX_MODULES.map((m) => m.create).filter(Boolean).map(String),
-    [MATRIX_MODULES],
-  )
-  const updateCodes = useMemo(
-    () => MATRIX_MODULES.map((m) => m.update).filter(Boolean).map(String),
-    [MATRIX_MODULES],
-  )
-  const deleteCodes = useMemo(
-    () => MATRIX_MODULES.map((m) => m.delete).filter(Boolean).map(String),
-    [MATRIX_MODULES],
-  )
-
-  // Trạng thái tick trên Header
-  const isAllModulesChecked = allCodes.length > 0 && allCodes.every((c) => isPermissionActive(c))
-  const isAllReadChecked = readCodes.length > 0 && readCodes.every((c) => isPermissionActive(c))
-  const isAllCreateChecked = createCodes.length > 0 && createCodes.every((c) => isPermissionActive(c))
-  const isAllUpdateChecked = updateCodes.length > 0 && updateCodes.every((c) => isPermissionActive(c))
-  const isAllDeleteChecked = deleteCodes.length > 0 && deleteCodes.every((c) => isPermissionActive(c))
-
-  // Toggle danh sách nhiều quyền (cho header hoặc cho dòng module)
-  const toggleCodeList = (codes: string[]) => {
-    if (saving || isTargetAdmin || codes.length === 0) return
-    const allActive = codes.every((c) => isPermissionActive(c))
-
-    if (allActive) {
-      // Tắt tất cả
-      codes.forEach((code) => {
-        if (roleBasePermissions.has(code)) {
-          setRevoked((prev) => new Set(prev).add(code))
-        } else {
-          setGranted((prev) => {
-            const next = new Set(prev)
-            next.delete(code)
-            return next
-          })
-        }
-      })
-    } else {
-      // Bật tất cả
-      codes.forEach((code) => {
-        if (roleBasePermissions.has(code)) {
-          setRevoked((prev) => {
-            const next = new Set(prev)
-            next.delete(code)
-            return next
-          })
-        } else {
-          setGranted((prev) => new Set(prev).add(code))
-        }
-      })
-    }
-  }
-
-  // Lọc theo tìm kiếm
-  const filteredModules = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase()
-    if (!q) return MATRIX_MODULES
-    return MATRIX_MODULES.filter((m) => {
-      const matchLabel = m.label.toLowerCase().includes(q)
-      const codes = [m.read, m.create, m.update, m.delete].filter(Boolean).map(String)
-      const matchCodes = codes.some((c) => c.toLowerCase().includes(q))
-      return matchLabel || matchCodes
-    })
-  }, [searchTerm, MATRIX_MODULES])
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header Modal */}
-        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-slate-900 leading-tight">
-                Sửa Hồ Sơ Phân Quyền Nhân Sự
-              </h2>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                {activeCount}/{PERMISSION_CATALOG.length} quyền kích hoạt
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Nhân sự:{' '}
-              <strong className="text-slate-700">{user.fullName || user.email}</strong>{' '}
-              <span className="text-slate-400">({user.email})</span>
-            </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-2 backdrop-blur-xs sm:p-4" onClick={() => { if (!saving) onClose() }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="custom-permissions-title" className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded border border-slate-200 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <h2 id="custom-permissions-title" className="text-sm font-bold text-slate-900">Ma trận phân quyền chức năng</h2>
+            <p className="mt-1 break-words text-xs text-slate-500"><strong className="text-slate-700">{user.fullName || user.email}</strong>{user.email && ' · ' + user.email}</p>
           </div>
+          <button type="button" aria-label="Đóng phân quyền" disabled={saving} onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"><X className="h-4 w-4" /></button>
+        </header>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+        <div className="space-y-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-slate-500">Vai trò gốc</span>
+              <StatusBadge tone="blue">{roleNormalized.toUpperCase()}</StatusBadge>
+            </div>
+            <span className="text-slate-500">Cấp thêm: <strong className="text-blue-700">+{isTargetAdmin ? 0 : selection.granted.size}</strong> · Thu hồi: <strong className="text-rose-600">{isTargetAdmin ? 0 : selection.revoked.size}</strong></span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <input aria-label="Tìm quyền theo chức năng" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Tìm chức năng, hành động hoặc mã quyền…" className="w-full rounded border border-slate-200 py-2 pl-8 pr-8 text-xs focus:border-sky-500 focus:outline-none" />
+              {searchTerm && <button type="button" aria-label="Xóa tìm kiếm" onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"><X className="h-3.5 w-3.5" /></button>}
+            </div>
+            <AdminButton variant="secondary" icon={RotateCcw} disabled={disabled} onClick={() => setSelection({ granted: new Set(), revoked: new Set() })}>Về mặc định</AdminButton>
+          </div>
+          <p className="text-xs leading-5 text-slate-500">Chọn quyền theo hàng chức năng và cột hành động. Rê chuột lên ô để xem chi tiết; dấu — là thao tác không áp dụng. Quyền vẫn chịu giới hạn vai trò và phạm vi chi nhánh.</p>
         </div>
 
-        {/* Thanh điều khiển & Tìm kiếm */}
-        <div className="bg-slate-50/60 px-5 py-2.5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 text-slate-700">
-            <span className="font-semibold text-slate-600">Vai trò gốc:</span>
-            <StatusBadge tone={isTargetAdmin ? 'emerald' : 'blue'}>
-              {roleNormalized.toUpperCase()}
-            </StatusBadge>
-            <span className="text-slate-400 font-normal">|</span>
-            <span className="text-slate-600 text-[11px]">
-              Cấp thêm: <strong className="text-blue-700">+{granted.size}</strong> • Đã tước:{' '}
-              <strong className="text-rose-600">-{revoked.size}</strong>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="relative w-full sm:w-56">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Tìm quyền hạn..."
-                className="w-full pl-8 pr-2.5 py-1 text-xs rounded border border-slate-200 bg-white focus:outline-none focus:border-sky-600"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={resetToDefault}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-emerald-800 hover:underline cursor-pointer shrink-0"
-              title="Khôi phục lại toàn bộ quyền mặc định theo vai trò"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span className="hidden sm:inline">Về mặc định</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Nội dung BẢNG PHÂN QUYỀN CHUẨN MA TRẬN (GIỐNG HỆT ẢNH MẪU) */}
-        <div className="p-4 sm:p-5 overflow-y-auto flex-1">
-          {isTargetAdmin && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-              <div>
-                <strong>Lưu ý:</strong> Tài khoản vai trò <strong>Admin</strong> mặc định có toàn bộ quyền hệ thống. Các tùy biến tước quyền không áp dụng cho quản trị viên tối cao.
-              </div>
-            </div>
-          )}
-
+        <div className="no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/40 p-4 sm:p-5">
+          {isTargetAdmin && <div className="flex gap-2 rounded border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><p>Admin có bộ quyền quản trị kỹ thuật cố định. Không áp dụng cấp thêm hoặc thu hồi quyền cho vai trò này.</p></div>}
+          {loadFailed && <div role="alert" className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Không tải được quyền mới nhất. Đang hiển thị dữ liệu tài khoản đã có; kiểm tra lại trước khi lưu.</div>}
           {loadingDb ? (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-500 gap-3 border border-slate-200 rounded bg-white">
-              <Loader2 className="w-7 h-7 animate-spin text-sky-600" />
-              <p className="text-xs font-semibold text-slate-700">Đang tải phân quyền thực tế từ cơ sở dữ liệu PostgreSQL...</p>
-              <p className="text-[11px] text-slate-400">Vui lòng chờ trong giây lát</p>
-            </div>
+            <div role="status" className="flex items-center justify-center gap-2 rounded border border-slate-200 bg-white py-14 text-xs text-slate-500"><Loader2 className="h-5 w-5 animate-spin" />Đang tải quyền hiện tại…</div>
           ) : (
-            <div className="border border-slate-200 rounded overflow-hidden shadow-xs bg-white">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse border border-slate-200 text-xs sm:text-sm">
-                  {/* HEADER BẢNG MÀU XANH #0088cc GIỐNG HỆT ẢNH */}
-                  <thead>
-                    <tr className="bg-[#0088cc] text-white">
-                      {/* Cột 1: Modules */}
-                      <th className="py-2.5 px-3.5 sm:px-4 border border-sky-600/70 font-bold min-w-[220px]">
-                        <label className="flex items-center gap-2 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={isAllModulesChecked}
-                            disabled={saving || isTargetAdmin}
-                            onChange={() => toggleCodeList(allCodes)}
-                            className="w-4 h-4 rounded text-[#0088cc] bg-white border-white focus:ring-sky-300 cursor-pointer"
-                          />
-                          <span className="text-white font-bold text-xs sm:text-sm">Modules</span>
-                        </label>
-                      </th>
-
-                      {/* Cột 2: Xem */}
-                      <th className="py-2.5 px-3 text-center border border-sky-600/70 font-bold w-24 sm:w-28">
-                        <label className="flex items-center justify-center gap-1.5 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={isAllReadChecked}
-                            disabled={saving || isTargetAdmin}
-                            onChange={() => toggleCodeList(readCodes)}
-                            className="w-4 h-4 rounded text-[#0088cc] bg-white border-white focus:ring-sky-300 cursor-pointer"
-                          />
-                          <span className="text-white font-bold text-xs sm:text-sm">Xem</span>
-                        </label>
-                      </th>
-
-                      {/* Cột 3: Thêm mới */}
-                      <th className="py-2.5 px-3 text-center border border-sky-600/70 font-bold w-28 sm:w-32">
-                        <label className="flex items-center justify-center gap-1.5 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={isAllCreateChecked}
-                            disabled={saving || isTargetAdmin}
-                            onChange={() => toggleCodeList(createCodes)}
-                            className="w-4 h-4 rounded text-[#0088cc] bg-white border-white focus:ring-sky-300 cursor-pointer"
-                          />
-                          <span className="text-white font-bold text-xs sm:text-sm">Thêm mới</span>
-                        </label>
-                      </th>
-
-                      {/* Cột 4: Sửa */}
-                      <th className="py-2.5 px-3 text-center border border-sky-600/70 font-bold w-24 sm:w-28">
-                        <label className="flex items-center justify-center gap-1.5 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={isAllUpdateChecked}
-                            disabled={saving || isTargetAdmin}
-                            onChange={() => toggleCodeList(updateCodes)}
-                            className="w-4 h-4 rounded text-[#0088cc] bg-white border-white focus:ring-sky-300 cursor-pointer"
-                          />
-                          <span className="text-white font-bold text-xs sm:text-sm">Sửa</span>
-                        </label>
-                      </th>
-
-                      {/* Cột 5: Xóa */}
-                      <th className="py-2.5 px-3 text-center border border-sky-600/70 font-bold w-24 sm:w-28">
-                        <label className="flex items-center justify-center gap-1.5 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={isAllDeleteChecked}
-                            disabled={saving || isTargetAdmin}
-                            onChange={() => toggleCodeList(deleteCodes)}
-                            className="w-4 h-4 rounded text-[#0088cc] bg-white border-white focus:ring-sky-300 cursor-pointer"
-                          />
-                          <span className="text-white font-bold text-xs sm:text-sm">Xóa</span>
-                        </label>
-                      </th>
+            <>
+              <label className="flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                <input type="checkbox" checked={allVisibleChecked} ref={(node) => { if (node) node.indeterminate = visibleCount > 0 && !allVisibleChecked }} disabled={disabled || !filteredCatalog.length} onChange={(event) => setCodes(filteredCatalog.map((item) => item.code), event.target.checked)} className="h-4 w-4 shrink-0 rounded accent-sky-600" />
+                Chọn các quyền đang hiển thị
+                <span className="ml-auto text-[11px] font-normal text-slate-400">{visibleCount}/{filteredCatalog.length}</span>
+              </label>
+              <div className="no-scrollbar overflow-x-auto rounded border border-slate-200 bg-white">
+                <table className="w-full min-w-[760px] table-fixed border-collapse text-xs">
+                  <caption className="sr-only">Ma trận quyền theo chức năng và hành động thực tế</caption>
+                  <colgroup>
+                    <col className="w-[220px]" />
+                    {MATRIX_COLUMNS.map((column) => <col key={column.id} />)}
+                  </colgroup>
+                  <thead className="bg-slate-100 text-slate-700">
+                    <tr>
+                      <th scope="col" className="border-b border-r border-slate-200 px-3 py-3 text-left font-bold">Nhóm chức năng</th>
+                      {MATRIX_COLUMNS.map((column) => {
+                        const codes = matrixRows.map((row) => row.cells[column.id]).filter((code): code is AppPermission => Boolean(code) && visibleCodes.has(code))
+                        const count = codes.filter(isPermissionActive).length
+                        return (
+                          <th key={column.id} scope="col" className="border-b border-r border-slate-200 px-2 py-3 last:border-r-0">
+                            <label className="flex items-center justify-center gap-2">
+                              <input type="checkbox" aria-label={'Chọn tất cả quyền ' + column.label + ' đang hiển thị'} checked={codes.length > 0 && count === codes.length} ref={(node) => { if (node) node.indeterminate = count > 0 && count < codes.length }} disabled={disabled || !codes.length} onChange={(event) => setCodes(codes, event.target.checked)} className="h-4 w-4 shrink-0 rounded accent-sky-600" />
+                              {column.label}
+                            </label>
+                          </th>
+                        )
+                      })}
                     </tr>
                   </thead>
-
-                  {/* THÂN BẢNG: Ô CÓ QUYỀN THÌ CÓ CHECKBOX Ở GIỮA, Ô KHÔNG CÓ THÌ ĐỂ TRẮNG */}
-                  <tbody className="divide-y divide-slate-200">
-                    {filteredModules.map((m) => {
-                      const rowCodes = [m.read, m.create, m.update, m.delete].filter(Boolean).map(String)
-                      const isRowChecked =
-                        rowCodes.length > 0 && rowCodes.every((code) => isPermissionActive(code))
-
+                  <tbody>
+                    {!matrixRows.length && <tr><td colSpan={MATRIX_COLUMNS.length + 1} className="py-10 text-center text-slate-500">Không có quyền phù hợp với từ khóa.</td></tr>}
+                    {matrixRows.map((row) => {
+                      const Icon = GROUP_ICONS[row.group]
+                      const codes = Object.values(row.cells).filter((code) => visibleCodes.has(code))
+                      const count = codes.filter(isPermissionActive).length
                       return (
-                        <tr key={m.id} className="hover:bg-sky-50/20 transition-colors">
-                          {/* Cột 1: Tên Module với Checkbox */}
-                          <td className="py-3 px-3.5 sm:px-4 border border-slate-200 font-medium text-slate-800">
-                            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                checked={isRowChecked}
-                                disabled={saving || isTargetAdmin}
-                                onChange={() => toggleCodeList(rowCodes)}
-                                className="w-4 h-4 rounded border-slate-300 text-[#0088cc] focus:ring-sky-500 cursor-pointer"
-                              />
-                              <span className="font-semibold text-slate-900 text-xs sm:text-sm">
-                                {m.label}
+                        <tr key={row.id} data-permission-row={row.id} className="border-b border-slate-200 last:border-b-0">
+                          <th scope="row" className="border-r border-slate-200 bg-slate-50/60 px-3 py-3 text-left align-middle">
+                            <label className="flex items-start gap-2">
+                              <input type="checkbox" aria-label={'Chọn tất cả quyền trong nhóm ' + row.label} checked={count === codes.length} ref={(node) => { if (node) node.indeterminate = count > 0 && count < codes.length }} disabled={disabled} onChange={(event) => setCodes(codes, event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 rounded accent-sky-600" />
+                              <span className="min-w-0">
+                                <span className="flex items-center gap-1.5 font-semibold text-slate-800"><Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />{row.label}</span>
+                                <span className="mt-1 block text-[10px] font-normal text-slate-400">{count}/{codes.length} quyền</span>
                               </span>
                             </label>
-                          </td>
-
-                          {/* 4 Cột hành động: Xem, Thêm mới, Sửa, Xóa */}
-                          {[m.read, m.create, m.update, m.delete].map((code, colIdx) => {
-                            if (!code) {
-                              return (
-                                <td
-                                  key={colIdx}
-                                  className="py-3 px-3 border border-slate-200 bg-slate-50/40 text-center select-none"
-                                >
-                                  <span className="text-slate-300 font-bold text-xs select-none">—</span>
-                                </td>
-                              )
-                            }
-
-                            const codeStr = String(code)
-                            const item = PERMISSION_CATALOG.find((it) => String(it.code) === codeStr)
-                            const isActive = isPermissionActive(codeStr)
-
+                          </th>
+                          {MATRIX_COLUMNS.map((column) => {
+                            const code = row.cells[column.id]
+                            const item = filteredCatalog.find((permission) => permission.code === code)
+                            if (!item) return (
+                              <td key={column.id} className="border-r border-slate-200 bg-slate-50/30 px-2 py-3 text-center text-slate-300 last:border-r-0">
+                                <span aria-label={code ? 'Quyền không khớp bộ lọc' : 'Không áp dụng'}>—</span>
+                              </td>
+                            )
+                            const checked = isPermissionActive(item.code)
+                            const base = roleBasePermissions.has(item.code)
+                            const stateLabel = checked ? base ? 'Mặc định' : 'Cấp thêm' : base ? 'Đã thu hồi' : 'Chưa cấp'
+                            const description = item.code === AppPermission.INTEGRATION_READ
+                              ? 'Quyền kỹ thuật dành cho Admin. Trang tích hợp hiện chỉ xem cấu hình và kiểm tra SMTP.'
+                              : item.description
                             return (
-                              <td
-                                key={colIdx}
-                                onClick={() => {
-                                  if (!saving && !isTargetAdmin) {
-                                    togglePermission(codeStr)
-                                  }
-                                }}
-                                title={`${item?.label || codeStr} (${codeStr})\n${item?.description || ''}`}
-                                className={`py-3 px-3 border border-slate-200 text-center transition-colors cursor-pointer select-none ${isActive
-                                  ? 'bg-sky-50/40 hover:bg-sky-100/60'
-                                  : 'bg-white hover:bg-slate-50'
-                                  }`}
-                              >
-                                <div className="flex items-center justify-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={isActive}
-                                    disabled={saving || isTargetAdmin}
-                                    onChange={() => togglePermission(codeStr)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="w-4 h-4 rounded border-slate-300 text-[#0088cc] focus:ring-sky-500 cursor-pointer"
-                                  />
-                                </div>
+                              <td key={column.id} className={'border-r border-slate-200 align-middle last:border-r-0 ' + (checked ? 'bg-sky-50/30' : 'bg-white')}>
+                                <label title={item.label + ' · ' + stateLabel + '\n' + description} className={'flex min-h-12 items-center justify-center px-2.5 py-3 ' + (disabled ? 'cursor-default' : 'cursor-pointer hover:bg-slate-50')}>
+                                  <input type="checkbox" aria-label={item.label} checked={checked} disabled={disabled} onChange={(event) => setCodes([item.code], event.target.checked)} className="h-4 w-4 shrink-0 rounded accent-sky-600" />
+                                </label>
                               </td>
                             )
                           })}
@@ -657,47 +267,17 @@ export function CustomPermissionsModal({
                   </tbody>
                 </table>
               </div>
-            </div>
+            </>
           )}
         </div>
 
-        {/* Footer Actions giống ảnh: Nút Lưu màu xanh lá & Hủy bỏ */}
-        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between">
-          <div className="text-xs text-slate-500">
-            Tổng quyền kích hoạt: <strong className="text-emerald-700">{activeCount}</strong> /{' '}
-            {PERMISSION_CATALOG.length} quyền
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
+          <span className="text-xs text-slate-500">Đang kích hoạt <strong className="text-slate-800">{activeCount}</strong>/{PERMISSION_CATALOG.length} quyền</span>
+          <div className="flex items-center gap-2">
+            <AdminButton variant="secondary" disabled={saving} onClick={onClose}>Hủy bỏ</AdminButton>
+            <AdminButton variant="primary" loading={saving} disabled={disabled} onClick={() => { if (!disabled) void onSave({ granted: [...selection.granted], revoked: [...selection.revoked] }) }}>Lưu phân quyền</AdminButton>
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="px-4 py-1.5 text-xs font-semibold rounded text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 cursor-pointer"
-            >
-              Hủy bỏ
-            </button>
-
-            <button
-              type="button"
-              disabled={saving || isTargetAdmin}
-              onClick={handleFormSubmit}
-              className="px-6 py-1.5 text-xs font-semibold rounded bg-[#28a745] hover:bg-[#218838] text-white shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Đang lưu...</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Lưu</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+        </footer>
       </div>
     </div>
   )

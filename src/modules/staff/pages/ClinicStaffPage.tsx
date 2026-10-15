@@ -21,10 +21,15 @@ import {
   AdminTextarea,
 } from '@/common/components/ui'
 import { createUser, deleteUser, listUsers, updateUser, listCatalog, listClinicRooms, resolveMediaUrl } from '../services/staffService'
+import { useAuth } from '@/common/hooks/useAuth'
+import { usePermission } from '@/common/hooks/usePermission'
+import { AppPermission } from '@/common/constants/permissions.constant'
 import ImageUploader from '@/modules/catalog/components/ImageUploader'
 
 const ROLES = [
   ['all', 'Tất cả'],
+  ['admin', 'Quản trị hệ thống'],
+  ['chain_manager', 'Quản lý toàn chuỗi'],
   ['doctor', 'Bác sĩ'],
   ['receptionist', 'Lễ tân'],
   ['branch_manager', 'Quản lý chi nhánh'],
@@ -70,6 +75,12 @@ const TABLE_COLUMNS = [
 
 export default function ClinicStaffPage() {
   const navigate = useNavigate()
+  const { role: currentRole } = useAuth()
+  const { hasPermission } = usePermission()
+  const canCreateUsers = hasPermission(AppPermission.USER_CREATE)
+  const canUpdateUsers = hasPermission(AppPermission.USER_UPDATE)
+  const canDeleteUsers = hasPermission(AppPermission.USER_DELETE)
+  const canManageRoles = hasPermission(AppPermission.ROLE_MANAGE)
   const [rows, setRows] = useState<any[]>([])
   const [branches, setBranches] = useState<any[]>([])
   const [specialties, setSpecialties] = useState<any[]>([])
@@ -203,7 +214,7 @@ export default function ClinicStaffPage() {
     if (!form.fullName.trim() || !form.email.trim()) return setError('Vui lòng nhập họ tên và email.')
     if (modal === 'create' && form.password.length < 6)
       return setError('Mật khẩu phải có ít nhất 6 ký tự.')
-    if (!form.branchIds || form.branchIds.length === 0)
+    if (!['admin', 'chain_manager'].includes(form.role) && (!form.branchIds || form.branchIds.length === 0))
       return setError('Vui lòng chọn ít nhất một cơ sở làm việc / quản lý.')
 
     setSaving(true)
@@ -218,9 +229,9 @@ export default function ClinicStaffPage() {
         avatarUrl: form.avatarUrl || null,
         ...(form.phoneNumber ? { phoneNumber: form.phoneNumber.trim() } : {}),
         ...(form.password ? { password: form.password } : {}),
-        branchId: primaryId,
-        branchIds: form.branchIds,
-        primaryBranchId: primaryId,
+        branchId: ['admin', 'chain_manager'].includes(form.role) ? undefined : primaryId,
+        branchIds: ['admin', 'chain_manager'].includes(form.role) ? [] : form.branchIds,
+        primaryBranchId: ['admin', 'chain_manager'].includes(form.role) ? undefined : primaryId,
       }
       if (form.role === 'doctor') {
         payload.academicRank = form.academicRank.trim()
@@ -287,14 +298,14 @@ export default function ClinicStaffPage() {
         title="Nhân sự phòng khám"
         description="Quản lý tài khoản, ảnh đại diện, chi nhánh, chuyên khoa và phòng khám."
       >
-        <AdminButton
+        {currentRole !== 'admin' && <AdminButton
           variant="secondary"
           icon={Calendar}
           onClick={() => navigate('/work-schedules')}
           className="border-emerald-200 text-emerald-800 bg-emerald-50/60 hover:bg-emerald-100/60"
         >
           Lịch làm việc bác sĩ
-        </AdminButton>
+        </AdminButton>}
         <AdminButton
           variant="secondary"
           icon={RefreshCw}
@@ -303,13 +314,13 @@ export default function ClinicStaffPage() {
         >
           Làm mới
         </AdminButton>
-        <AdminButton
+        {canCreateUsers && <AdminButton
           variant="primary"
           icon={Plus}
           onClick={openCreate}
         >
           Thêm nhân sự
-        </AdminButton>
+        </AdminButton>}
       </AdminPageHeader>
 
       {error && (
@@ -352,7 +363,7 @@ export default function ClinicStaffPage() {
             ) : (
               filtered.map((row) => {
                 const bName =
-                  row.branchAssignments?.[0]?.branch?.name || row.branchName || 'Chi nhánh chính'
+                  (['chain_manager', 'admin'].includes(String(row.role).toLowerCase()) ? 'Toàn hệ thống' : row.branchAssignments?.[0]?.branch?.name || row.branchName || 'Chưa phân công')
                 const specName = row.doctor?.specialties?.[0]?.specialty?.name || '—'
                 const avatar = row.avatarUrl || row.doctor?.avatarUrl
                 const roleKey = String(row.role || row.userType).toLowerCase()
@@ -415,7 +426,7 @@ export default function ClinicStaffPage() {
                     </td>
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
-                        {roleKey === 'doctor' && (
+                        {roleKey === 'doctor' && currentRole !== 'admin' && (
                           <AdminIconButton
                             icon={Calendar}
                             title="Lịch làm việc bác sĩ"
@@ -423,7 +434,7 @@ export default function ClinicStaffPage() {
                             onClick={() => navigate('/work-schedules', { state: { doctorId: row.id, doctorName: row.fullName } })}
                           />
                         )}
-                        <AdminIconButton
+                        {canUpdateUsers && <><AdminIconButton
                           icon={Edit2}
                           title="Sửa"
                           tone="emerald"
@@ -435,12 +446,13 @@ export default function ClinicStaffPage() {
                           tone={row.isBlocked ? 'emerald' : 'amber'}
                           onClick={() => void toggle(row)}
                         />
-                        <AdminIconButton
+                        </>}
+                        {canDeleteUsers && <AdminIconButton
                           icon={Trash2}
                           title="Xóa"
                           tone="rose"
                           onClick={() => void remove(row)}
-                        />
+                        />}
                       </div>
                     </td>
                   </tr>
@@ -511,9 +523,10 @@ export default function ClinicStaffPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <AdminSelect
               label="Vai trò hệ thống"
+              disabled={modal === 'edit' && !canManageRoles}
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
-              options={ROLES.slice(1)}
+              options={canManageRoles || modal === 'edit' ? ROLES.slice(1) : ROLES.slice(1).filter(([id]) => ['doctor', 'receptionist'].includes(id))}
             />
             <AdminInput
               label={modal === 'edit' ? 'Mật khẩu (để trống nếu giữ nguyên)' : 'Mật khẩu'}
@@ -528,6 +541,7 @@ export default function ClinicStaffPage() {
           </div>
 
           {/* Chọn cơ sở công tác / quản lý (Hỗ trợ đa chi nhánh) */}
+          {['admin', 'chain_manager'].includes(form.role) ? <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Vai trò này có phạm vi toàn hệ thống, không cần gán từng chi nhánh.</p> : (
           <div className="p-3 rounded border border-slate-200 bg-slate-50/60 space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
@@ -604,6 +618,7 @@ export default function ClinicStaffPage() {
             )}
           </div>
 
+          )}
           {/* Nhóm chuyên môn Bác sĩ (chỉ hiển thị khi vai trò là Bác sĩ) */}
           {form.role === 'doctor' && (
             <div className="pt-2 border-t border-slate-100 space-y-3">

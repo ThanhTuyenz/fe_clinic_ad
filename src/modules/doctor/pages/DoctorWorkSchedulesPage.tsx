@@ -29,6 +29,8 @@ import {
   ShiftDetailModal,
 } from '../components/schedules'
 import { AlertTriangle, CalendarOff, Copy, Plus } from 'lucide-react'
+import { usePermission } from '@/common/hooks/usePermission'
+import { AppPermission } from '@/common/constants/permissions.constant'
 import { AdminButton, AdminPageHeader } from '@/common/components/ui'
 
 export interface DoctorWorkSchedulesPageProps {
@@ -44,6 +46,10 @@ export default function DoctorWorkSchedulesPage({
   isDoctorRole = false,
   initialBranchId,
 }: DoctorWorkSchedulesPageProps = {}) {
+  const { hasPermission } = usePermission()
+  const canCreate = !readOnly && hasPermission(AppPermission.SCHEDULE_CREATE)
+  const canUpdate = !readOnly && hasPermission(AppPermission.SCHEDULE_UPDATE)
+  const canDelete = !readOnly && hasPermission(AppPermission.SCHEDULE_DELETE)
   const session = getStaffSession()
   const currentRole = staffRole(session?.user)
   const isDoctor = Boolean(isDoctorRole || currentRole === 'doctor')
@@ -398,13 +404,14 @@ export default function DoctorWorkSchedulesPage({
   }, [filteredSchedules])
 
   const openScheduleModal = (doctorId?: string, dateStr?: string) => {
+    if (!canCreate) return
     setSelectedDoctorId(doctorId || filterDoctor || '')
     setSelectedDate(dateStr || '')
     setScheduleModalOpen(true)
   }
 
   const handleCardClick = (sc: any) => {
-    if (isDoctor) {
+    if (isDoctor || !canUpdate) {
       setSelectedDetailShift(sc)
       setDetailModalOpen(true)
     } else {
@@ -413,6 +420,7 @@ export default function DoctorWorkSchedulesPage({
   }
 
   const openEdit = (row: any) => {
+    if (!canUpdate) return
     setSelected(row)
     setForm({
       doctorId: row.doctorId,
@@ -451,6 +459,7 @@ export default function DoctorWorkSchedulesPage({
   }
 
   const remove = async (row: any) => {
+    if (!canDelete) return
     const occupied = row.occupiedCount || 0
     const warningText =
       occupied > 0
@@ -468,6 +477,7 @@ export default function DoctorWorkSchedulesPage({
   }
 
   const toggleStatus = async (row: any) => {
+    if (!canUpdate) return
     try {
       await updateSchedule(row.id, { status: row.status === 'OPEN' ? 'CLOSED' : 'OPEN' })
       await loadData()
@@ -489,6 +499,7 @@ export default function DoctorWorkSchedulesPage({
             <AdminButton
               variant="outline"
               icon={Copy}
+              disabled={!canCreate}
               onClick={() => setCopyWeekModalOpen(true)}
               className="border-slate-200 text-slate-700 hover:bg-slate-50"
             >
@@ -498,6 +509,7 @@ export default function DoctorWorkSchedulesPage({
             <AdminButton
               variant="outline"
               icon={CalendarOff}
+              disabled={!canUpdate}
               onClick={() => setDoctorLeaveOpen(true)}
               className="border-slate-200 text-slate-700 hover:bg-slate-50"
             >
@@ -507,6 +519,7 @@ export default function DoctorWorkSchedulesPage({
             <AdminButton
               variant="primary"
               icon={Plus}
+              disabled={!canCreate}
               onClick={() => openScheduleModal()}
             >
               Phân ca làm việc
@@ -568,6 +581,9 @@ export default function DoctorWorkSchedulesPage({
           activeBranchName={activeBranchName}
           weekStats={weekStats}
           onCardClick={handleCardClick}
+          canCreate={canCreate}
+          canUpdate={canUpdate}
+          canDelete={canDelete}
           onOpenEdit={openEdit}
           onToggleStatus={toggleStatus}
           onRemove={remove}

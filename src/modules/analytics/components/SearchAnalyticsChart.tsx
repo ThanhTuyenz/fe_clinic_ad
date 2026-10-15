@@ -32,14 +32,6 @@ interface SearchAnalyticsChartProps {
   layout?: 'horizontal' | 'vertical'
 }
 
-const defaultChartData: KeywordSearchStat[] = [
-  { keyword: 'Mất ngủ', count: 7 },
-  { keyword: 'Đau đầu', count: 6 },
-  { keyword: 'Đau bụng', count: 3 },
-  { keyword: 'Bã', count: 2 },
-  { keyword: 'Xét nghiệm', count: 2 },
-]
-
 const chartConfig = {
   count: {
     label: 'Số lượt tìm kiếm',
@@ -48,7 +40,7 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export function SearchAnalyticsChart({
-  data = defaultChartData,
+  data = [],
   title = 'Top Từ khóa tìm kiếm',
   description = 'Tần suất truy vấn triệu chứng và dịch vụ từ bệnh nhân',
   className = '',

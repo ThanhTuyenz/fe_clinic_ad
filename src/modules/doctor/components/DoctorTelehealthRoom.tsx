@@ -124,16 +124,11 @@ export default function DoctorTelehealthRoom({
     if (!confirm("Bác sĩ có chắc chắn muốn kết thúc ca tư vấn trực tuyến này?")) return;
     setIsFinishing(true);
     try {
-      await fetch(`${serverUrl}/telehealth/room/${appointmentId}/end`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          endedByUserId: doctorId,
-        }),
-      });
-      endCall();
-      if (onClose) onClose();
+      const callEnded = await endCall();
+      if (!callEnded) {
+        throw new Error("Không thể lưu và thông báo kết thúc phòng tư vấn.");
+      }
+      onClose?.();
     } catch (err) {
       console.error("Lỗi kết thúc ca khám:", err);
     } finally {

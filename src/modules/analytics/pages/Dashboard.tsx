@@ -14,7 +14,8 @@ import { getStaffSession, isReceptionStaff, staffRole } from '@/modules/admin/ut
 import { UserPlus, Calendar, ArrowRight, RefreshCw, Users, QrCode } from 'lucide-react'
 
 const ROLE_LABEL: Record<string, string> = {
-  admin: 'Quản trị viên',
+  admin: 'Quản trị hệ thống',
+  chain_manager: 'Quản lý toàn chuỗi',
   branch_manager: 'Quản lý chi nhánh',
   receptionist: 'Tiếp đón',
   doctor: 'Bác sĩ',
@@ -233,9 +234,8 @@ export default function Dashboard() {
   const pendingActionTotal = showStaffExtras ? pendingFromActions(actions) : null
   const pendingToday = pendingActionTotal != null ? pendingActionTotal : Number(today?.pending) || 0
   const waitingToday = Number(today?.confirmed) || 0
-  const todayTotal = pendingActionTotal != null
-    ? pendingToday + (Number(today?.confirmed) || 0) + (Number(today?.examined) || 0) + (Number(today?.cancelled) || 0)
-    : Number(today?.total) || 0
+  // Use the API total so appointments marked NO_SHOW remain included.
+  const todayTotal = Number(today?.total) || 0
 
   if (isDoctor) {
     const doctorCards = [

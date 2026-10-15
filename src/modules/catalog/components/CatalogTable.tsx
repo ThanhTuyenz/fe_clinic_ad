@@ -28,6 +28,8 @@ interface CatalogTableProps {
   onDetail: (row: any) => void
   onEdit: (row: any) => void
   onRemove: (row: any) => void
+  canEdit?: boolean
+  canSyncVectors?: boolean
   canRemove?: boolean
   display: (key: string, value: any) => React.ReactNode
 }
@@ -57,6 +59,8 @@ export default function CatalogTable({
   onDetail,
   onEdit,
   onRemove,
+  canEdit = true,
+  canSyncVectors = true,
   canRemove = true,
   display,
 }: CatalogTableProps) {
@@ -136,7 +140,7 @@ export default function CatalogTable({
               Làm mới
             </button>
 
-            <button
+            {canSyncVectors && (<button
               type="button"
               disabled={syncingVectors}
               onClick={onSyncVectors}
@@ -144,7 +148,7 @@ export default function CatalogTable({
               title="Đồng bộ Vector Embedding cho toàn bộ gói khám vào Redis qua RabbitMQ"
             >
               {syncingVectors ? 'Đang gửi task…' : '⚡ Đồng bộ Vector AI'}
-            </button>
+            </button>)}
           </div>
         </div>
       ) : (
@@ -292,20 +296,20 @@ export default function CatalogTable({
                       >
                         Chi tiết
                       </button>
-                      <button
+                      {canEdit && (<button
                         type="button"
                         onClick={() => onEdit(row)}
                         className="mr-2 rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 cursor-pointer"
                       >
                         Sửa
-                      </button>
-                      <button
+                      </button>)}
+                      {canRemove && (<button
                         type="button"
                         onClick={() => onRemove(row)}
                         className="rounded border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:border-rose-300 cursor-pointer"
                       >
                         Ngừng dùng
-                      </button>
+                      </button>)}
                     </td>
                   </tr>
                 ))
@@ -403,13 +407,13 @@ export default function CatalogTable({
                       >
                         Chi tiết
                       </button>
-                      <button
+                      {canEdit && (<button
                         type="button"
                         onClick={() => onEdit(row)}
                         className="mr-1.5 rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 cursor-pointer"
                       >
                         Sửa
-                      </button>
+                      </button>)}
                       {canRemove && (
                         <button
                           type="button"

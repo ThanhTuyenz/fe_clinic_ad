@@ -57,7 +57,7 @@ type StaffUser = {
 }
 
 type RoleDef = {
-  id: 'admin' | 'branch_manager' | 'doctor' | 'receptionist'
+  id: 'admin' | 'chain_manager' | 'branch_manager' | 'doctor' | 'receptionist'
   label: string
   shortLabel: string
   scope: string
@@ -76,13 +76,29 @@ const SYSTEM_STAFF_ROLES: RoleDef[] = [
     scope: 'Toàn hệ thống chuỗi',
     icon: Shield,
     badgeTone: 'emerald',
-    summary: 'Toàn quyền quản trị hệ thống, phân quyền nhân sự và tài chính.',
-    responsibility: 'Quản lý toàn diện: danh mục, cơ sở chi nhánh, tài khoản nhân sự, phân quyền, cấu hình hệ thống và báo cáo tài chính cấp cao.',
+    summary: 'Quản trị kỹ thuật, tài khoản và phân quyền hệ thống.',
+    responsibility: 'Quản lý tài khoản, cấp quyền, cấu hình ứng dụng và giám sát lỗi hệ thống.',
     permissions: [
-      'Toàn quyền cấu hình chi nhánh & phòng khám',
+      'Cấu hình ứng dụng và bảo mật hệ thống',
       'Quản lý tài khoản & gán vai trò nhân sự',
-      'Xem toàn bộ báo cáo doanh thu & dòng tiền',
-      'Điều phối lịch làm việc & lịch hẹn toàn viện',
+      'Giám sát nhật ký và lỗi hệ thống',
+      'Quản lý bảo mật và quyền truy cập',
+    ],
+  },
+  {
+    id: 'chain_manager',
+    label: 'Quản lý toàn chuỗi',
+    shortLabel: 'Toàn chuỗi',
+    scope: 'Tất cả chi nhánh',
+    icon: Building2,
+    badgeTone: 'emerald',
+    summary: 'Điều hành nghiệp vụ và danh mục dùng chung trên toàn chuỗi.',
+    responsibility: 'Quản lý chi nhánh, chuyên khoa, gói khám, giá chuẩn, lịch khám và báo cáo toàn chuỗi. Tài khoản và phân quyền do Admin quản lý.',
+    permissions: [
+      'Quản lý chuyên khoa, nội dung và giá gói khám',
+      'Thiết lập hình thức đặt khám tại các chi nhánh',
+      'Điều phối hoạt động tất cả chi nhánh',
+      'Theo dõi lịch khám, nhân sự và doanh thu toàn chuỗi',
     ],
   },
   {
@@ -103,18 +119,17 @@ const SYSTEM_STAFF_ROLES: RoleDef[] = [
   },
   {
     id: 'doctor',
-    label: 'Bác sĩ chuyên môn',
+    label: 'Bác sĩ',
     shortLabel: 'Bác sĩ',
-    scope: 'Phòng khám & Kê đơn',
+    scope: 'Lịch khám & Tư vấn trực tuyến',
     icon: Stethoscope,
     badgeTone: 'purple',
-    summary: 'Khám chữa bệnh, chẩn đoán ICD-10 và xuất đơn thuốc điện tử.',
-    responsibility: 'Tiếp nhận hàng đợi bệnh nhân tại phòng khám, ghi nhận triệu chứng, chẩn đoán mã ICD-10, chỉ định cận lâm sàng, xuất đơn thuốc điện tử.',
+    summary: 'Theo dõi lịch khám, hàng đợi bệnh nhân và thực hiện tư vấn trực tuyến.',
+    responsibility: 'Theo dõi bệnh nhân chờ khám, tư vấn trực tuyến, ghi nhận kết quả tư vấn và cập nhật trạng thái lịch hẹn.',
     permissions: [
       'Gọi số bệnh nhân & quản lý hàng đợi phòng khám',
-      'Chẩn đoán bệnh theo mã quốc tế ICD-10',
-      'Chỉ định cận lâm sàng & xét nghiệm',
-      'Kê đơn thuốc điện tử và hoàn thành ca khám',
+      'Thực hiện tư vấn trực tuyến',
+      'Ghi nhận kết quả tư vấn và hoàn tất lịch hẹn',
       'Xem lịch làm việc cá nhân & lịch sử ca khám',
     ],
   },
@@ -148,6 +163,10 @@ const ROLE_BADGE_MAP: Record<string, { badge: string; iconColor: string }> = {
   admin: {
     badge: 'bg-slate-100 text-slate-700 border-slate-200/90',
     iconColor: 'text-slate-500',
+  },
+  chain_manager: {
+    badge: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    iconColor: 'text-emerald-600',
   },
   branch_manager: {
     badge: 'bg-slate-100 text-slate-700 border-slate-200/90',
@@ -325,7 +344,7 @@ export default function RolesPermissionsPage() {
                 const branchName =
                   row.branchAssignments?.find((b) => b.isPrimary)?.branch?.name ||
                   row.branchAssignments?.[0]?.branch?.name ||
-                  (cur === 'admin' ? 'Toàn chuỗi phòng khám' : 'VitaCare Clinic')
+                  (['admin', 'chain_manager'].includes(cur) ? 'Toàn chuỗi phòng khám' : 'VitaCare Clinic')
 
                 // Lấy thông tin học vị/chuyên khoa nếu là bác sĩ
                 const docRank = row.doctor?.academicRank

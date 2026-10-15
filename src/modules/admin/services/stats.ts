@@ -22,6 +22,16 @@ export async function fetchDashboardStats({
   }
 }
 
+export async function fetchBranchComparison({ timeFilter = 'month', startDate, endDate }: {
+  timeFilter?: string; startDate?: string; endDate?: string
+} = {}) {
+  try {
+    return await apiRequest({ method: 'GET', url: '/stats/branch-comparison', params: { timeFilter, startDate, endDate } })
+  } catch (error) {
+    throw new Error(apiErrorMessage(error, 'Không tải được dữ liệu so sánh chi nhánh.'))
+  }
+}
+
 export async function fetchAnalyticsData({
   token,
   timeFilter = 'month',

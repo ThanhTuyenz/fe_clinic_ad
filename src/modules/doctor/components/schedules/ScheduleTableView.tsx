@@ -16,6 +16,9 @@ import { SCHEDULE_TABLE_COLUMNS } from './scheduleUtils'
 interface ScheduleTableViewProps {
   filteredSchedules: any[]
   loading: boolean
+  canCreate?: boolean
+  canUpdate?: boolean
+  canDelete?: boolean
   isDoctor: boolean
   onCardClick: (shift: any) => void
   onOpenEdit: (shift: any) => void
@@ -27,6 +30,9 @@ export default function ScheduleTableView({
   filteredSchedules,
   loading,
   isDoctor,
+  canCreate = true,
+  canUpdate = true,
+  canDelete = true,
   onCardClick,
   onOpenEdit,
   onToggleStatus,
@@ -94,7 +100,8 @@ export default function ScheduleTableView({
                       </AdminButton>
                     ) : (
                       <div className="flex items-center justify-end gap-1.5">
-                        <AdminButton variant="secondary" size="xs" onClick={() => onOpenEdit(row)}>
+                        <AdminButton variant="secondary" size="xs" disabled={!canUpdate}
+                                onClick={() => onOpenEdit(row)}>
                           Sửa
                         </AdminButton>
                         <AdminButton

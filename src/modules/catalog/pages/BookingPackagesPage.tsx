@@ -1,10 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { useAuth } from '@/common/hooks/useAuth'
+import BranchPackagesPage from './BranchPackagesPage'
 import SystemCatalogCrudPage from './SystemCatalogCrudPage'
 
 export default function BookingPackagesPage() {
+  const { role } = useAuth()
   const [tab, setTab] = useState<'branch-specialties' | 'room-specialties' | 'service-packages'>('service-packages')
+  if (role === 'branch_manager') return <BranchPackagesPage />
   return (
     <div>
       <div className="mb-5 flex flex-wrap gap-2 border-b border-slate-200">

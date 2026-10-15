@@ -66,7 +66,7 @@ export const CONFIG: Record<string, Config> = {
     ],
   },
   'branch-specialties': {
-    title: 'Chuyên khoa theo cơ sở',
+    title: 'Chuyên khoa tại chi nhánh',
     singular: 'chuyên khoa tại cơ sở',
     fields: [
       ['branchId', 'Cơ sở y tế', 'select', 'branches'],
@@ -75,6 +75,7 @@ export const CONFIG: Record<string, Config> = {
     columns: [
       ['branch.name', 'Cơ sở'],
       ['specialty.name', 'Chuyên khoa'],
+      ['isActive', 'Trạng thái'],
     ],
   },
   'room-specialties': {

@@ -19,6 +19,9 @@ interface ScheduleMonthViewProps {
   currentMonthDate: Date
   schedules: any[]
   schedulesMap: Record<string, any[]>
+  canCreate?: boolean
+  canUpdate?: boolean
+  canDelete?: boolean
   isDoctor: boolean
   targetDoctorId: string
   filterDoctor: string
@@ -44,6 +47,9 @@ export default function ScheduleMonthView({
   schedules,
   schedulesMap,
   isDoctor,
+  canCreate = true,
+  canUpdate = true,
+  canDelete = true,
   targetDoctorId,
   filterDoctor,
   activeBranchName,
@@ -171,6 +177,7 @@ export default function ScheduleMonthView({
                               <button
                                 type="button"
                                 title="Sửa ca trực"
+                                disabled={!canUpdate}
                                 onClick={() => onOpenEdit(sc)}
                                 className="p-0.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded cursor-pointer"
                               >
@@ -179,6 +186,7 @@ export default function ScheduleMonthView({
                               <button
                                 type="button"
                                 title={isOpen ? 'Khóa' : 'Mở'}
+                                disabled={!canUpdate}
                                 onClick={() => onToggleStatus(sc)}
                                 className="p-0.5 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded cursor-pointer"
                               >
@@ -187,6 +195,7 @@ export default function ScheduleMonthView({
                               <button
                                 type="button"
                                 title="Xóa"
+                                disabled={!canDelete}
                                 onClick={() => onRemove(sc)}
                                 className="p-0.5 text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
                               >

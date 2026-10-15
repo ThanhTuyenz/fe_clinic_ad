@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, Zap } from 'lucide-react'
+import { usePermission } from '@/common/hooks/usePermission'
+import { AppPermission } from '@/common/constants/permissions.constant'
 import { useAuth } from '@/common/hooks/useAuth'
 import {
   CONFIG,
@@ -34,8 +36,11 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   const cfg = CONFIG[resource]
   const { role } = useAuth()
   const isBranchManager = role === 'branch_manager'
-  const canCreate = !(isBranchManager && resource === 'branches')
-  const canRemove = !(isBranchManager && resource === 'branches')
+  const { hasPermission } = usePermission()
+  const prefix = ({ branches: 'branch', rooms: 'room', specialties: 'specialty', 'service-packages': 'service', 'booking-methods': 'booking_method', 'branch-specialties': 'specialty', 'room-specialties': 'room' } as Record<string, string>)[resource]
+  const canCreate = hasPermission(prefix + ':create') && !(isBranchManager && resource === 'branches')
+  const canEdit = hasPermission(prefix + ':update')
+  const canRemove = hasPermission(prefix + ':delete') && !(isBranchManager && resource === 'branches')
 
   const [rows, setRows] = useState<any[]>([])
   const [options, setOptions] = useState<Record<string, any[]>>({})
@@ -294,6 +299,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   }, [options])
 
   const openCreate = () => {
+    if (!canCreate) return
     setSelected(null)
     const autoCode = ['service-packages', 'services', 'branches', 'rooms', 'medicines'].includes(resource)
       ? generateCode(resource)
@@ -323,6 +329,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   }
 
   const openEdit = (row: any) => {
+    if (!canEdit) return
     setSelected(row)
     const branchList = options.branches || []
     const specialtyBranchIds: string[] = resource === 'specialties'
@@ -371,6 +378,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (modal === 'create' ? !canCreate : !canEdit) return
     const payload: any = { ...form }
     if (resource === 'specialties') {
       const bList = options.branches || []
@@ -438,6 +446,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   }
 
   async function remove(row: any) {
+    if (!canRemove) return
     if (!confirm(`Ngừng sử dụng ${cfg.singular} “${row.name}”?`)) return
     try {
       await deleteCatalog(resource, row.id)
@@ -511,17 +520,16 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
           <p className="mt-1 text-sm text-slate-500">Quản lý {cfg.singular} và trạng thái áp dụng.</p>
         </div>
         <div className="flex items-center gap-2">
-          {resource === 'branch-specialties' && (
+          {canEdit && resource === 'branch-specialties' && (
             <button
               type="button"
               onClick={openBatchBranchModal}
               className="inline-flex items-center gap-1.5 rounded border border-emerald-600 bg-emerald-50 px-3.5 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 transition cursor-pointer"
             >
-              <Zap className="w-4 h-4 text-emerald-700" />
-              Gán chuyên khoa hàng loạt
+              Thêm chuyên khoa
             </button>
           )}
-          {resource === 'room-specialties' && (
+          {canEdit && resource === 'room-specialties' && (
             <button
               type="button"
               onClick={openBatchRoomModal}
@@ -591,6 +599,8 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         onDetail={(row) => setDetailItem(row)}
         onEdit={(row) => openEdit(row)}
         onRemove={(row) => void remove(row)}
+        canEdit={canEdit}
+        canSyncVectors={canEdit && role === 'chain_manager'}
         canRemove={canRemove}
         display={display}
       />
@@ -623,6 +633,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       />
 
       <CatalogDetailModal
+        canEdit={canEdit}
         detailItem={detailItem}
         cfg={cfg}
         resource={resource}

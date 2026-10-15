@@ -360,16 +360,27 @@ export function useWebRTC({
     });
   }, [appointmentId, userId, userName, userRole]);
 
-  const endCall = useCallback((extraData?: { diagnosis?: string; prescriptionNotes?: string }) => {
-    if (socketRef.current) {
-      socketRef.current.emit("telehealth:end-call", {
-        appointmentId,
-        endedByRole: userRole,
-        endedByUserId: userId,
-        ...extraData,
-      });
-    }
-  }, [appointmentId, userRole, userId]);
+  const endCall = useCallback(
+    (extraData?: { diagnosis?: string; prescriptionNotes?: string }) =>
+      new Promise<boolean>((resolve) => {
+        if (!socketRef.current) {
+          resolve(false);
+          return;
+        }
+
+        socketRef.current.emit(
+          "telehealth:end-call",
+          {
+            appointmentId,
+            endedByRole: userRole,
+            endedByUserId: userId,
+            ...extraData,
+          },
+          (response: { success?: boolean }) => resolve(response?.success === true),
+        );
+      }),
+    [appointmentId, userRole, userId],
+  );
 
   return {
     localStream,

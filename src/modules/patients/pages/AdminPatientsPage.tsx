@@ -20,6 +20,8 @@ import {
   AdminSelect,
 } from '@/common/components/ui'
 import { apiClient, apiErrorMessage } from '@/lib/api-client'
+import { usePermission } from '@/common/hooks/usePermission'
+import { AppPermission } from '@/common/constants/permissions.constant'
 import { createUser, deleteUser, listUsers, updateUser, listPatientHistoryReception, listPatientsReception } from '../services/patientService'
 import { formatDateVi, patientListDisplayName } from '@/modules/reception'
 
@@ -62,6 +64,10 @@ const TABLE_COLUMNS = [
 ]
 
 export default function AdminPatientsPage() {
+  const { hasPermission } = usePermission()
+  const canCreate = hasPermission(AppPermission.USER_CREATE)
+  const canUpdate = hasPermission(AppPermission.USER_UPDATE)
+  const canDelete = hasPermission(AppPermission.USER_DELETE)
   const [rows, setRows] = useState<PatientAccount[]>([])
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'blocked'>('all')
@@ -301,6 +307,7 @@ export default function AdminPatientsPage() {
         <AdminButton
           variant="primary"
           icon={Plus}
+          disabled={!canCreate}
           onClick={openCreateModal}
         >
           Thêm bệnh nhân
@@ -396,17 +403,19 @@ export default function AdminPatientsPage() {
                           icon={Edit2}
                           title="Sửa"
                           tone="emerald"
+                          disabled={!canUpdate}
                           onClick={() => openEditModal(row)}
                         />
                         <AdminIconButton
                           icon={row.isBlocked ? Unlock : Lock}
                           title={row.isBlocked ? 'Mở khóa' : 'Khóa'}
                           tone={row.isBlocked ? 'emerald' : 'amber'}
-                          disabled={savingId === row.id}
+                          disabled={!canUpdate || savingId === row.id}
                           onClick={() => void toggleBlocked(row)}
                         />
                         <AdminIconButton
                           icon={Trash2}
+                          disabled={!canDelete}
                           title="Xóa"
                           tone="rose"
                           onClick={() => {

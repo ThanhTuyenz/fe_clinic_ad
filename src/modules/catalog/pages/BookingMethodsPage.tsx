@@ -1,5 +1,7 @@
 'use client'
 
+import { usePermission } from '@/common/hooks/usePermission'
+import { AppPermission } from '@/common/constants/permissions.constant'
 import { useEffect, useMemo, useState } from 'react'
 import { apiErrorMessage } from '@/lib/api-client'
 import {
@@ -41,6 +43,10 @@ const EMPTY = {
 }
 
 export default function BookingMethodsPage() {
+  const { hasPermission } = usePermission()
+  const canCreate = hasPermission(AppPermission.BOOKING_METHOD_CREATE)
+  const canUpdate = hasPermission(AppPermission.BOOKING_METHOD_UPDATE)
+  const canDelete = hasPermission(AppPermission.BOOKING_METHOD_DELETE)
   const [branches, setBranches] = useState<Branch[]>([])
   const [methods, setMethods] = useState<BookingMethod[]>([])
   const [branchId, setBranchId] = useState('')
@@ -213,6 +219,7 @@ export default function BookingMethodsPage() {
             variant="primary"
             icon={Plus}
             disabled={!branchId}
+            disabled={!canCreate}
             onClick={openCreate}
           >
             Thêm hình thức
@@ -258,6 +265,7 @@ export default function BookingMethodsPage() {
                 <button
                   type="button"
                   disabled={saving === row.id}
+                  disabled={!canUpdate}
                   onClick={() => void toggle(row)}
                   className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${
                     row.isEnabled ? 'bg-emerald-600' : 'bg-slate-300'
@@ -293,6 +301,7 @@ export default function BookingMethodsPage() {
                     variant="secondary"
                     size="xs"
                     icon={Edit2}
+                    disabled={!canUpdate}
                     onClick={() => openEdit(row)}
                   >
                     Sửa
@@ -304,6 +313,7 @@ export default function BookingMethodsPage() {
                       icon={Trash2}
                       className="text-rose-600 border-rose-200 hover:bg-rose-50"
                       disabled={saving === row.id}
+                      disabled={!canDelete}
                       onClick={() => void remove(row)}
                     >
                       Tắt

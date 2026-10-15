@@ -15,6 +15,7 @@ export const AuthContext = createContext(null)
 
 const STAFF_ROLES = [
   'admin',
+  'chain_manager',
   'branch_manager',
   'doctor',
   'receptionist',
