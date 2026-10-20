@@ -111,13 +111,6 @@ export function doctorDisplayName(d: any): string {
   return `${last} ${first}`.trim() || String(d.email || '').trim() || '—'
 }
 
-export function clinicRoomLabel(roomId: string, rooms: any[]): string {
-  const id = String(roomId || '').trim()
-  if (!id) return '—'
-  const hit = (rooms || []).find((r: any) => String(r.id || r.roomID) === id)
-  return hit?.name ? String(hit.name).trim() : id
-}
-
 export function mergeReceptionDetail(cached: any, row: any) {
   if (!row) return cached ?? null
   if (!cached) return row
@@ -182,13 +175,12 @@ export function formatExamTimeLine(start: any, end?: string): string {
   return e && e !== s ? `${s} – ${e}` : s
 }
 
-export function buildVisitSlipView(detail: any, rooms: any[], overrides: any = {}) {
+export function buildVisitSlipView(detail: any, overrides: any = {}) {
   if (!detail) return null
-  const roomId = String(overrides.clinicRoom ?? detail.clinicRoom ?? '').trim()
   let q = overrides.visitQueueNumber ?? detail.visitQueueNumber
   if (q === '' || q == null) q = null
   const patientName = patientListDisplayName(detail.patient)
-  const clinicRoom = roomId ? clinicRoomLabel(roomId, rooms) : '—'
+  const clinicRoom = String(detail.clinicRoomName || '').trim() || '—'
   const doctorName = doctorDisplayName(detail.doctor)
   const examTime = formatExamTimeLine(detail.startTime, detail.endTime)
   const examDate = formatDateVi(detail.appointmentDate)

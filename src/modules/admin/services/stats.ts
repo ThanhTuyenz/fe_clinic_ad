@@ -137,7 +137,7 @@ export async function fetchReceptionSummary({
     if (date) params.date = date
     if (branchId && branchId !== 'all') params.branchId = branchId
 
-    return await apiRequest({ method: 'GET', url: '/appointments/reception-summary', headers, params })
+    return await apiRequest({ method: 'GET', url: '/stats/reception-summary', headers, params })
   } catch (error) {
     throw new Error(apiErrorMessage(error, 'Không tải được báo cáo ca trực tiếp đón.'))
   }

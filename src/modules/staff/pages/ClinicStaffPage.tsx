@@ -190,6 +190,10 @@ export default function ClinicStaffPage() {
   }
 
   const toggleBranch = (bId: string) => {
+    if (form.role === 'doctor') {
+      setForm((prev: any) => ({ ...prev, branchIds: [bId], primaryBranchId: bId, branchId: bId, roomId: '' }))
+      return
+    }
     const current: string[] = form.branchIds || []
     let next: string[] = []
     if (current.includes(bId)) {
@@ -216,6 +220,7 @@ export default function ClinicStaffPage() {
       return setError('Mật khẩu phải có ít nhất 6 ký tự.')
     if (!['admin', 'chain_manager'].includes(form.role) && (!form.branchIds || form.branchIds.length === 0))
       return setError('Vui lòng chọn ít nhất một cơ sở làm việc / quản lý.')
+    if (form.role === 'doctor' && form.branchIds.length !== 1) return setError('Mỗi bác sĩ phải làm việc tại đúng một chi nhánh.')
 
     setSaving(true)
     setError('')
@@ -525,7 +530,7 @@ export default function ClinicStaffPage() {
               label="Vai trò hệ thống"
               disabled={modal === 'edit' && !canManageRoles}
               value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              onChange={(e) => setForm({ ...form, role: e.target.value, ...(e.target.value === 'doctor' ? { branchIds: form.primaryBranchId ? [form.primaryBranchId] : [], roomId: '' } : {}) })}
               options={canManageRoles || modal === 'edit' ? ROLES.slice(1) : ROLES.slice(1).filter(([id]) => ['doctor', 'receptionist'].includes(id))}
             />
             <AdminInput
@@ -540,7 +545,7 @@ export default function ClinicStaffPage() {
             />
           </div>
 
-          {/* Chọn cơ sở công tác / quản lý (Hỗ trợ đa chi nhánh) */}
+          {/* Bác sĩ làm việc tại một chi nhánh; các vai trò khác giữ phạm vi phân công. */}
           {['admin', 'chain_manager'].includes(form.role) ? <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Vai trò này có phạm vi toàn hệ thống, không cần gán từng chi nhánh.</p> : (
           <div className="p-3 rounded border border-slate-200 bg-slate-50/60 space-y-2">
             <div className="flex items-center justify-between">
@@ -580,7 +585,8 @@ export default function ClinicStaffPage() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <input
-                        type="checkbox"
+                        type={form.role === 'doctor' ? 'radio' : 'checkbox'}
+                        name={form.role === 'doctor' ? 'doctor-branch' : undefined}
                         checked={isChecked}
                         onChange={() => toggleBranch(b.id)}
                         className="w-4 h-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500 cursor-pointer"
@@ -590,7 +596,7 @@ export default function ClinicStaffPage() {
                       </span>
                     </label>
 
-                    {isChecked && (
+                    {isChecked && form.role !== 'doctor' && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -611,7 +617,8 @@ export default function ClinicStaffPage() {
                 )
               })}
             </div>
-            {form.branchIds?.length > 1 && (
+            {form.role === 'doctor' && <p className="text-xs text-slate-500">Mỗi bác sĩ chỉ làm việc và nhận lịch khám tại một chi nhánh.</p>}
+            {form.role !== 'doctor' && form.branchIds?.length > 1 && (
               <p className="text-[11px] text-slate-500 italic mt-1">
                 * Bấm nút <strong>&quot;Đặt làm chính&quot;</strong> để chọn cơ sở mặc định ưu tiên phân ca và đón tiếp.
               </p>

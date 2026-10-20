@@ -31,7 +31,6 @@ import {
 import {
   listDoctorAppointments,
   finishExamAppointment,
-  updateAppointmentStatus,
 } from '@/modules/admin/services/appointments'
 import DoctorWorkSchedulesPage from './DoctorWorkSchedulesPage'
 import DoctorAppHeader from '../components/DoctorAppHeader'
@@ -195,11 +194,7 @@ export default function DoctorHome() {
     }
     setFinishingId(item.id)
     try {
-      try {
-        await finishExamAppointment({ appointmentId: item.id })
-      } catch {
-        await updateAppointmentStatus({ appointmentId: item.id, status: 'completed' })
-      }
+      await finishExamAppointment({ appointmentId: item.id })
       if (detailAppt?.id === item.id) {
         setDetailAppt(null)
       }

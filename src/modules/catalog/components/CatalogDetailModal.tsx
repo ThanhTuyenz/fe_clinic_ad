@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Config, SESSION_LABELS, at, formatDaysOfWeek, money } from '../types/catalog.types'
+import { Config, formatPackageReception, at, money } from '../types/catalog.types'
 
 interface CatalogDetailModalProps {
   canEdit?: boolean
@@ -99,17 +99,9 @@ export default function CatalogDetailModal({
 
               {/* Operational Details */}
               <div className="space-y-3 text-xs pt-1">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <span className="font-semibold text-slate-700 block mb-1">Ngày khám trong tuần</span>
-                    <span className="text-slate-600">{formatDaysOfWeek(detailItem.activeDaysOfWeek)}</span>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-700 block mb-1">Ca trực tiếp nhận</span>
-                    <span className="text-slate-600">
-                      {SESSION_LABELS[detailItem.sessionType || 'ALL_DAY'] || 'Cả ngày & Ngoài giờ'}
-                    </span>
-                  </div>
+                <div>
+                  <span className="font-semibold text-slate-700 block mb-1">Lịch tiếp nhận tại chi nhánh</span>
+                  <p className="text-slate-600 leading-relaxed">{formatPackageReception(detailItem)}</p>
                 </div>
 
                 {(() => {
@@ -119,14 +111,6 @@ export default function CatalogDetailModal({
                         (l: any) => l.branchBookingMethod?.branch?.name
                       ) || []),
                       detailItem.branchBookingMethod?.branch?.name,
-                    ].filter(Boolean)),
-                  ] as string[]
-                  const methodNames: string[] = [
-                    ...new Set([
-                      ...(detailItem.branchBookingMethods?.map(
-                        (l: any) => l.branchBookingMethod?.bookingMethod?.name
-                      ) || []),
-                      detailItem.branchBookingMethod?.bookingMethod?.name,
                     ].filter(Boolean)),
                   ] as string[]
                   return (
@@ -151,25 +135,6 @@ export default function CatalogDetailModal({
                         </div>
                       </div>
 
-                      <div className="border-t border-slate-100 pt-3">
-                        <span className="font-semibold text-slate-700 block mb-1.5">
-                          Hình thức đặt khám áp dụng ({methodNames.length})
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {methodNames.length > 0 ? (
-                            methodNames.map((name) => (
-                              <span
-                                key={name}
-                                className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
-                              >
-                                {name}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
-                        </div>
-                      </div>
                     </>
                   )
                 })()}

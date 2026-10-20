@@ -6,6 +6,6 @@ export async function recordAppointmentPayment({ token, appointmentId, method, a
   const body = { method }
   if (amount != null) body.amount = amount
   if (note != null) body.note = String(note || '')
-  try { return await apiRequest({ method: 'POST', url: `/appointments/${encodeURIComponent(id)}/payment`, data: body }) }
+  try { return await apiRequest({ method: 'POST', url: `/payments/appointments/${encodeURIComponent(id)}/counter`, data: body }) }
   catch (error) { throw new Error(apiErrorMessage(error, 'Không ghi nhận được thanh toán.')) }
 }

@@ -10,6 +10,7 @@ interface PackageSymptomsFieldProps {
   setSymptomInput: (val: string) => void
   aiSuggestedSymptoms: string[]
   setAiSuggestedSymptoms: React.Dispatch<React.SetStateAction<string[]>>
+  aiSuggestionFeedback?: { message: string; isError: boolean } | null
   loadingAiSymptoms: boolean
   onAiSuggest: () => void
   onAddSymptom: (text: string) => void
@@ -22,6 +23,7 @@ export default function PackageSymptomsField({
   symptomInput,
   setSymptomInput,
   aiSuggestedSymptoms,
+  aiSuggestionFeedback,
   loadingAiSymptoms,
   onAiSuggest,
   onAddSymptom,
@@ -36,7 +38,7 @@ export default function PackageSymptomsField({
             Triệu chứng lâm sàng liên quan
           </span>
           <p className="text-[11px] text-slate-400 font-normal mt-0.5">
-            Nhập triệu chứng rồi nhấn <span className="font-medium text-slate-600">Enter</span> hoặc bấm Gợi ý triệu chứng.
+            Nhập từng triệu chứng rồi nhấn <span className="font-medium text-slate-600">Enter</span> để thêm.
           </p>
         </div>
 
@@ -74,11 +76,14 @@ export default function PackageSymptomsField({
           <div className="flex-1 min-w-[240px] flex items-center gap-1.5">
             <input
               type="text"
+              aria-label="Nhập triệu chứng liên quan"
               value={symptomInput}
               onChange={(e) => setSymptomInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ',') {
+                if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return
+                if (e.key === 'Enter') {
                   e.preventDefault()
+                  e.stopPropagation()
                   onAddSymptom(symptomInput)
                 } else if (e.key === 'Backspace' && !symptomInput && (form.symptomTags || []).length > 0) {
                   const current = form.symptomTags || []
@@ -88,7 +93,7 @@ export default function PackageSymptomsField({
               placeholder={
                 (form.symptomTags || []).length > 0
                   ? 'Thêm triệu chứng khác (nhấn Enter)...'
-                  : 'Nhập triệu chứng (ví dụ: mắc ói, đau đầu, tức ngực...)'
+                  : 'Nhập một triệu chứng, ví dụ: đau đầu'
               }
               className="flex-1 border-none bg-transparent px-1.5 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
             />
@@ -104,6 +109,8 @@ export default function PackageSymptomsField({
           </div>
         </div>
       </div>
+
+      {aiSuggestionFeedback && <p role={aiSuggestionFeedback.isError ? 'alert' : 'status'} className={`text-xs ${aiSuggestionFeedback.isError ? 'text-rose-700' : 'text-slate-500'}`}>{aiSuggestionFeedback.message}</p>}
 
       {/* Khay hiển thị gợi ý */}
       {aiSuggestedSymptoms.length > 0 && (

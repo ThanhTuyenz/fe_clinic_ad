@@ -27,6 +27,7 @@ import {
 } from '../services/appointmentsService'
 import { listCatalog } from '@/modules/catalog'
 import { listDoctors } from '@/modules/admin/services/doctors'
+import { listSpecialties, listSpecialtyServices } from '@/modules/admin/services/specialties'
 import { appointmentSourceLabel } from '@/modules/admin/utils/appointmentSource'
 import {
   doctorDisplayName,
@@ -86,11 +87,17 @@ export default function AdminAppointmentsPage() {
     patientPhoneOrEmail: '',
     patientName: '',
     branchId: '',
+    specialtyId: '',
+    servicePackageId: '',
+    scheduleSlotId: '',
     doctorId: '',
     appointmentDate: today,
     startTime: '',
     note: '',
   })
+  const [createSpecialties, setCreateSpecialties] = useState<any[]>([])
+  const [createServices, setCreateServices] = useState<any[]>([])
+  const [createServicesLoading, setCreateServicesLoading] = useState(false)
   const [createSlots, setCreateSlots] = useState<any[]>([])
   const [createSlotsLoading, setCreateSlotsLoading] = useState(false)
 
@@ -107,7 +114,9 @@ export default function AdminAppointmentsPage() {
     Promise.all([
       listCatalog('branches').catch(() => []),
       listDoctors().catch(() => []),
-    ]).then(([bRows, dRows]) => {
+      listSpecialties().catch(() => []),
+    ]).then(([bRows, dRows, specialties]) => {
+      setCreateSpecialties(specialties || [])
       setBranches(bRows || [])
       const byId = new Map<string, any>()
       ;(dRows || []).forEach((d: any) => {
@@ -136,26 +145,45 @@ export default function AdminAppointmentsPage() {
   }, [load])
 
   useEffect(() => {
-    if (activeModal !== 'create' || !createForm.doctorId || !createForm.appointmentDate) {
-      setCreateSlots([])
-      return
+    if (activeModal !== 'create' || !createForm.specialtyId) {
+      setCreateServices([]);
+      return;
     }
-    let cancel = false
-    setCreateSlotsLoading(true)
-    getAvailability({ doctorId: createForm.doctorId, date: createForm.appointmentDate })
+    let cancelled = false;
+    setCreateServices([]);
+    setCreateServicesLoading(true);
+    listSpecialtyServices(createForm.specialtyId, createForm.branchId || undefined)
+      .then(rows => {
+        if (cancelled) return;
+        setCreateServices(rows.filter((service: any) => service.bookingMethod?.code === 'SPECIALTY_EXAM'));
+      })
+      .catch((error: any) => { if (!cancelled) setModalError(error.message || 'Không tải được dịch vụ chuyên khoa.'); })
+      .finally(() => { if (!cancelled) setCreateServicesLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeModal, createForm.specialtyId, createForm.branchId]);
+
+  useEffect(() => {
+    if (activeModal !== 'create' || !createForm.specialtyId || !createForm.servicePackageId || !createForm.appointmentDate) {
+      setCreateSlots([]);
+      setCreateSlotsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setCreateSlots([]);
+    setCreateSlotsLoading(true);
+    getAvailability({ date: createForm.appointmentDate, specialtyId: createForm.specialtyId, servicePackageId: createForm.servicePackageId, branchId: createForm.branchId || undefined })
       .then((res: any) => {
-        if (!cancel) setCreateSlots(Array.isArray(res) ? res : res?.slots || [])
+        if (cancelled) return;
+        const slots = Array.isArray(res?.slots) ? res.slots : [];
+        setCreateSlots(slots);
+        setCreateForm(current => slots.some((slot: any) => slot.id === current.scheduleSlotId) ? current : { ...current, doctorId: '', scheduleSlotId: '' });
       })
-      .catch(() => {
-        if (!cancel) setCreateSlots([])
+      .catch((error: any) => {
+        if (!cancelled) setModalError(error.message || 'Không lấy được khung giờ.');
       })
-      .finally(() => {
-        if (!cancel) setCreateSlotsLoading(false)
-      })
-    return () => {
-      cancel = true
-    }
-  }, [activeModal, createForm.doctorId, createForm.appointmentDate])
+      .finally(() => { if (!cancelled) setCreateSlotsLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeModal, createForm.specialtyId, createForm.servicePackageId, createForm.appointmentDate, createForm.branchId]);
 
   useEffect(() => {
     if (activeModal !== 'reschedule' || !rescheduleDoctorId || !rescheduleDate) {
@@ -203,7 +231,7 @@ export default function AdminAppointmentsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!createForm.patientPhoneOrEmail.trim() || !createForm.doctorId || !createForm.startTime) {
+    if (!createForm.patientPhoneOrEmail.trim() || !createForm.specialtyId || !createForm.servicePackageId || !createForm.doctorId || !createForm.startTime || !createForm.scheduleSlotId || createSlotsLoading) {
       return setModalError('Vui lòng điền đủ thông tin bắt buộc.')
     }
     setModalLoading(true)
@@ -212,7 +240,11 @@ export default function AdminAppointmentsPage() {
       await createAppointmentReception({
         patientEmailOrPhone: createForm.patientPhoneOrEmail.trim(),
         patient: createForm.patientName.trim() ? { fullName: createForm.patientName.trim() } : null,
+        specialtyId: createForm.specialtyId,
+        servicePackageId: createForm.servicePackageId,
         doctorId: createForm.doctorId,
+        scheduleSlotId: createForm.scheduleSlotId,
+        branchId: createSlots.find(slot => slot.id === createForm.scheduleSlotId)?.branchId,
         appointmentDate: createForm.appointmentDate,
         startTime: createForm.startTime,
         note: createForm.note.trim() || undefined,
@@ -323,8 +355,11 @@ export default function AdminAppointmentsPage() {
             setCreateForm({
               patientPhoneOrEmail: '',
               patientName: '',
-              branchId: branches[0]?.id || '',
-              doctorId: doctors[0]?.id || '',
+              branchId: '',
+              specialtyId: '',
+              servicePackageId: '',
+              scheduleSlotId: '',
+              doctorId: '',
               appointmentDate: today,
               startTime: '',
               note: '',
@@ -640,26 +675,19 @@ export default function AdminAppointmentsPage() {
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <AdminSelect
-              label="Bác sĩ khám"
-              required
-              value={createForm.doctorId}
-              onChange={(e) =>
-                setCreateForm({ ...createForm, doctorId: e.target.value, startTime: '' })
-              }
-              placeholder="-- Chọn bác sĩ --"
-              options={doctors.map((d) => ({ value: d.id, label: doctorDisplayName(d) }))}
-            />
-            <AdminInput
-              label="Ngày khám"
-              type="date"
-              required
-              value={createForm.appointmentDate}
-              onChange={(e) =>
-                setCreateForm({ ...createForm, appointmentDate: e.target.value, startTime: '' })
-              }
-            />
+            <AdminSelect label="Cơ sở khám" value={createForm.branchId} placeholder="Cơ sở được phân công"
+              onChange={e => setCreateForm({ ...createForm, branchId: e.target.value, servicePackageId: '', doctorId: '', scheduleSlotId: '', startTime: '' })}
+              options={branches.map(branch => ({ value: branch.id, label: branch.name }))} />
+            <AdminSelect label="1. Chuyên khoa" required value={createForm.specialtyId} placeholder="-- Chọn chuyên khoa --"
+              onChange={e => setCreateForm({ ...createForm, specialtyId: e.target.value, servicePackageId: '', doctorId: '', scheduleSlotId: '', startTime: '' })}
+              options={createSpecialties.map(specialty => ({ value: String(specialty.id), label: specialty.name }))} />
           </div>
+          <AdminSelect label="2. Dịch vụ chuyên khoa" required value={createForm.servicePackageId} disabled={!createForm.specialtyId || createServicesLoading}
+            placeholder={createServicesLoading ? 'Đang tải dịch vụ…' : '-- Chọn dịch vụ --'}
+            onChange={e => setCreateForm({ ...createForm, servicePackageId: e.target.value, doctorId: '', scheduleSlotId: '', startTime: '' })}
+            options={createServices.map(service => ({ value: service.id, label: `${service.name} — ${Number(service.price).toLocaleString('vi-VN')} đ` }))} />
+          <AdminInput label="3. Ngày khám" type="date" required min={today} value={createForm.appointmentDate}
+            onChange={e => setCreateForm({ ...createForm, appointmentDate: e.target.value, startTime: '', doctorId: '', scheduleSlotId: '' })} />
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Khung giờ khám *
@@ -672,14 +700,13 @@ export default function AdminAppointmentsPage() {
               </p>
             ) : (
               <div className="grid grid-cols-4 gap-1.5 max-h-36 overflow-y-auto p-1 border rounded bg-slate-50/50">
-                {createSlots.map((s: any) => {
-                  const val = s.time || s.startTime
+                {[...new Set(createSlots.map((slot: any) => String(slot.startTime)))].map((val) => {
                   const active = createForm.startTime === val
                   return (
                     <button
                       key={val}
                       type="button"
-                      onClick={() => setCreateForm({ ...createForm, startTime: val })}
+                      onClick={() => setCreateForm({ ...createForm, startTime: val, doctorId: '', scheduleSlotId: '' })}
                       className={`py-1.5 text-xs font-semibold rounded border cursor-pointer ${
                         active
                           ? 'bg-emerald-700 text-white border-emerald-700'
@@ -693,6 +720,13 @@ export default function AdminAppointmentsPage() {
               </div>
             )}
           </div>
+          <AdminSelect label="4. Bác sĩ trong khung giờ" required value={createForm.scheduleSlotId} disabled={!createForm.startTime || createSlotsLoading}
+            placeholder={createForm.startTime ? '-- Chọn bác sĩ còn chỗ --' : 'Chọn khung giờ trước'}
+            onChange={e => {
+              const slot = createSlots.find(item => item.id === e.target.value);
+              setCreateForm({ ...createForm, scheduleSlotId: slot?.id || '', doctorId: slot?.doctorId || '' });
+            }}
+            options={createSlots.filter(slot => slot.startTime === createForm.startTime).map(slot => ({ value: slot.id, label: `${slot.doctorName} · ${slot.branchName}${slot.roomName ? ' · ' + slot.roomName : ''}` }))} />
           <AdminTextarea
             label="Ghi chú khám"
             value={createForm.note}
@@ -711,7 +745,7 @@ export default function AdminAppointmentsPage() {
               variant="primary"
               type="submit"
               loading={modalLoading}
-              disabled={!createForm.startTime}
+              disabled={!createForm.scheduleSlotId || createSlotsLoading || createServicesLoading}
             >
               Đặt lịch
             </AdminButton>
@@ -739,16 +773,11 @@ export default function AdminAppointmentsPage() {
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <AdminSelect
-              label="Bác sĩ phụ trách"
-              required
-              value={rescheduleDoctorId}
-              onChange={(e) => {
-                setRescheduleDoctorId(e.target.value)
-                setSelectedSlotId('')
-              }}
-              options={doctors.map((d) => ({ value: d.id, label: doctorDisplayName(d) }))}
-            />
+            <div>
+              <p className="text-xs font-medium text-slate-700 mb-1">Bác sĩ phụ trách</p>
+              <p className="text-sm font-semibold text-slate-900">{doctorDisplayName(selected?.doctor)}</p>
+              <p className="text-xs text-slate-500 mt-1">Đổi lịch giữ nguyên bác sĩ và cơ sở khám.</p>
+            </div>
             <AdminInput
               label="Ngày khám mới"
               type="date"

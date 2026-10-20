@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Zap } from 'lucide-react'
+import { apiErrorMessage } from '@/lib/api-client'
 import { usePermission } from '@/common/hooks/usePermission'
 import { AppPermission } from '@/common/constants/permissions.constant'
 import { useAuth } from '@/common/hooks/useAuth'
@@ -10,7 +11,7 @@ import {
   EMPTY,
   Field,
   at,
-  formatDaysOfWeek,
+  formatReceptionSchedule,
   generateCode,
   money,
 } from '../types/catalog.types'
@@ -46,7 +47,6 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   const [options, setOptions] = useState<Record<string, any[]>>({})
   const [q, setQ] = useState('')
   const [filterBranchId, setFilterBranchId] = useState('')
-  const [filterMethodCode, setFilterMethodCode] = useState('')
   const [filterSessionType, setFilterSessionType] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -62,6 +62,13 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   const [symptomInput, setSymptomInput] = useState('')
   const [aiSuggestedSymptoms, setAiSuggestedSymptoms] = useState<string[]>([])
   const [loadingAiSymptoms, setLoadingAiSymptoms] = useState(false)
+  const [aiSuggestionFeedback, setAiSuggestionFeedback] = useState<{ message: string; isError: boolean } | null>(null)
+  const aiRequestId = useRef(0)
+  useEffect(() => {
+    aiRequestId.current++
+    setLoadingAiSymptoms(false)
+    setAiSuggestionFeedback(null)
+  }, [modal, resource])
 
   // Batch Assignment Modal State
   const [batchModal, setBatchModal] = useState<'branch-specialties' | 'room-specialties' | null>(null)
@@ -135,16 +142,14 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   }
 
   const handleAddSymptom = (text: string) => {
-    if (!text) return
-    const parts = text.split(/[,;\n]+/).map((s) => s.trim().toLowerCase()).filter(Boolean)
-    if (parts.length === 0) return
-    const current: string[] = form.symptomTags || []
-    const newTags = parts.filter((p) => !current.includes(p))
-    if (newTags.length > 0) {
-      setForm((prev: any) => ({ ...prev, symptomTags: [...current, ...newTags] }))
-    }
+    const symptom = text.trim().replace(/\s+/g, ' ').toLowerCase()
+    if (!symptom) return
+    setForm((previous: any) => ({
+      ...previous,
+      symptomTags: [...new Set([...(previous.symptomTags || []), symptom])],
+    }))
     setSymptomInput('')
-    setAiSuggestedSymptoms((prev) => prev.filter((s) => !parts.includes(s.toLowerCase())))
+    setAiSuggestedSymptoms((previous) => previous.filter((item) => item.trim().toLowerCase() !== symptom))
   }
 
   const handleRemoveSymptom = (tag: string) => {
@@ -154,23 +159,32 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
 
   const handleAiSuggest = async () => {
     if (!String(form.name || '').trim()) {
-      setError('Vui lòng nhập Tên gói khám trước để AI có cơ sở phân tích triệu chứng.')
+      setAiSuggestionFeedback({ message: 'Vui lòng nhập tên trước khi lấy gợi ý triệu chứng.', isError: true })
       return
     }
+    const requestId = ++aiRequestId.current
     setLoadingAiSymptoms(true)
-    setError('')
+    setAiSuggestionFeedback(null)
+    setAiSuggestedSymptoms([])
     try {
-      const specList = options.specialties || []
-      const specObj = specList.find((s: any) => String(s.id) === String(form.specialtyId))
-      const specName = specObj?.name || ''
-      const res = await suggestSymptoms(form.name, specName)
-      const current: string[] = (form.symptomTags || []).map((t: string) => t.toLowerCase())
-      const newSuggestions = (res || []).filter((s: string) => !current.includes(s.toLowerCase()))
+      const specObj = (options.specialties || []).find((item: any) => String(item.id) === String(form.specialtyId))
+      const res = await suggestSymptoms(form.name, resource === 'specialties' ? form.name : specObj?.name || '')
+      if (requestId !== aiRequestId.current) return
+      const current = new Set((form.symptomTags || []).map((item: string) => item.trim().toLowerCase()))
+      const suggestions = [...new Set(res.map((item: string) => item.trim().replace(/\s+/g, ' ').toLowerCase()).filter(Boolean))] as string[]
+      const newSuggestions = suggestions.filter((item) => !current.has(item))
       setAiSuggestedSymptoms(newSuggestions)
-    } catch {
-      setError('Không thể lấy gợi ý triệu chứng từ AI lúc này.')
+      setAiSuggestionFeedback({
+        message: !suggestions.length ? 'Chưa có gợi ý phù hợp. Bạn có thể nhập triệu chứng rồi nhấn Enter.'
+          : !newSuggestions.length ? 'Các triệu chứng được gợi ý đã có trong danh sách của bạn.'
+          : `Có ${newSuggestions.length} gợi ý. Chọn từng mục hoặc bấm Thêm tất cả.`,
+        isError: false,
+      })
+    } catch (error) {
+      if (requestId !== aiRequestId.current) return
+      setAiSuggestionFeedback({ message: apiErrorMessage(error, 'Không thể lấy gợi ý triệu chứng. Vui lòng thử lại hoặc nhập thủ công.'), isError: true })
     } finally {
-      setLoadingAiSymptoms(false)
+      if (requestId === aiRequestId.current) setLoadingAiSymptoms(false)
     }
   }
 
@@ -196,7 +210,6 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   useEffect(() => {
     setQ('')
     setFilterBranchId('')
-    setFilterMethodCode('')
     setFilterSessionType('')
     setDetailItem(null)
     setSyncMsg('')
@@ -214,7 +227,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
     const resources = [
       ...new Set([
         ...cfg.fields.map((field) => field[3]).filter(Boolean),
-        ...(resource === 'service-packages' ? ['rooms'] : []),
+        ...(resource === 'service-packages' ? ['booking-methods'] : []),
       ]),
     ] as string[]
     Promise.all(resources.map(async (name) => [name, await listCatalog(name)] as const))
@@ -241,17 +254,8 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
           return hasInLinks || bId === filterBranchId
         })
       }
-      if (filterMethodCode) {
-        list = list.filter((row) => {
-          const hasInLinks = row.branchBookingMethods?.some(
-            (l: any) => l.branchBookingMethod?.bookingMethod?.code === filterMethodCode
-          )
-          const mCode = row.branchBookingMethod?.bookingMethod?.code || row.bookingMethodCode
-          return hasInLinks || mCode === filterMethodCode
-        })
-      }
       if (filterSessionType) {
-        list = list.filter((row) => (row.sessionType || 'ALL_DAY') === filterSessionType)
+        list = list.filter((row) => (row.receptionSchedules || []).some((day: any) => (!filterBranchId || day.branchId === filterBranchId) && day.sessions.includes(filterSessionType)))
       }
     }
     if (sortKey) {
@@ -275,28 +279,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       })
     }
     return list
-  }, [q, rows, resource, filterBranchId, filterMethodCode, filterSessionType, sortKey, sortDir])
-
-  const bookingMethodOptions = useMemo(() => {
-    const raw = options['booking-methods'] || []
-    const map = new Map<string, { code: string; name: string }>()
-    raw.forEach((item: any) => {
-      const code = item.code || item.type
-      const name = item.displayName || item.name
-      if (code && !map.has(code)) {
-        map.set(code, { code, name })
-      }
-    })
-    if (map.size === 0) {
-      return [
-        { code: 'HEALTH_PACKAGE', name: 'Gói khám sức khỏe' },
-        { code: 'SPECIALTY_EXAM', name: 'Đặt khám theo chuyên khoa' },
-        { code: 'CONSULTATION', name: 'Tư vấn khám bệnh' },
-        { code: 'AFTER_HOURS', name: 'Đặt khám ngoài giờ' },
-      ]
-    }
-    return Array.from(map.values())
-  }, [options])
+  }, [q, rows, resource, filterBranchId, filterSessionType, sortKey, sortDir])
 
   const openCreate = () => {
     if (!canCreate) return
@@ -309,14 +292,11 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       ...EMPTY,
       code: autoCode,
       price: '',
-      sessionType: 'MORNING',
-      activeDaysOfWeek: [1, 2, 3, 4, 5, 6, 0],
-      medicalServiceIds: [],
-      schedules: [],
+      receptionSchedules: [],
       applyAllBranches: false,
-      branchIds: branchList.length > 0 ? [branchList[0].id] : [],
+      branchIds: [],
+      branchBookingMethodIds: [],
       branchId: filterBranchId || (branchList[0]?.id ?? ''),
-      bookingMethodCodes: ['HEALTH_PACKAGE'],
       symptomTags: [],
       isActive: true,
       slug: '',
@@ -343,13 +323,6 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         ...specialtyBranchIds,
       ].filter(Boolean)),
     ] as string[]
-    const deployedMethodCodes: string[] = [
-      ...new Set([
-        ...(row.branchBookingMethods?.map((l: any) => l.branchBookingMethod?.bookingMethod?.code) || []),
-        row.branchBookingMethod?.bookingMethod?.code,
-      ].filter(Boolean)),
-    ] as string[]
-
     const rawSymptoms = Array.isArray(row.symptoms)
       ? row.symptoms
       : (Array.isArray(row.symptomTags) ? row.symptomTags : [])
@@ -357,14 +330,13 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
     setForm({
       ...EMPTY,
       ...row,
-      activeDaysOfWeek: Array.isArray(row.activeDaysOfWeek) && row.activeDaysOfWeek.length > 0 ? row.activeDaysOfWeek : [1, 2, 3, 4, 5, 6, 0],
-      sessionType: row.sessionType || 'MORNING',
-      medicalServiceIds: (row.items || []).map((i: any) => i.medicalServiceId || i.medicalService?.id || i.id),
-      schedules: row.schedules || [],
+      branchBookingMethodIds: [...new Set([
+        ...(row.branchBookingMethods || []).map((link: any) => link.branchBookingMethodId),
+        ...(row.branchBookingMethodId ? [row.branchBookingMethodId] : []),
+      ])],
       applyAllBranches: branchList.length > 0 && deployedBranchIds.length >= branchList.length,
       branchIds: deployedBranchIds.length > 0 ? deployedBranchIds : (row.branchId ? [row.branchId] : []),
       branchId: row.branchId || (branchList[0]?.id ?? ''),
-      bookingMethodCodes: deployedMethodCodes.length > 0 ? deployedMethodCodes : ['HEALTH_PACKAGE'],
       symptomTags: rawSymptoms,
       isActive: row.isActive !== false,
       slug: row.slug || '',
@@ -379,7 +351,19 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (modal === 'create' ? !canCreate : !canEdit) return
-    const payload: any = { ...form }
+    const payload: any = resource === 'service-packages' ? {
+      name: form.name, code: form.code, price: form.price, specialtyId: form.specialtyId,
+      imageUrl: form.imageUrl, description: form.description, durationMin: form.durationMin,
+      isActive: form.isActive,
+    } : { ...form }
+    if (resource === 'specialties' || resource === 'service-packages') {
+      // Also retain an unfinished input when the user saves without pressing Enter.
+      payload.symptoms = [...new Set([
+        ...(Array.isArray(form.symptomTags) ? form.symptomTags : []),
+        symptomInput,
+      ].map((text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase()).filter(Boolean))]
+      delete payload.symptomTags
+    }
     if (resource === 'specialties') {
       const bList = options.branches || []
       const finalBranchIds = form.applyAllBranches
@@ -387,7 +371,6 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         : (form.branchIds || []).filter(Boolean)
 
       payload.branchIds = finalBranchIds
-      payload.symptoms = Array.isArray(form.symptomTags) ? form.symptomTags : []
       payload.isActive = form.isActive !== false
       delete payload.branchId
     }
@@ -400,14 +383,9 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
       if (finalBranchIds.length === 0) {
         return setError('Vui lòng chọn ít nhất một cơ sở y tế áp dụng gói khám.')
       }
-      payload.branchIds = finalBranchIds
-      payload.branchId = finalBranchIds[0]
-
-      const finalMethodCodes = (form.bookingMethodCodes || []).filter(Boolean)
-      if (finalMethodCodes.length === 0) {
-        return setError('Vui lòng chọn ít nhất một hình thức đặt khám áp dụng.')
-      }
-      payload.bookingMethodCodes = finalMethodCodes
+      const methods = (options['booking-methods'] || []).filter((method: any) => finalBranchIds.includes(method.branchId) && (form.branchBookingMethodIds || []).includes(method.id))
+      if (finalBranchIds.some((branchId: string) => !methods.some((method: any) => method.branchId === branchId))) return setError('Vui lòng chọn hình thức khám cho từng cơ sở đã chọn.')
+      payload.branchBookingMethodIds = methods.map((method: any) => method.id)
 
       if (!form.name || !String(form.name).trim()) {
         return setError('Vui lòng nhập tên gói dịch vụ.')
@@ -416,11 +394,11 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         return setError('Vui lòng nhập giá gói dịch vụ hợp lệ.')
       }
       payload.price = Number(form.price)
-      payload.sessionType = form.sessionType || 'MORNING'
-      payload.activeDaysOfWeek = Array.isArray(form.activeDaysOfWeek) && form.activeDaysOfWeek.length > 0 ? form.activeDaysOfWeek : [1, 2, 3, 4, 5, 6, 0]
-      payload.symptomTags = Array.isArray(form.symptomTags) ? form.symptomTags : []
-      delete payload.branchBookingMethodId
-      delete payload.branchBookingMethods
+      payload.branchReceptionSchedules = finalBranchIds.map((branchId: string) => ({
+        branchId,
+        schedules: (form.receptionSchedules || []).filter((day: any) => day.branchId === branchId)
+          .map(({ dayOfWeek, sessions }: any) => ({ dayOfWeek, sessions })),
+      }))
     }
     if (resource === 'rooms' && !String(form.branchId || '').trim()) {
       return setError('Vui lòng chọn chi nhánh cho phòng khám.')
@@ -459,18 +437,8 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
   const display = (key: string, value: any) =>
     key === 'items'
       ? `${value?.length || 0} dịch vụ`
-      : key === 'sessionType'
-        ? value === 'MORNING'
-          ? 'Buổi sáng (07:30 - 11:30)'
-          : value === 'AFTERNOON'
-            ? 'Buổi chiều (13:30 - 17:00)'
-            : value === 'EVENING'
-              ? 'Ngoài giờ (17:00 - 20:30)'
-              : value === 'OFFICE_HOURS'
-                ? 'Giờ hành chính (07:30 - 17:00)'
-                : 'Cả ngày & Ngoài giờ'
-        : key === 'activeDaysOfWeek'
-          ? formatDaysOfWeek(value)
+      : key === 'receptionSchedules'
+        ? formatReceptionSchedule(value)
           : key === 'schedules'
             ? `${value?.length || 0} ngày / ${
                 value?.reduce((total: number, item: any) => total + (item.slots?.length || 0), 0) || 0
@@ -570,12 +538,9 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         setQ={setQ}
         filterBranchId={filterBranchId}
         setFilterBranchId={setFilterBranchId}
-        filterMethodCode={filterMethodCode}
-        setFilterMethodCode={setFilterMethodCode}
         filterSessionType={filterSessionType}
         setFilterSessionType={setFilterSessionType}
         options={options}
-        bookingMethodOptions={bookingMethodOptions}
         sortKey={sortKey}
         setSortKey={setSortKey}
         sortDir={sortDir}
@@ -615,7 +580,6 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         form={form}
         setForm={setForm}
         options={options}
-        bookingMethodOptions={bookingMethodOptions}
         fieldOptions={fieldOptions}
         optionValue={optionValue}
         generateCode={generateCode}
@@ -625,6 +589,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
         setSymptomInput={setSymptomInput}
         aiSuggestedSymptoms={aiSuggestedSymptoms}
         setAiSuggestedSymptoms={setAiSuggestedSymptoms}
+        aiSuggestionFeedback={aiSuggestionFeedback}
         loadingAiSymptoms={loadingAiSymptoms}
         onAiSuggest={handleAiSuggest}
         onAddSymptom={handleAddSymptom}

@@ -1,230 +1,67 @@
 'use client'
 
-import React from 'react'
-import { DAYS_OF_WEEK } from '../types/catalog.types'
+import { useState } from 'react'
+import { DAYS_OF_WEEK, RECEPTION_SESSIONS, ReceptionDay, formatReceptionSchedule } from '../types/catalog.types'
 
-interface PackageSchedulesFieldProps {
-  form: any
-  setForm: React.Dispatch<React.SetStateAction<any>>
+interface Props {
+  value: ReceptionDay[]
+  onChange: (days: ReceptionDay[]) => void
+  disabled?: boolean
+  weekendOnly?: boolean
 }
 
-export default function PackageSchedulesField({ form, setForm }: PackageSchedulesFieldProps) {
-  const activeList: number[] = form.activeDaysOfWeek || [1, 2, 3, 4, 5, 6, 0]
-  const isAll = activeList.length === 7
-  const isWeekdays = activeList.length === 5 && [1, 2, 3, 4, 5].every((d) => activeList.includes(d))
-  const isWeekends = activeList.length === 2 && activeList.includes(6) && activeList.includes(0)
+export default function PackageSchedulesField({ value, onChange, disabled, weekendOnly = false }: Props) {
+  const [perDay, setPerDay] = useState(() => new Set(value.map((day) => [...day.sessions].sort().join(','))).size > 1)
+  const selectedDays = value.map((day) => day.dayOfWeek)
+  const commonSessions = RECEPTION_SESSIONS.filter((session) => value.some((day) => day.sessions.includes(session.code))).map((session) => session.code)
+  const chooseDays = (days: number[]) => onChange(days.map((dayOfWeek) =>
+    value.find((day) => day.dayOfWeek === dayOfWeek) || { dayOfWeek, sessions: perDay ? [] : [...commonSessions] },
+  ))
+  const toggleSession = (code: string, targetDay?: number) => {
+    const selected = targetDay === undefined ? commonSessions : value.find((day) => day.dayOfWeek === targetDay)?.sessions || []
+    const next = selected.includes(code) ? selected.filter((session) => session !== code) : [...selected, code]
+    onChange(value.map((day) => targetDay === undefined || day.dayOfWeek === targetDay ? { ...day, sessions: next } : day))
+  }
 
-  return (
-    <section className="sm:col-span-2 space-y-4 rounded border border-slate-200 bg-slate-50/40 p-4">
-      {/* 1. Ngày hoạt động trong tuần */}
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Ngày hoạt động trong tuần</h3>
-            <p className="mt-0.5 text-xs font-normal text-slate-500">
-              Chỉ những ngày được chọn mới mở lịch cho bệnh nhân đặt gói khám.
-            </p>
+  return <fieldset disabled={disabled} className="space-y-4 rounded border border-slate-200 bg-slate-50/40 p-4 disabled:opacity-60">
+    <legend className="px-1 text-sm font-bold text-slate-900">Lịch tiếp nhận gói khám</legend>
+    <p className="text-xs text-slate-500">Bệnh nhân chỉ được đặt trong ngày, buổi đã chọn và khi có lịch bác sĩ phù hợp.</p>
+    {weekendOnly && <p className="text-xs text-slate-600">Khám ngoài giờ chỉ nhận thứ Bảy và Chủ nhật. Bỏ chọn các ngày khác nếu lịch cũ còn lưu.</p>}
+    <div className="flex flex-wrap gap-2">
+      {[{ label: 'Cả tuần', days: [1, 2, 3, 4, 5, 6, 0] }, { label: 'Thứ 2–Thứ 6', days: [1, 2, 3, 4, 5] }, { label: 'Cuối tuần', days: [6, 0] }].filter((preset) => !weekendOnly || preset.days.every((day) => day === 6 || day === 0)).map((preset) =>
+        <button key={preset.label} type="button" onClick={() => chooseDays(preset.days)} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs hover:border-emerald-600">{preset.label}</button>,
+      )}
+      <button type="button" onClick={() => onChange([])} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs">Tạm ngừng tiếp nhận</button>
+    </div>
+    <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+      {DAYS_OF_WEEK.map((day) => {
+        const selected = selectedDays.includes(day.id)
+        return <button key={day.id} type="button" aria-pressed={selected} disabled={weekendOnly && day.id !== 6 && day.id !== 0 && !selected} onClick={() => chooseDays(selected ? selectedDays.filter((id) => id !== day.id) : [...selectedDays, day.id])}
+          className={`rounded border px-2 py-2 text-xs ${selected ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-500'}`}>
+          <span className="block font-semibold">{day.label}</span><span className="mt-1 block">{selected ? 'Nhận' : 'Không nhận'}</span>
+        </button>
+      })}
+    </div>
+    {!!value.length && <>
+      <label className="flex items-center gap-2 text-xs text-slate-700">
+        <input type="checkbox" checked={perDay} onChange={(event) => {
+          setPerDay(event.target.checked)
+          if (!event.target.checked) onChange(value.map((day) => ({ ...day, sessions: commonSessions })))
+        }} className="accent-emerald-700" />Thiết lập buổi riêng theo ngày
+      </label>
+      {(perDay ? DAYS_OF_WEEK.filter((day) => selectedDays.includes(day.id)) : [{ id: -1, label: 'Buổi tiếp nhận cho các ngày đã chọn' }]).map((day) =>
+        <div key={day.id} className="space-y-2">
+          <p className="text-xs font-semibold text-slate-700">{day.label}</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {RECEPTION_SESSIONS.map((session) => <label key={session.code} className="flex items-center gap-2 rounded border border-slate-200 bg-white p-3 text-xs">
+              <input type="checkbox" checked={(perDay ? value.find((item) => item.dayOfWeek === day.id)?.sessions || [] : commonSessions).includes(session.code)}
+                onChange={() => toggleSession(session.code, perDay ? day.id : undefined)} className="accent-emerald-700" />
+              <span><span className="block font-semibold">{session.label}</span><span className="text-slate-500">{session.hours}</span></span>
+            </label>)}
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, activeDaysOfWeek: [1, 2, 3, 4, 5, 6, 0] })}
-              className={`rounded border px-2.5 py-1 text-xs transition-colors cursor-pointer ${
-                isAll
-                  ? 'border-slate-400 bg-slate-100 text-slate-900 font-semibold shadow-2xs'
-                  : 'border-slate-200 bg-white font-medium text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Cả tuần (T2–CN)
-            </button>
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, activeDaysOfWeek: [1, 2, 3, 4, 5] })}
-              className={`rounded border px-2.5 py-1 text-xs transition-colors cursor-pointer ${
-                isWeekdays
-                  ? 'border-slate-400 bg-slate-100 text-slate-900 font-semibold shadow-2xs'
-                  : 'border-slate-200 bg-white font-medium text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Thứ 2 – Thứ 6 (Hành chính)
-            </button>
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, activeDaysOfWeek: [6, 0] })}
-              className={`rounded border px-2.5 py-1 text-xs transition-colors cursor-pointer ${
-                isWeekends
-                  ? 'border-slate-400 bg-slate-100 text-slate-900 font-semibold shadow-2xs'
-                  : 'border-slate-200 bg-white font-medium text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              T7 & Chủ Nhật (Cuối tuần)
-            </button>
-          </div>
-        </div>
-
-        {/* Khung chọn ngày dùng chung border mỏng nhẹ liền mạch */}
-        <div className="flex items-stretch rounded border border-slate-200 divide-x divide-slate-200 overflow-hidden bg-white shadow-2xs mt-2">
-          {DAYS_OF_WEEK.map((day) => {
-            const isChecked = activeList.includes(day.id)
-            return (
-              <button
-                key={day.id}
-                type="button"
-                onClick={() => {
-                  const next = isChecked
-                    ? activeList.filter((d) => d !== day.id)
-                    : [...activeList, day.id]
-                  if (next.length === 0) return
-                  setForm({ ...form, activeDaysOfWeek: next })
-                }}
-                className={`flex-1 flex flex-col items-center justify-center py-2 px-1 text-xs transition-colors cursor-pointer ${
-                  isChecked
-                    ? 'bg-slate-100/90 text-slate-900 font-bold'
-                    : 'bg-white text-slate-400 font-normal hover:bg-slate-50 hover:text-slate-600'
-                }`}
-              >
-                <span className="text-xs leading-tight">{day.label}</span>
-                <span
-                  className={`mt-0.5 text-[10px] leading-none ${
-                    isChecked ? 'text-emerald-700 font-semibold' : 'text-slate-400'
-                  }`}
-                >
-                  {isChecked ? 'Mở' : 'Nghỉ'}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <hr className="border-slate-200" />
-
-      {/* 2. Khung giờ & Buổi tiếp nhận */}
-      <div>
-        <div className="mb-2">
-          <h3 className="text-sm font-bold text-slate-900">Khung giờ & Buổi tiếp nhận bệnh nhân</h3>
-          <p className="mt-0.5 text-xs font-normal text-slate-500">
-            Chọn buổi tiếp nhận để hệ thống tự động lọc khung giờ và bác sĩ trực phù hợp khi đặt lịch.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          <label
-            className={`flex flex-col gap-1 rounded border p-3 cursor-pointer transition-colors ${
-              (form.sessionType || 'MORNING') === 'MORNING'
-                ? 'border-slate-400 bg-slate-50 shadow-2xs'
-                : 'border-slate-200 bg-white hover:bg-slate-50/60'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="sessionType"
-                value="MORNING"
-                checked={(form.sessionType || 'MORNING') === 'MORNING'}
-                onChange={() => setForm({ ...form, sessionType: 'MORNING' })}
-              />
-              <span className="text-xs font-bold text-slate-900">Chỉ buổi sáng</span>
-            </div>
-            <span className="text-[11px] font-medium text-slate-600">Khung giờ: 07:30 – 11:30</span>
-            <span className="text-[11px] text-slate-400">
-              Khuyên dùng cho gói tổng quát & xét nghiệm máu (cần nhịn ăn sáng).
-            </span>
-          </label>
-
-          <label
-            className={`flex flex-col gap-1 rounded border p-3 cursor-pointer transition-colors ${
-              form.sessionType === 'AFTERNOON'
-                ? 'border-slate-400 bg-slate-50 shadow-2xs'
-                : 'border-slate-200 bg-white hover:bg-slate-50/60'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="sessionType"
-                value="AFTERNOON"
-                checked={form.sessionType === 'AFTERNOON'}
-                onChange={() => setForm({ ...form, sessionType: 'AFTERNOON' })}
-              />
-              <span className="text-xs font-bold text-slate-900">Chỉ buổi chiều</span>
-            </div>
-            <span className="text-[11px] font-medium text-slate-600">Khung giờ: 13:30 – 17:00</span>
-            <span className="text-[11px] text-slate-400">
-              Dành cho các gói khám tư vấn, chuyên sâu không làm xét nghiệm lúc đói.
-            </span>
-          </label>
-
-          <label
-            className={`flex flex-col gap-1 rounded border p-3 cursor-pointer transition-colors ${
-              form.sessionType === 'EVENING'
-                ? 'border-slate-400 bg-slate-50 shadow-2xs'
-                : 'border-slate-200 bg-white hover:bg-slate-50/60'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="sessionType"
-                value="EVENING"
-                checked={form.sessionType === 'EVENING'}
-                onChange={() => setForm({ ...form, sessionType: 'EVENING' })}
-              />
-              <span className="text-xs font-bold text-slate-900">Khám ngoài giờ (Tối)</span>
-            </div>
-            <span className="text-[11px] font-medium text-slate-600">Khung giờ: 17:00 – 20:30</span>
-            <span className="text-[11px] text-slate-400">
-              Dành cho người bận rộn khám sau giờ làm việc hành chính.
-            </span>
-          </label>
-
-          <label
-            className={`flex flex-col gap-1 rounded border p-3 cursor-pointer transition-colors ${
-              form.sessionType === 'OFFICE_HOURS'
-                ? 'border-slate-400 bg-slate-50 shadow-2xs'
-                : 'border-slate-200 bg-white hover:bg-slate-50/60'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="sessionType"
-                value="OFFICE_HOURS"
-                checked={form.sessionType === 'OFFICE_HOURS'}
-                onChange={() => setForm({ ...form, sessionType: 'OFFICE_HOURS' })}
-              />
-              <span className="text-xs font-bold text-slate-900">Giờ hành chính</span>
-            </div>
-            <span className="text-[11px] font-medium text-slate-600">Sáng & Chiều (07:30 – 17:00)</span>
-            <span className="text-[11px] text-slate-400">
-              Chỉ tiếp nhận trong giờ hành chính ban ngày, không nhận ca tối.
-            </span>
-          </label>
-
-          <label
-            className={`flex flex-col gap-1 rounded border p-3 cursor-pointer transition-colors ${
-              form.sessionType === 'ALL_DAY'
-                ? 'border-slate-400 bg-slate-50 shadow-2xs'
-                : 'border-slate-200 bg-white hover:bg-slate-50/60'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="sessionType"
-                value="ALL_DAY"
-                checked={form.sessionType === 'ALL_DAY'}
-                onChange={() => setForm({ ...form, sessionType: 'ALL_DAY' })}
-              />
-              <span className="text-xs font-bold text-slate-900">Cả ngày & Ngoài giờ</span>
-            </div>
-            <span className="text-[11px] font-medium text-slate-600">Tất cả ca trực (07:30 – 20:30)</span>
-            <span className="text-[11px] text-slate-400">
-              Mở tất cả các ca trực của bác sĩ và phòng khám trong ngày.
-            </span>
-          </label>
-        </div>
-      </div>
-    </section>
-  )
+        </div>,
+      )}
+    </>}
+    <p className="rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{formatReceptionSchedule(value)}</p>
+  </fieldset>
 }

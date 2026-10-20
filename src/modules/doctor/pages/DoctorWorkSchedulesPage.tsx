@@ -1,5 +1,7 @@
 'use client'
 
+import { clinicPeriod } from '@/common/constants/clinic-sessions'
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   createSchedule,
@@ -385,8 +387,8 @@ export default function DoctorWorkSchedulesPage({
     let totalCapacity = 0
 
     filteredSchedules.forEach((sc) => {
-      if (sc.startTime < '12:00') morningCount++
-      else if (sc.startTime >= '17:30') eveningCount++
+      if (clinicPeriod(sc.startTime) === 'MORNING') morningCount++
+      else if (clinicPeriod(sc.startTime) === 'EVENING') eveningCount++
       else afternoonCount++
 
       totalOccupied += sc.occupiedCount || 0

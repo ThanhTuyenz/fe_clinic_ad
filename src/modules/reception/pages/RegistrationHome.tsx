@@ -1,5 +1,7 @@
 'use client'
 
+import { CLINIC_SESSIONS, clinicPeriod } from '@/common/constants/clinic-sessions'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import RoleSidebar, { StaffMobileHeader } from '@/modules/portal/components/RoleSidebar'
 import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
@@ -12,22 +14,18 @@ import {
   lookupPatientByCode,
   updateAppointmentStatus,
 } from '@/modules/admin/services/appointments'
-import { listSpecialties, listDoctorsBySpecialty, listSpecialtyServices } from '@/modules/admin/services/specialties'
-import { listUsers } from '@/modules/admin/services/users'
-import { listSchedules } from '@/modules/admin/services/schedules'
+import { listSpecialties, listSpecialtyServices } from '@/modules/admin/services/specialties'
 import { getStaffSession, isReceptionStaff } from '@/modules/admin/utils/staffSession'
 import { decodeQrFromImageFile } from '@/modules/admin/utils/imageQrDecoder'
 import ReceptionQrScannerModal from '../components/ReceptionQrScannerModal'
 import {
   CheckCircle2,
   ChevronLeft,
-  ChevronRight,
   X,
   Plus,
   QrCode,
   Search,
   ChevronLeftIcon,
-  CalendarIcon,
 } from 'lucide-react'
 
 
@@ -35,9 +33,6 @@ import {
   parseCccdQr,
   patientFromQrPayload,
   displayName,
-  staffCreatorPayload,
-  pad2,
-  ymd,
   todayIsoDate,
   clampIsoDateMaxToday,
   isIsoDateNotBeforeToday,
@@ -59,6 +54,11 @@ import {
   historyIsExamined,
 } from '../components/registrationHelpers'
 import RegistrationPatientPickerModal from '../components/RegistrationPatientPickerModal'
+
+type ReceptionSlotOption = {
+  id: string; startTime: string; endTime: string; branchId: string; branchName: string;
+  doctorId: string; doctorName: string; academicRank?: string; roomName?: string;
+};
 
 export default function RegistrationHome() {
   const { performLogout } = useStaffLogout()
@@ -86,20 +86,21 @@ export default function RegistrationHome() {
   const [lastSaved, setLastSaved] = useState<any>(null)
   const [doctorId, setDoctorId] = useState('')
   const [doctors, setDoctors] = useState<any[]>([])
-  const [doctorsLoading, setDoctorsLoading] = useState(false)
-  const [doctorsErr, setDoctorsErr] = useState('')
 
   /** Ngày khám: Có thể chỉnh sửa tự do, mặc định hôm nay */
   const [appointmentDate, setAppointmentDate] = useState(() => (createNew ? todayIsoDate() : ''))
   const [availableWorkDates, setAvailableWorkDates] = useState<string[]>([])
-  const [schedulesLoading, setSchedulesLoading] = useState(false)
-  const dateScrollRef = useRef<HTMLDivElement>(null)
 
   const [startTime, setStartTime] = useState('')
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [slotsErr, setSlotsErr] = useState('')
   const [freeSlots, setFreeSlots] = useState<string[]>([])
+  const [availableSlots, setAvailableSlots] = useState<ReceptionSlotOption[]>([])
+  const [selectedScheduleSlotId, setSelectedScheduleSlotId] = useState('')
+  const selectedReceptionSlot = availableSlots.find(slot => slot.id === selectedScheduleSlotId && slot.startTime === startTime && slot.doctorId === doctorId)
+  const selectedService = servicePackages.find(pkg => String(pkg.id) === servicePackageId)
   const [bookingMode, setBookingMode] = useState<'new' | 're_exam'>('new')
+  const [reExamDoctorId, setReExamDoctorId] = useState('')
   const [selectedHistoryId, setSelectedHistoryId] = useState<string>('')
 
   const [draftPatientCode, setDraftPatientCode] = useState('')
@@ -150,6 +151,8 @@ export default function RegistrationHome() {
     if (createNew) {
       return (
         specialtyId !== lastSaved.specialtyId ||
+        servicePackageId !== lastSaved.servicePackageId ||
+        selectedScheduleSlotId !== lastSaved.selectedScheduleSlotId ||
         doctorId !== lastSaved.doctorId ||
         appointmentDate !== lastSaved.appointmentDate ||
         startTime !== lastSaved.startTime ||
@@ -173,6 +176,8 @@ export default function RegistrationHome() {
     lastSaved,
     createNew,
     specialtyId,
+    servicePackageId,
+    selectedScheduleSlotId,
     doctorId,
     appointmentDate,
     startTime,
@@ -239,12 +244,6 @@ export default function RegistrationHome() {
     draftAddress,
   ])
 
-  const appointmentDoctorDisplay = useMemo(() => {
-    const d = payload?.doctor
-    return String(
-      d?.displayName || [d?.lastName, d?.firstName].filter(Boolean).join(' ').trim() || d?.email || '',
-    ).trim()
-  }, [payload?.doctor])
 
   const appointmentSpecialtyDisplay = useMemo(() => {
     const fromPayload = String(payload?.doctor?.specialtyName || payload?.doctor?.specialty || '').trim()
@@ -323,61 +322,12 @@ export default function RegistrationHome() {
     }
   }, [])
 
-  // Tải danh sách Bác sĩ theo Chuyên khoa hoặc toàn bộ bác sĩ
-  useEffect(() => {
-    let mounted = true
-    setDoctorsErr('')
-    setDoctorsLoading(true)
-
-    if (specialtyId) {
-      listDoctorsBySpecialty(specialtyId)
-        .then((rows) => {
-          if (!mounted) return
-          setDoctors(Array.isArray(rows) ? rows : [])
-        })
-        .catch((e: any) => {
-          if (!mounted) return
-          setDoctors([])
-          setDoctorsErr(e?.message || 'Không tải được danh sách bác sĩ thuộc chuyên khoa này.')
-        })
-        .finally(() => {
-          if (!mounted) return
-          setDoctorsLoading(false)
-        })
-    } else {
-      listUsers({ limit: 100 })
-        .then((res: any) => {
-          if (!mounted) return
-          const doctorUsers = (res?.data || [])
-            .filter((u: any) => String(u.role || u.userType).toLowerCase() === 'doctor')
-            .map((u: any) => ({
-              id: u.doctor?.id || u.id,
-              fullName: u.fullName || `${u.lastName || ''} ${u.firstName || ''}`.trim() || u.displayName || u.email,
-              specialtyId: u.doctor?.specialtyId,
-            }))
-          setDoctors(doctorUsers)
-        })
-        .catch((e: any) => {
-          if (!mounted) return
-          setDoctors([])
-          setDoctorsErr(e?.message || 'Không tải được danh sách bác sĩ.')
-        })
-        .finally(() => {
-          if (!mounted) return
-          setDoctorsLoading(false)
-        })
-    }
-
-    return () => {
-      mounted = false
-    }
-  }, [specialtyId])
-
   // Tải danh sách Dịch vụ / Gói khám theo Chuyên khoa
   useEffect(() => {
     if (!specialtyId) {
       setServicePackages([])
       setServicePackageId('')
+      setServicesLoading(false)
       return
     }
     let mounted = true
@@ -385,7 +335,9 @@ export default function RegistrationHome() {
     listSpecialtyServices(specialtyId)
       .then((rows) => {
         if (!mounted) return
-        setServicePackages(Array.isArray(rows) ? rows : [])
+        const services = (Array.isArray(rows) ? rows : []).filter(pkg => pkg.bookingMethod?.code === 'SPECIALTY_EXAM' && Number(pkg.specialtyId) === Number(specialtyId))
+        setServicePackages(services)
+        setServicePackageId(current => services.some(pkg => String(pkg.id) === current) ? current : '')
       })
       .catch(() => {
         if (!mounted) return
@@ -407,133 +359,48 @@ export default function RegistrationHome() {
     }))
   }, [specialties])
 
-  const doctorOptions = useMemo(() => {
-    return doctors.map((d) => {
-      const name = String(d.fullName || d.name || d.displayName || '').trim()
-      const fallback = [d.lastName, d.firstName].filter(Boolean).join(' ').trim() || d.email || 'Bác sĩ'
-      const rank = d.academicRank ? `${d.academicRank} ` : ''
-      return {
-        id: String(d.id || d._id || d.doctor?.id || ''),
-        label: `${rank}${name || fallback}`,
-      }
-    })
-  }, [doctors])
-
-  // Lấy các ngày bác sĩ có lịch làm việc (Schedules) - Backend đã tối ưu lọc sẵn ca trực còn lịch khả dụng
+  // Chọn dịch vụ, ngày và giờ trước khi chọn bác sĩ.
   useEffect(() => {
-    if (!doctorId) {
-      setAvailableWorkDates([])
-      return
+    if (fromAppointment) return;
+    if (!specialtyId || !servicePackageId || !appointmentDate) {
+      setFreeSlots([]); setAvailableSlots([]); setAvailableWorkDates([]);
+      setSlotsLoading(false);
+      setSelectedScheduleSlotId('');
+      return;
     }
-    let mounted = true
-    setSchedulesLoading(true)
-    listSchedules({ doctorId, startDate: todayIsoDate(), availableOnly: 'true' })
-      .then((schedules) => {
-        if (!mounted) return
-        const dates = Array.from(
-          new Set(
-            (schedules || [])
-              .map((s: any) => String(s?.workDate || '').slice(0, 10))
-              .filter(Boolean),
-          ),
-        ).sort()
-
-        setAvailableWorkDates(dates)
-        if (dates.length > 0) {
-          setAppointmentDate((prev) => (dates.includes(prev) ? prev : dates[0]))
-        } else {
-          setAppointmentDate('')
-        }
-      })
-      .catch(() => {
-        if (!mounted) return
-        setAvailableWorkDates([])
-        setAppointmentDate('')
-      })
-      .finally(() => {
-        if (!mounted) return
-        setSchedulesLoading(false)
-      })
-    return () => {
-      mounted = false
-    }
-  }, [doctorId])
-
-  // Truy vấn Khung giờ trống (Availability)
-  useEffect(() => {
-    if (!doctorId || !appointmentDate) {
-      setFreeSlots([])
-      setStartTime('')
-      setSlotsErr('')
-      return
-    }
-    let mounted = true
-    setSlotsLoading(true)
-    setSlotsErr('')
-    getAvailability({ doctorId, date: appointmentDate })
+    let mounted = true;
+    setSlotsLoading(true); setSlotsErr(''); setFreeSlots([]); setAvailableSlots([]);
+    getAvailability({ date: appointmentDate, specialtyId, servicePackageId, doctorId: bookingMode === 're_exam' ? reExamDoctorId || undefined : undefined })
       .then((res: any) => {
-        if (!mounted) return
-        const rawSlots = Array.isArray(res?.freeSlots) ? res.freeSlots : []
-        let slots = Array.from(new Set(rawSlots.filter(Boolean))).sort()
-
-        // Nếu ngày khám là HÔM NAY: chỉ hiển thị các khung giờ từ thời điểm hiện tại trở về sau
-        if (appointmentDate === todayIsoDate()) {
-          const now = new Date()
-          const currentTotalMin = now.getHours() * 60 + now.getMinutes()
-          slots = slots.filter((slot: string) => {
-            const [hStr, mStr] = slot.split(':')
-            const h = parseInt(hStr, 10)
-            const m = parseInt(mStr, 10)
-            if (Number.isNaN(h) || Number.isNaN(m)) return false
-            // Mỗi slot kéo dài 30 phút. Slot hợp lệ nếu giờ kết thúc slot >= thời gian hiện tại
-            return h * 60 + m + 30 >= currentTotalMin
-          })
-        }
-
-        setFreeSlots(slots)
-        if (!fromAppointment) {
-          if (slots.length > 0 && (!startTime || !slots.includes(startTime))) {
-            setStartTime(slots[0])
-          } else if (slots.length === 0) {
-            setStartTime('')
-          }
-        }
+        if (!mounted) return;
+        const slots: ReceptionSlotOption[] = Array.isArray(res?.slots) ? res.slots : [];
+        setAvailableSlots(slots);
+        setFreeSlots([...new Set(slots.map(slot => slot.startTime))].sort());
+        setAvailableWorkDates(Array.isArray(res?.availableDates) ? res.availableDates : []);
+        setDoctors(slots.map(slot => ({ id: slot.doctorId, fullName: slot.doctorName })));
+        setSelectedScheduleSlotId(current => slots.some(slot => slot.id === current) ? current : '');
       })
-      .catch((e: any) => {
-        if (!mounted) return
-        setFreeSlots([])
-        setSlotsErr(e?.message || 'Không lấy được giờ khám.')
+      .catch((error: any) => {
+        if (!mounted) return;
+        setFreeSlots([]); setAvailableSlots([]); setAvailableWorkDates([]);
+        setSlotsErr(error?.message || 'Không lấy được khung giờ của dịch vụ.');
       })
-      .finally(() => {
-        if (!mounted) return
-        setSlotsLoading(false)
-      })
-    return () => {
-      mounted = false
-    }
-  }, [doctorId, appointmentDate, fromAppointment])
+      .finally(() => { if (mounted) setSlotsLoading(false); });
+    return () => { mounted = false; };
+  }, [specialtyId, servicePackageId, appointmentDate, fromAppointment, bookingMode, reExamDoctorId]);
 
-  const morningSlots = useMemo(() => {
-    return freeSlots.filter((slot) => {
-      const hour = parseInt(slot.split(':')[0], 10)
-      return hour < 12
-    })
-  }, [freeSlots])
-
-  const afternoonSlots = useMemo(() => {
-    return freeSlots.filter((slot) => {
-      const hour = parseInt(slot.split(':')[0], 10)
-      return hour >= 12
-    })
-  }, [freeSlots])
+  const slotsBySession = useMemo(() => CLINIC_SESSIONS.map((session) => ({
+    ...session, slots: freeSlots.filter((slot) => clinicPeriod(slot) === session.code),
+  })), [freeSlots])
 
   useEffect(() => {
     if (!fromAppointment) return
     const did = String(payload?.doctorId || payload?.doctor?.id || '').trim()
-    const sid = String(payload?.specialtyId || payload?.doctor?.specialtyID || payload?.doctor?.specialtyId || '').trim()
+    const sid = String(payload?.specialtyId || payload?.specialty?.id || payload?.doctor?.specialtyID || payload?.doctor?.specialtyId || '').trim()
     const ad = isoDateOnly(payload?.appointmentDate)
     const st = String(payload?.startTime || '').trim()
     if (sid) setSpecialtyId(sid)
+    if (payload?.servicePackage?.id) setServicePackageId(String(payload.servicePackage.id))
     if (did) setDoctorId(did)
     if (ad) setAppointmentDate(ad)
     if (st) setStartTime(st)
@@ -549,20 +416,39 @@ export default function RegistrationHome() {
     const safeDate = val && val < today ? today : val
     setAppointmentDate(safeDate)
     setStartTime('')
+    setDoctorId('')
+    setSelectedScheduleSlotId('')
   }
 
   function handleSpecialtyChange(val: string) {
     setSpecialtyId(val)
+    setSelectedScheduleSlotId('')
+    setAvailableSlots([])
     setServicePackageId('')
     setDoctorId('')
     setStartTime('')
     setFreeSlots([])
   }
 
-  function handleDoctorChange(val: string) {
-    setDoctorId(val)
+  function handleServiceChange(value: string) {
+    setServicePackageId(value)
     setStartTime('')
+    setDoctorId('')
+    setSelectedScheduleSlotId('')
+    setAvailableSlots([])
     setFreeSlots([])
+  }
+
+  function handleTimeChange(value: string) {
+    setStartTime(value)
+    setDoctorId('')
+    setSelectedScheduleSlotId('')
+  }
+
+  function handleDoctorSlotChange(value: string) {
+    const slot = availableSlots.find(item => item.id === value && item.startTime === startTime)
+    setSelectedScheduleSlotId(slot?.id || '')
+    setDoctorId(slot?.doctorId || '')
   }
 
   function currentPatientSnapshot() {
@@ -608,11 +494,14 @@ export default function RegistrationHome() {
   function makeSavedSnapshot() {
     return {
       specialtyId,
+      servicePackageId,
+      selectedScheduleSlotId,
       doctorId,
       appointmentDate,
       startTime,
       draftPatientId,
       draftPatientCode,
+      draftNationalId,
       draftName,
       draftDob,
       draftPhone,
@@ -643,6 +532,10 @@ export default function RegistrationHome() {
         setLookupErr('Vui lòng chọn chuyên khoa khám.')
         return
       }
+      if (!servicePackageId || !selectedService) {
+        setLookupErr('Vui lòng chọn dịch vụ thuộc chuyên khoa khám.')
+        return
+      }
       if (!doctorId) {
         setSaveMsg('')
         setLookupErr('Vui lòng chọn bác sĩ phụ trách.')
@@ -656,6 +549,10 @@ export default function RegistrationHome() {
       if (!isIsoDateNotBeforeToday(appointmentDate)) {
         setSaveMsg('')
         setLookupErr('Ngày khám phải là hôm nay hoặc ngày trong tương lai.')
+        return
+      }
+      if (!selectedReceptionSlot || slotsLoading) {
+        setLookupErr('Vui lòng chọn khung giờ và bác sĩ còn chỗ của dịch vụ.')
         return
       }
       if (!startTime) {
@@ -683,8 +580,11 @@ export default function RegistrationHome() {
           token,
           patientEmailOrPhone: phoneTrim,
           patient,
-          createdByStaff: staffCreatorPayload(user),
+          specialtyId,
+          servicePackageId,
           doctorId,
+          scheduleSlotId: selectedReceptionSlot?.id,
+          branchId: selectedReceptionSlot?.branchId,
           appointmentDate,
           startTime,
           note: buildAppointmentNote(),
@@ -693,7 +593,7 @@ export default function RegistrationHome() {
       const now = Date.now()
       const savedAppointment = data?.appointment || {}
       const rowId = String(savedAppointment.id || payload?.appointmentId || `LOCAL-${now.toString(36).toUpperCase()}`)
-      const stamp = String(data?.ticket || maKcb || payload?.ticket || rowId)
+      const stamp = String(savedAppointment.ticket || savedAppointment.bookingCode || data?.ticket || maKcb || payload?.ticket || rowId)
 
       setMaKcb(stamp)
       setSaveMsg('Đăng ký khám thành công!')
@@ -785,6 +685,11 @@ export default function RegistrationHome() {
   }
 
   function resetDraftForNew() {
+    setSpecialtyId('')
+    setServicePackageId('')
+    setSelectedScheduleSlotId('')
+    setReExamDoctorId('')
+    setAvailableSlots([])
     setMaKcb('')
     setSaveMsg('')
     setLookupErr('')
@@ -963,18 +868,12 @@ export default function RegistrationHome() {
     }
 
     // 3. Kế thừa Gói khám nếu có
-    if (pkgId) {
-      setServicePackageId(pkgId)
-    }
+    setServicePackageId(pkgId)
+    setSelectedScheduleSlotId('')
 
-    // 4. Kế thừa Bác sĩ (tự động bổ sung vào mảng doctors nếu danh sách chưa tải xong)
-    if (did) {
-      setDoctors((prev) => {
-        if (prev.some((d) => String(d.id) === did)) return prev
-        return [{ id: did, fullName: dName, specialtyId: sid }, ...prev]
-      })
-      setDoctorId(did)
-    }
+    // Tái khám giữ bác sĩ điều trị; vẫn chọn khung giờ trước khi xác nhận bác sĩ.
+    setReExamDoctorId(did)
+    setDoctorId('')
 
     // 5. Khởi tạo ngày khám hôm nay và sẵn sàng chọn khung giờ
     setAppointmentDate(todayIsoDate())
@@ -1340,7 +1239,7 @@ export default function RegistrationHome() {
                 2
               </span>
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                {bookingMode === 're_exam' ? 'Đăng ký Tái khám theo đợt khám cũ' : 'Lựa chọn Chuyên khoa & Bác sĩ khám'}
+                {bookingMode === 're_exam' ? 'Đăng ký Tái khám theo đợt khám cũ' : 'Đăng ký khám chuyên khoa tại quầy'}
               </h2>
             </div>
 
@@ -1405,7 +1304,7 @@ export default function RegistrationHome() {
                     Chọn đợt khám trước cần tái khám:
                   </span>
                   <span className="text-[11px] text-slate-500 font-medium">
-                    Nhấp vào dòng để kế thừa Bác sĩ và Chuyên khoa
+                    Chọn đợt khám trước, sau đó chọn dịch vụ, khung giờ và bác sĩ phụ trách
                   </span>
                 </div>
 
@@ -1470,8 +1369,8 @@ export default function RegistrationHome() {
               </div>
 
               {/* Tóm tắt thông tin đợt tái khám */}
-              {doctorId && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+              {selectedHistoryId && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">1. Chuyên khoa tái khám</label>
                     <input
@@ -1485,10 +1384,10 @@ export default function RegistrationHome() {
                     <select
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs disabled:bg-slate-50"
                       value={servicePackageId}
-                      onChange={(e) => setServicePackageId(e.target.value)}
+                      onChange={(e) => handleServiceChange(e.target.value)}
                       disabled={servicesLoading || !specialtyId}
                     >
-                      <option value="">Khám chuyên khoa tiêu chuẩn</option>
+                      <option value="">-- Chọn dịch vụ chuyên khoa --</option>
                       {servicePackages.map((pkg) => (
                         <option key={pkg.id} value={pkg.id}>
                           {pkg.name} — {Number(pkg.price || 0).toLocaleString('vi-VN')} đ
@@ -1496,272 +1395,59 @@ export default function RegistrationHome() {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">3. Bác sĩ phụ trách</label>
-                    <input
-                      readOnly
-                      className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded font-bold text-slate-900 cursor-not-allowed"
-                      value={doctors.find((d) => String(d.id) === String(doctorId))?.fullName || '—'}
-                    />
-                  </div>
                 </div>
               )}
             </div>
           ) : (
             /* CHẾ ĐỘ KHÁM MỚI */
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  1. Chuyên khoa khám <span className="text-rose-600">*</span>
-                </label>
-                {fromAppointment ? (
-                  <input
-                    readOnly
-                    className="w-full px-3.5 py-2 bg-slate-100 border border-slate-300 rounded font-medium text-slate-800 cursor-not-allowed"
-                    value={appointmentSpecialtyDisplay || '—'}
-                  />
-                ) : (
-                  <select
-                    className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs"
-                    value={specialtyId}
-                    onChange={(e) => handleSpecialtyChange(e.target.value)}
-                    disabled={specialtiesLoading && specialtyOptions.length === 0}
-                  >
-                    <option value="">
-                      {specialtiesLoading ? 'Đang tải chuyên khoa…' : '-- Chọn chuyên khoa khám --'}
-                    </option>
-                    {specialtyOptions.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
+                <label className="block font-bold mb-2">1. Chuyên khoa khám <span className="text-rose-600">*</span></label>
+                {fromAppointment ? <p>{appointmentSpecialtyDisplay || '—'}</p> : (
+                  <select className="w-full px-3 py-2 border rounded-lg" value={specialtyId} onChange={e => handleSpecialtyChange(e.target.value)} disabled={specialtiesLoading}>
+                    <option value="">{specialtiesLoading ? 'Đang tải…' : '-- Chọn chuyên khoa --'}</option>
+                    {specialtyOptions.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
               </div>
-
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  2. Dịch vụ / Gói khám
-                </label>
-                <select
-                  className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs disabled:bg-slate-50 disabled:cursor-not-allowed"
-                  value={servicePackageId}
-                  onChange={(e) => setServicePackageId(e.target.value)}
-                  disabled={servicesLoading || !specialtyId}
-                >
-                  <option value="">
-                    {servicesLoading
-                      ? 'Đang tải dịch vụ…'
-                      : !specialtyId
-                        ? '← Chọn chuyên khoa trước'
-                        : 'Khám chuyên khoa tiêu chuẩn'}
-                  </option>
-                  {servicePackages.map((pkg) => (
-                    <option key={pkg.id} value={pkg.id}>
-                      {pkg.name} — {Number(pkg.price || 0).toLocaleString('vi-VN')} đ
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  3. Bác sĩ phụ trách <span className="text-rose-600">*</span>
-                </label>
-                {fromAppointment ? (
-                  <input
-                    readOnly
-                    className="w-full px-3.5 py-2 bg-slate-100 border border-slate-300 rounded font-medium text-slate-800 cursor-not-allowed"
-                    value={appointmentDoctorDisplay || '—'}
-                  />
-                ) : (
-                  <select
-                    className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 shadow-xs disabled:bg-slate-50 disabled:cursor-not-allowed"
-                    value={doctorId}
-                    onChange={(e) => handleDoctorChange(e.target.value)}
-                    disabled={doctorsLoading || !specialtyId}
-                  >
-                    <option value="">
-                      {doctorsLoading
-                        ? 'Đang tải bác sĩ…'
-                        : !specialtyId
-                          ? '← Chọn chuyên khoa trước'
-                          : '-- Chọn bác sĩ --'}
-                    </option>
-                    {doctorOptions.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.label}
-                      </option>
-                    ))}
+                <label className="block font-bold mb-2">2. Dịch vụ chuyên khoa <span className="text-rose-600">*</span></label>
+                {fromAppointment ? <p>{payload?.servicePackage?.name || 'Theo lịch hẹn đã đặt'}</p> : (
+                  <select className="w-full px-3 py-2 border rounded-lg disabled:bg-slate-100" value={servicePackageId} onChange={e => handleServiceChange(e.target.value)} disabled={servicesLoading || !specialtyId}>
+                    <option value="">{servicesLoading ? 'Đang tải dịch vụ…' : '-- Chọn dịch vụ --'}</option>
+                    {servicePackages.map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name} — {Number(pkg.price || 0).toLocaleString('vi-VN')} đ</option>)}
                   </select>
                 )}
+                {selectedService && <p className="mt-2 font-semibold text-emerald-700">Phí khám: {Number(selectedService.price || 0).toLocaleString('vi-VN')} đ</p>}
+                {!fromAppointment && specialtyId && !servicesLoading && !servicePackages.length && <p className="mt-2 text-amber-700">Chuyên khoa chưa có dịch vụ đang áp dụng.</p>}
               </div>
             </div>
           )}
-
-          {/* Ngày bác sĩ có lịch trực khả dụng */}
-          {doctorId && !fromAppointment && (
-            availableWorkDates.length > 0 ? (
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                    <CalendarIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Ngày trực khả dụng của bác sĩ:</span>
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {schedulesLoading && (
-                      <span className="text-[11px] text-slate-500 animate-pulse mr-2">
-                        Đang cập nhật lịch…
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => dateScrollRef.current?.scrollBy({ left: -220, behavior: 'smooth' })}
-                      className="p-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shadow-2xs"
-                      title="Cuộn sang trái"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => dateScrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })}
-                      className="p-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shadow-2xs"
-                      title="Cuộn sang phải"
-                    >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div
-                  ref={dateScrollRef}
-                  className="flex items-center gap-2 overflow-x-auto scroll-smooth py-0.5 [&::-webkit-scrollbar]:hidden"
-                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                >
-                  {availableWorkDates.slice(0, 14).map((dStr) => {
-                    const isToday = dStr === todayIso
-                    const isSelected = appointmentDate === dStr
-                    const parts = dStr.split('-')
-                    const shortDate = parts.length === 3 ? `${parts[2]}/${parts[1]}` : dStr
-                    return (
-                      <button
-                        key={dStr}
-                        type="button"
-                        onClick={() => handleAppointmentDateChange(dStr)}
-                        className={`shrink-0 w-24 py-2 px-1 rounded border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
-                          isSelected
-                            ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
-                            : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:bg-emerald-50/50'
-                        }`}
-                      >
-                        <span
-                          className={`text-[11px] font-medium leading-none ${
-                            isSelected ? 'text-emerald-100' : isToday ? 'text-emerald-700 font-bold' : 'text-slate-500'
-                          }`}
-                        >
-                          {isToday ? 'Hôm nay' : formatDayOfWeekVi(dStr)}
-                        </span>
-                        <span
-                          className={`text-xs font-bold leading-none ${
-                            isSelected ? 'text-white' : 'text-slate-900'
-                          }`}
-                        >
-                          {shortDate}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : !schedulesLoading ? (
-              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded">
-                Bác sĩ hiện chưa có ca trực nào còn mở trong các ngày tới. Vui lòng chọn bác sĩ khác.
-              </div>
-            ) : null
-          )}
-
-          {/* Khối hiển thị Lịch Trống (Availability Slots) */}
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded space-y-3">
-            <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200">
-              <span className="text-xs font-bold text-slate-800">
-                Khung giờ khám ({appointmentDate ? formatDateVi(appointmentDate) : '—'})
-              </span>
-
-              {freeSlots.length > 0 && (
-                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  {freeSlots.length} khung giờ khả dụng
-                </span>
-              )}
+          <div className="space-y-3">
+            <label className="block text-xs font-bold">3. Ngày và khung giờ khám <span className="text-rose-600">*</span></label>
+            <input type="date" min={todayIso} value={appointmentDate} onChange={e => handleAppointmentDateChange(e.target.value)} disabled={fromAppointment || !servicePackageId} className="px-3 py-2 border rounded-lg disabled:bg-slate-100" />
+            {!fromAppointment && <div className="flex gap-2 overflow-x-auto pb-1">
+              {availableWorkDates.slice(0, 14).map(day => <button key={day} type="button" onClick={() => handleAppointmentDateChange(day)} className={`shrink-0 rounded-lg border px-3 py-2 text-xs ${appointmentDate === day ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700'}`}>{day === todayIso ? 'Hôm nay' : formatDayOfWeekVi(day)} · {formatDateVi(day)}</button>)}
+            </div>}
+            <div className="p-4 bg-slate-50 border rounded-xl space-y-3">
+              {fromAppointment ? <p className="text-xs">{formatDateVi(appointmentDate)} · {formatSlotRange(startTime)}</p>
+                : slotsLoading ? <p className="text-xs text-slate-500">Đang tải khung giờ…</p>
+                : slotsErr ? <p className="text-xs text-rose-700">{slotsErr}</p>
+                : !specialtyId || !servicePackageId ? <p className="text-xs text-slate-500">Chọn chuyên khoa và dịch vụ để xem khung giờ.</p>
+                : !freeSlots.length ? <p className="text-xs text-amber-700">Dịch vụ chưa có khung giờ còn trống trong ngày này. Vui lòng chọn ngày khác.</p>
+                : slotsBySession.filter(session => session.slots.length).map(session => <div key={session.code}>
+                    <p className="mb-2 text-xs font-semibold text-slate-500">Ca {session.label.toLowerCase()}</p>
+                    <div className="flex flex-wrap gap-2">{session.slots.map(time => <button key={time} type="button" onClick={() => handleTimeChange(time)} className={`rounded-lg border px-3 py-2 text-xs ${startTime === time ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700'}`}>{time} – {availableSlots.find(slot => slot.startTime === time)?.endTime}</button>)}</div>
+                  </div>)}
             </div>
-
-            {slotsLoading ? (
-              <div className="py-6 text-center text-xs font-medium text-slate-500">
-                Đang tải khung giờ khám…
-              </div>
-            ) : slotsErr ? (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded font-medium">
-                {slotsErr}
-              </div>
-            ) : !doctorId ? (
-              <div className="py-6 text-center text-xs text-slate-400 font-medium">
-                Vui lòng chọn Chuyên khoa và Bác sĩ để xem các khung giờ khám.
-              </div>
-            ) : !appointmentDate || freeSlots.length === 0 ? (
-              <div className="py-6 text-center text-xs text-slate-500 font-medium bg-white rounded border border-slate-200 p-4">
-                {appointmentDate
-                  ? `Bác sĩ không có ca trực hoặc đã kín lịch trong ngày ${formatDateVi(appointmentDate)}. Vui lòng chọn ngày khám khác.`
-                  : 'Bác sĩ hiện không có ca trực nào còn trống trong các ngày tới. Vui lòng chọn bác sĩ khác.'}
-              </div>
-            ) : (
-              <div className="space-y-3 pt-1">
-                {/* Ca Sáng */}
-                {morningSlots.length > 0 && (
-                  <div>
-                    <span className="block text-[11px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
-                      Ca sáng (08:00 – 12:00)
-                    </span>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {morningSlots.map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setStartTime(t)}
-                          className={`px-3.5 py-2 rounded text-xs font-medium border transition-all cursor-pointer ${startTime === t
-                            ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
-                            : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
-                            }`}
-                        >
-                          {formatSlotRange(t)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Ca Chiều */}
-                {afternoonSlots.length > 0 && (
-                  <div>
-                    <span className="block text-[11px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
-                      Ca chiều (13:00 – 17:00)
-                    </span>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {afternoonSlots.map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setStartTime(t)}
-                          className={`px-3.5 py-2 rounded text-xs font-medium border transition-all cursor-pointer ${startTime === t
-                            ? 'bg-emerald-600 border-emerald-600 text-white font-semibold shadow-xs'
-                            : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-emerald-700'
-                            }`}
-                        >
-                          {formatSlotRange(t)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold mb-2">4. Bác sĩ phụ trách <span className="text-rose-600">*</span></label>
+            {fromAppointment ? <p className="text-sm">{payload?.doctor?.fullName || '—'}</p> : (
+              <select className="w-full px-3 py-2 border rounded-lg text-xs disabled:bg-slate-100" value={selectedScheduleSlotId} onChange={e => handleDoctorSlotChange(e.target.value)} disabled={!startTime || slotsLoading}>
+                <option value="">{startTime ? '-- Chọn bác sĩ trong khung giờ --' : 'Chọn khung giờ trước'}</option>
+                {availableSlots.filter(slot => slot.startTime === startTime).map(slot => <option key={slot.id} value={slot.id}>{slot.doctorName} · {slot.branchName}{slot.roomName ? ` · ${slot.roomName}` : ''}</option>)}
+              </select>
             )}
           </div>
         </section>
@@ -1811,7 +1497,7 @@ export default function RegistrationHome() {
                             type="button"
                             className="px-3 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 font-bold rounded text-xs transition-all shadow-xs cursor-pointer"
                             onClick={() => startReExam(r)}
-                            disabled={doctorsLoading}
+                            disabled={saving}
                           >
                             Tái khám
                           </button>

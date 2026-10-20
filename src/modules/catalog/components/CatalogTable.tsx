@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Config, SESSION_LABELS, at, formatDaysOfWeek, money } from '../types/catalog.types'
+import { Config, formatPackageReception, at, money } from '../types/catalog.types'
 
 interface CatalogTableProps {
   resource: string
@@ -12,12 +12,9 @@ interface CatalogTableProps {
   setQ: (q: string) => void
   filterBranchId: string
   setFilterBranchId: (id: string) => void
-  filterMethodCode: string
-  setFilterMethodCode: (c: string) => void
   filterSessionType: string
   setFilterSessionType: (s: string) => void
   options: Record<string, any[]>
-  bookingMethodOptions: { code: string; name: string }[]
   sortKey: string
   setSortKey: (k: string) => void
   sortDir: 'asc' | 'desc'
@@ -43,12 +40,9 @@ export default function CatalogTable({
   setQ,
   filterBranchId,
   setFilterBranchId,
-  filterMethodCode,
-  setFilterMethodCode,
   filterSessionType,
   setFilterSessionType,
   options,
-  bookingMethodOptions,
   sortKey,
   setSortKey,
   sortDir,
@@ -92,19 +86,6 @@ export default function CatalogTable({
             </select>
 
             <select
-              value={filterMethodCode}
-              onChange={(e) => setFilterMethodCode(e.target.value)}
-              className="rounded border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-slate-400 focus:outline-none"
-            >
-              <option value="">Tất cả hình thức</option>
-              {bookingMethodOptions.map((m: any) => (
-                <option key={m.code} value={m.code}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-
-            <select
               value={filterSessionType}
               onChange={(e) => setFilterSessionType(e.target.value)}
               className="rounded border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-slate-400 focus:outline-none"
@@ -113,17 +94,14 @@ export default function CatalogTable({
               <option value="MORNING">Buổi sáng (07:30 - 11:30)</option>
               <option value="AFTERNOON">Buổi chiều (13:30 - 17:00)</option>
               <option value="EVENING">Ngoài giờ (17:00 - 20:30)</option>
-              <option value="OFFICE_HOURS">Giờ hành chính (07:30 - 17:00)</option>
-              <option value="ALL_DAY">Cả ngày & Ngoài giờ</option>
             </select>
 
-            {(filterBranchId || filterMethodCode || filterSessionType || q) && (
+            {(filterBranchId || filterSessionType || q) && (
               <button
                 type="button"
                 onClick={() => {
                   setQ('')
                   setFilterBranchId('')
-                  setFilterMethodCode('')
                   setFilterSessionType('')
                 }}
                 className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
@@ -188,7 +166,7 @@ export default function CatalogTable({
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <tr>
                 <th className="whitespace-nowrap px-4 py-3 w-[34%]">Gói dịch vụ & Mã</th>
-                <th className="whitespace-nowrap px-4 py-3 w-[26%]">Cơ sở & Hình thức</th>
+                <th className="whitespace-nowrap px-4 py-3 w-[26%]">Cơ sở áp dụng</th>
                 <th className="whitespace-nowrap px-4 py-3 w-[18%]">Thời gian tiếp nhận</th>
                 <th className="whitespace-nowrap px-4 py-3 w-[10%]">Giá gói</th>
                 <th className="whitespace-nowrap px-4 py-3 w-[12%] text-right">Thao tác</th>
@@ -233,14 +211,6 @@ export default function CatalogTable({
                             row.branchBookingMethod?.branch?.name,
                           ].filter(Boolean)),
                         ] as string[]
-                        const methodNames: string[] = [
-                          ...new Set([
-                            ...(row.branchBookingMethods?.map(
-                              (l: any) => l.branchBookingMethod?.bookingMethod?.name
-                            ) || []),
-                            row.branchBookingMethod?.bookingMethod?.name,
-                          ].filter(Boolean)),
-                        ] as string[]
                         return (
                           <>
                             <div className="flex flex-wrap gap-1">
@@ -257,33 +227,12 @@ export default function CatalogTable({
                                 <span className="text-xs text-slate-400">—</span>
                               )}
                             </div>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {methodNames.length > 0 ? (
-                                methodNames.map((name) => (
-                                  <span
-                                    key={name}
-                                    className="inline-flex items-center rounded bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-600 border border-slate-200/60"
-                                  >
-                                    {name}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-[11px] text-slate-400">—</span>
-                              )}
-                            </div>
                           </>
                         )
                       })()}
                     </td>
                     <td className="px-5 py-3.5 align-top">
-                      <div className="font-medium text-slate-800 text-xs">
-                        {formatDaysOfWeek(row.activeDaysOfWeek)}
-                      </div>
-                      <div className="mt-1">
-                        <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                          {SESSION_LABELS[row.sessionType || 'ALL_DAY'] || 'Cả ngày & Ngoài giờ'}
-                        </span>
-                      </div>
+                      <div className="max-w-sm text-xs leading-relaxed text-slate-700">{formatPackageReception(row)}</div>
                     </td>
                     <td className="px-5 py-3.5 align-top whitespace-nowrap">
                       <span className="font-bold text-slate-900 text-sm">{money(row.price)}</span>

@@ -4,7 +4,8 @@ import React from 'react'
 import { Config, Field } from '../types/catalog.types'
 import ImageUploader from './ImageUploader'
 import PackageSymptomsField from './PackageSymptomsField'
-import PackageSchedulesField from './PackageSchedulesField'
+import PackageBranchSchedulesField from './PackageBranchSchedulesField'
+
 
 const toSlug = (str: string) =>
   (str || '')
@@ -28,7 +29,6 @@ interface CatalogFormModalProps {
   form: any
   setForm: React.Dispatch<React.SetStateAction<any>>
   options: Record<string, any[]>
-  bookingMethodOptions: { code: string; name: string }[]
   fieldOptions: (source?: string) => any[]
   optionValue: (field: Field, option: any) => any
   generateCode: (resource: string) => string
@@ -38,6 +38,7 @@ interface CatalogFormModalProps {
   setSymptomInput: (val: string) => void
   aiSuggestedSymptoms: string[]
   setAiSuggestedSymptoms: React.Dispatch<React.SetStateAction<string[]>>
+  aiSuggestionFeedback?: { message: string; isError: boolean } | null
   loadingAiSymptoms: boolean
   onAiSuggest: () => void
   onAddSymptom: (text: string) => void
@@ -55,7 +56,6 @@ export default function CatalogFormModal({
   form,
   setForm,
   options,
-  bookingMethodOptions,
   fieldOptions,
   optionValue,
   generateCode,
@@ -65,6 +65,7 @@ export default function CatalogFormModal({
   setSymptomInput,
   aiSuggestedSymptoms,
   setAiSuggestedSymptoms,
+  aiSuggestionFeedback,
   loadingAiSymptoms,
   onAiSuggest,
   onAddSymptom,
@@ -148,12 +149,12 @@ export default function CatalogFormModal({
                     role="switch"
                     aria-checked={form.isActive !== false}
                     onClick={() => setForm({ ...form, isActive: form.isActive === false })}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                       form.isActive !== false ? 'bg-emerald-600' : 'bg-slate-300'
                     }`}
                   >
                     <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
                         form.isActive !== false ? 'translate-x-4' : 'translate-x-0'
                       }`}
                     />
@@ -235,6 +236,7 @@ export default function CatalogFormModal({
                     setSymptomInput={setSymptomInput}
                     aiSuggestedSymptoms={aiSuggestedSymptoms}
                     setAiSuggestedSymptoms={setAiSuggestedSymptoms}
+                    aiSuggestionFeedback={aiSuggestionFeedback}
                     loadingAiSymptoms={loadingAiSymptoms}
                     onAiSuggest={onAiSuggest}
                     onAddSymptom={onAddSymptom}
@@ -314,103 +316,21 @@ export default function CatalogFormModal({
                 return null
               }
 
-              // Giao diện chọn nhiều cơ sở khi tạo mới hoặc cập nhật gói khám
               if (resource === 'service-packages' && key === 'branchId') {
                 const branchList = options.branches || []
-                return (
-                  <div key={key} className="sm:col-span-2 rounded border border-slate-200 bg-slate-50/40 p-3.5">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <span className="block text-xs font-semibold text-slate-700">Cơ sở y tế áp dụng</span>
-                        <span className="ml-2 text-[11px] text-slate-400 font-normal">
-                          ({form.applyAllBranches ? 'Tất cả cơ sở' : `${form.branchIds?.length || 0}/${branchList.length} cơ sở đã chọn`})
-                        </span>
-                      </div>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold text-emerald-800 hover:text-emerald-950">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(form.applyAllBranches)}
-                          onChange={(e) => {
-                            const checked = e.target.checked
-                            setForm({
-                              ...form,
-                              applyAllBranches: checked,
-                              branchIds: checked ? branchList.map((b: any) => b.id) : [],
-                            })
-                          }}
-                          className="rounded accent-emerald-700"
-                        />
-                        Áp dụng cho tất cả cơ sở
-                      </label>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 rounded border border-slate-200 bg-white p-2">
-                      {branchList.map((branch: any) => {
-                        const isChecked = form.applyAllBranches || (form.branchIds || []).includes(branch.id)
-                        return (
-                          <label
-                            key={branch.id}
-                            className={`flex items-center gap-2 p-2 rounded text-xs transition cursor-pointer ${
-                              isChecked ? 'bg-emerald-50/70 text-emerald-950 font-medium' : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              disabled={Boolean(form.applyAllBranches)}
-                              onChange={() => {
-                                const current = form.branchIds || []
-                                const next = current.includes(branch.id)
-                                  ? current.filter((id: string) => id !== branch.id)
-                                  : [...current, branch.id]
-                                setForm({ ...form, branchIds: next })
-                              }}
-                              className="rounded accent-emerald-700"
-                            />
-                            <span className="truncate">{branch.name}</span>
-                          </label>
-                        )
-                      })}
-                    </div>
+                const selectedIds: string[] = form.applyAllBranches ? branchList.map((branch: any) => branch.id) : form.branchIds || []
+                const allSelected = branchList.length > 0 && branchList.every((branch: any) => selectedIds.includes(branch.id))
+                const buttonClass = (selected: boolean) => `rounded px-3 py-2 text-xs font-medium transition-colors ${selected ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`
+                return <div key={key} className="sm:col-span-2">
+                  <span className="mb-2 block text-xs font-semibold text-slate-700">Cơ sở áp dụng</span>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" aria-pressed={allSelected} disabled={saving || !branchList.length} className={buttonClass(allSelected)} onClick={() => setForm({ ...form, applyAllBranches: true, branchIds: branchList.map((branch: any) => branch.id) })}>Tất cả cơ sở</button>
+                    {branchList.map((branch: any) => <button key={branch.id} type="button" aria-pressed={!allSelected && selectedIds.includes(branch.id)} disabled={saving} className={buttonClass(!allSelected && selectedIds.includes(branch.id))} onClick={() => {
+                      const branchIds = selectedIds.includes(branch.id) ? selectedIds.filter((id) => id !== branch.id) : [...selectedIds, branch.id]
+                      setForm({ ...form, applyAllBranches: false, branchIds })
+                    }}>{branch.name}</button>)}
                   </div>
-                )
-              }
-
-              // Giao diện chọn nhiều hình thức đặt khám khi tạo mới hoặc cập nhật gói khám
-              if (resource === 'service-packages' && key === 'branchBookingMethodId') {
-                return (
-                  <div key={key} className="sm:col-span-2">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="block text-xs font-semibold text-slate-700">Hình thức đặt khám áp dụng</span>
-                      <span className="text-[11px] text-slate-400 font-normal">Có thể chọn nhiều hình thức</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 rounded border border-slate-200 bg-white p-2 hover:border-slate-300 transition-colors">
-                      {bookingMethodOptions.map((method) => {
-                        const isChecked = (form.bookingMethodCodes || []).includes(method.code)
-                        return (
-                          <label
-                            key={method.code}
-                            className="flex items-center gap-2 p-2 rounded text-xs font-normal hover:bg-slate-50 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                const current = form.bookingMethodCodes || []
-                                const next = current.includes(method.code)
-                                  ? current.filter((c: string) => c !== method.code)
-                                  : [...current, method.code]
-                                setForm({ ...form, bookingMethodCodes: next })
-                              }}
-                            />
-                            <span className={isChecked ? 'font-medium text-slate-900' : 'text-slate-600'}>
-                              {method.name}
-                            </span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
+                </div>
               }
 
               return (
@@ -437,6 +357,7 @@ export default function CatalogFormModal({
                           setSymptomInput={setSymptomInput}
                           aiSuggestedSymptoms={aiSuggestedSymptoms}
                           setAiSuggestedSymptoms={setAiSuggestedSymptoms}
+                          aiSuggestionFeedback={aiSuggestionFeedback}
                           loadingAiSymptoms={loadingAiSymptoms}
                           onAiSuggest={onAiSuggest}
                           onAddSymptom={onAddSymptom}
@@ -569,9 +490,15 @@ export default function CatalogFormModal({
             </label>
           )}
 
-          {resource === 'service-packages' && (
-            <PackageSchedulesField form={form} setForm={setForm} />
-          )}
+          {resource === 'service-packages' && <PackageBranchSchedulesField
+            methods={options['booking-methods'] || []}
+            methodIds={form.branchBookingMethodIds || []}
+            onMethodsChange={(branchBookingMethodIds) => setForm((previous: any) => ({ ...previous, branchBookingMethodIds }))}
+            branches={(options.branches || []).filter((branch: any) => form.applyAllBranches || (form.branchIds || []).includes(branch.id))}
+            value={form.receptionSchedules || []}
+            onChange={(receptionSchedules) => setForm((previous: any) => ({ ...previous, receptionSchedules }))}
+            disabled={saving}
+          />}
         </div>
 
         <footer className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4 bg-slate-50/60">

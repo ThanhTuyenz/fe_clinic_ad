@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
+import { CLINIC_SESSIONS } from '@/common/constants/clinic-sessions'
 import { Calendar, Clock, Layers, Check, AlertCircle } from 'lucide-react'
 import { createBatchSchedules } from '@/modules/admin/services/schedules'
 import { AdminButton, AdminInput, AdminModal, AdminSelect } from '@/common/components/ui'
@@ -27,11 +28,7 @@ const DAYS_OF_WEEK = [
   { id: 0, label: 'Chủ Nhật', short: 'CN' },
 ]
 
-const SHIFT_OPTIONS = [
-  { id: 'morning', label: 'Ca Sáng', start: '08:00', end: '12:00' },
-  { id: 'afternoon', label: 'Ca Chiều', start: '13:30', end: '17:30' },
-  { id: 'evening', label: 'Ca Tối', start: '17:30', end: '20:30' },
-]
+const SHIFT_OPTIONS = CLINIC_SESSIONS.map((session) => ({ ...session, label: `Ca ${session.label}` }))
 
 const formatYMD = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -57,7 +54,7 @@ export default function BatchScheduleModal({
   const [doctorId, setDoctorId] = useState(initialDoctorId || doctors[0]?.doctor?.id || doctors[0]?.id || '')
   const [branchId, setBranchId] = useState(initialBranchId || branches[0]?.id || '')
   const [roomId, setRoomId] = useState('')
-  const [selectedDays, setSelectedDays] = useState<number[]>([1, 3, 5])
+  const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5])
   const [startDate, setStartDate] = useState(today)
   const [endDate, setEndDate] = useState(defaultEnd)
   const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>(['morning'])
@@ -92,7 +89,7 @@ export default function BatchScheduleModal({
       } else {
         setStartDate(formatYMD(new Date()))
         setEndDate(defaultEnd)
-        setSelectedDays([1, 3, 5])
+        setSelectedDays([1, 2, 3, 4, 5])
       }
 
       setError('')
@@ -131,13 +128,6 @@ export default function BatchScheduleModal({
     } else {
       setSelectedDays([...selectedDays, dayId].sort())
     }
-  }
-
-  const applyDayPreset = (type: 'all' | 'workdays' | 't246' | 't357') => {
-    if (type === 'all') setSelectedDays([1, 2, 3, 4, 5, 6, 0])
-    if (type === 'workdays') setSelectedDays([1, 2, 3, 4, 5])
-    if (type === 't246') setSelectedDays([1, 3, 5])
-    if (type === 't357') setSelectedDays([2, 4, 6])
   }
 
   const toggleShift = (shiftId: string) => {
@@ -312,115 +302,63 @@ export default function BatchScheduleModal({
           </AdminSelect>
         </div>
 
-        {/* Days of week */}
-        <div className="rounded border border-slate-200 bg-slate-50/70 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-emerald-700" />
-              Ngày trực trong tuần:
+        <fieldset disabled={loading} className="space-y-3 disabled:opacity-60">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <Calendar className="h-4 w-4 text-emerald-700" />Ngày làm việc
             </span>
             <div className="flex flex-wrap items-center gap-1">
-              <button
-                type="button"
-                onClick={() => applyDayPreset('t246')}
-                className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:border-emerald-600 hover:text-emerald-700 cursor-pointer"
-              >
-                T2, T4, T6
-              </button>
-              <button
-                type="button"
-                onClick={() => applyDayPreset('t357')}
-                className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:border-emerald-600 hover:text-emerald-700 cursor-pointer"
-              >
-                T3, T5, T7
-              </button>
-              <button
-                type="button"
-                onClick={() => applyDayPreset('workdays')}
-                className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:border-emerald-600 hover:text-emerald-700 cursor-pointer"
-              >
-                T2 – T6
-              </button>
-              <button
-                type="button"
-                onClick={() => applyDayPreset('all')}
-                className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:border-emerald-600 hover:text-emerald-700 cursor-pointer"
-              >
-                Cả tuần
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-1.5 pt-1">
-            {DAYS_OF_WEEK.map((day) => {
-              const isSelected = selectedDays.includes(day.id)
-              return (
-                <button
-                  key={day.id}
-                  type="button"
-                  onClick={() => toggleDay(day.id)}
-                  className={`flex flex-col items-center justify-center rounded py-2 text-xs font-bold transition border cursor-pointer ${
-                    isSelected
-                      ? 'border-emerald-600 bg-emerald-600 text-white shadow-2xs'
-                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-100'
-                  }`}
-                >
-                  <span className="text-[10px] font-medium opacity-90">{day.label}</span>
-                  <span className="text-xs font-bold">{day.short}</span>
+              <span className="mr-1 text-xs text-slate-400">Chọn nhanh</span>
+              {[
+                { id: 'workdays', label: 'Thứ 2–Thứ 6', days: [1, 2, 3, 4, 5] },
+                { id: 'weekends', label: 'Cuối tuần', days: [6, 0] },
+                { id: 'all', label: 'Cả tuần', days: [0, 1, 2, 3, 4, 5, 6] },
+              ].map((preset) => {
+                const active = selectedDays.length === preset.days.length && preset.days.every((day) => selectedDays.includes(day))
+                return <button key={preset.id} type="button" aria-pressed={active}
+                  onClick={() => setSelectedDays(preset.days)}
+                  className={`rounded px-2.5 py-1.5 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 ${active ? 'bg-emerald-50 font-semibold text-emerald-800' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}`}>
+                  {preset.label}
                 </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Shift Selection & Slot Duration */}
-        <div className="rounded border border-slate-200 bg-slate-50/70 p-3">
-          <label className="block text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-emerald-700" />
-            Chọn Ca làm việc trong ngày (Có thể chọn nhiều ca):
-          </label>
-
-          <div className="grid gap-3 sm:grid-cols-[1fr_210px] items-start">
-            <div className="grid grid-cols-3 gap-2">
-              {SHIFT_OPTIONS.map((p) => {
-                const isSelected = selectedShiftIds.includes(p.id)
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => toggleShift(p.id)}
-                    className={`flex flex-col items-center justify-center rounded border py-2 px-2 text-center transition cursor-pointer ${
-                      isSelected
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className="text-xs font-semibold">{p.label}</span>
-                    <span
-                      className={`text-[10px] ${
-                        isSelected ? 'text-emerald-700 font-medium' : 'text-slate-500'
-                      }`}
-                    >
-                      {p.start} – {p.end}
-                    </span>
-                  </button>
-                )
               })}
             </div>
-
-            <AdminSelect
-              label="Thời lượng / lượt khám"
-              value={String(slotDurationMin)}
-              onChange={(e) => setSlotDurationMin(Number(e.target.value) || 30)}
-            >
-              <option value="15">15 phút / lượt</option>
-              <option value="20">20 phút / lượt</option>
-              <option value="30">30 phút / lượt (Chuẩn)</option>
-              <option value="45">45 phút / lượt</option>
-              <option value="60">60 phút / lượt</option>
-            </AdminSelect>
           </div>
-        </div>
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+            {DAYS_OF_WEEK.map((day) => {
+              const selected = selectedDays.includes(day.id)
+              return <button key={day.id} type="button" aria-label={day.label} aria-pressed={selected} onClick={() => toggleDay(day.id)}
+                className={`flex h-10 items-center justify-center gap-1 rounded text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 ${selected ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                <span className="sm:hidden">{day.short}</span><span className="hidden sm:inline">{day.label}</span>
+              </button>
+            })}
+          </div>
+        </fieldset>
+
+        <fieldset disabled={loading} className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-[minmax(0,1fr)_190px] disabled:opacity-60">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Clock className="h-4 w-4 text-emerald-700" />Ca làm việc</span>
+              <span className="text-xs text-slate-400">Có thể chọn nhiều ca</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {SHIFT_OPTIONS.map((shift) => {
+                const selected = selectedShiftIds.includes(shift.id)
+                return <button key={shift.id} type="button" aria-pressed={selected} onClick={() => toggleShift(shift.id)}
+                  className={`relative rounded px-2 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 sm:px-3 ${selected ? 'bg-emerald-50 text-emerald-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  <span className="block text-xs font-semibold">{shift.label}</span>
+                  <span className={`mt-1 block whitespace-nowrap text-[10px] sm:text-xs ${selected ? 'text-emerald-700' : 'text-slate-500'}`}>{shift.start}–{shift.end}</span>
+                </button>
+              })}
+            </div>
+          </div>
+          <div className="space-y-3">
+            <label htmlFor="batch-slot-duration" className="block text-sm font-semibold text-slate-800">Thời lượng khám</label>
+            <select id="batch-slot-duration" value={slotDurationMin} onChange={(event) => setSlotDurationMin(Number(event.target.value) || 30)}
+              className="h-[64px] w-full rounded bg-slate-100 px-3 text-sm text-slate-700 focus:outline focus:outline-2 focus:outline-emerald-600">
+              {[15, 20, 30, 45, 60].map((minutes) => <option key={minutes} value={minutes}>{minutes} phút / lượt</option>)}
+            </select>
+          </div>
+        </fieldset>
 
         {/* Date Range & Quick Presets */}
         <div className="rounded border border-slate-200 bg-white p-3">

@@ -1,3 +1,5 @@
+import { CLINIC_SESSIONS } from '@/common/constants/clinic-sessions'
+
 export const SLOT_DURATIONS = [15, 20, 30, 45, 60]
 
 export const EMPTY_FORM = {
@@ -5,8 +7,8 @@ export const EMPTY_FORM = {
   branchId: '',
   roomId: '',
   workDate: new Date().toISOString().slice(0, 10),
-  startTime: '08:00',
-  endTime: '12:00',
+  startTime: CLINIC_SESSIONS[0].start,
+  endTime: CLINIC_SESSIONS[0].end,
   slotDurationMin: '30',
   status: 'OPEN',
 }

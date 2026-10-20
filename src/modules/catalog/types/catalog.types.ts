@@ -1,3 +1,5 @@
+import { CLINIC_SESSIONS } from '@/common/constants/clinic-sessions'
+
 export type Field = [string, string, 'text' | 'date' | 'number' | 'textarea' | 'select' | 'multiselect' | 'image', string?]
 export type Config = { title: string; singular: string; fields: Field[]; columns: [string, string][] }
 
@@ -102,35 +104,24 @@ export const CONFIG: Record<string, Config> = {
       ['specialtyId', 'Chuyên khoa (không bắt buộc)', 'select', 'specialties'],
       ['price', 'Giá gói (VNĐ)', 'number'],
       ['branchId', 'Chi nhánh', 'select', 'branches'],
-      ['branchBookingMethodId', 'Hình thức đặt khám', 'select', 'booking-methods'],
       ['description', 'Mô tả', 'textarea'],
     ],
     columns: [
       ['code', 'Mã'],
       ['name', 'Gói dịch vụ'],
-      ['branchBookingMethod.bookingMethod.name', 'Hình thức'],
       ['specialty.name', 'Chuyên khoa'],
       ['branchBookingMethod.branch.name', 'Chi nhánh'],
-      ['activeDaysOfWeek', 'Ngày trong tuần'],
-      ['sessionType', 'Buổi tiếp nhận'],
+      ['receptionSchedules', 'Lịch tiếp nhận'],
       ['price', 'Giá gói'],
     ],
   },
 }
 
-export const EMPTY_SLOT = { startTime: '08:00', endTime: '11:30' }
-
 export const EMPTY = {
   isActive: true,
-  sessionType: 'MORNING',
-  activeDaysOfWeek: [1, 2, 3, 4, 5, 6, 0] as number[],
   timezone: 'Asia/Ho_Chi_Minh',
   durationMin: 30,
   price: '',
-  unitPrice: '',
-  stockQuantity: '',
-  medicalServiceIds: [] as string[],
-  schedules: [] as any[],
 }
 
 export const money = (value: unknown) => `${Number(value || 0).toLocaleString('vi-VN')} đ`
@@ -166,12 +157,31 @@ export const DAYS_OF_WEEK = [
   { id: 0, label: 'Chủ Nhật' },
 ]
 
-export const SESSION_LABELS: Record<string, string> = {
-  MORNING: 'Buổi sáng (07:30 - 11:30)',
-  AFTERNOON: 'Buổi chiều (13:30 - 17:00)',
-  EVENING: 'Ngoài giờ (17:00 - 20:30)',
-  OFFICE_HOURS: 'Giờ hành chính (07:30 - 17:00)',
-  ALL_DAY: 'Cả ngày & Ngoài giờ',
+export type ReceptionDay = { branchId?: string; dayOfWeek: number; sessions: string[] }
+
+export const RECEPTION_SESSIONS = CLINIC_SESSIONS.map(({ code, label, start, end }) => ({
+  code, label, hours: `${start}–${end}`,
+}))
+
+export const formatReceptionSchedule = (days: ReceptionDay[] = []) => {
+  if (!days.length) return 'Chưa mở lịch tiếp nhận'
+  const groups = new Map<string, number[]>()
+  for (const day of days) {
+    const label = RECEPTION_SESSIONS.filter((session) => day.sessions.includes(session.code)).map((session) => session.label).join(', ')
+    groups.set(label, [...new Set([...(groups.get(label) || []), day.dayOfWeek])])
+  }
+  return [...groups].map(([sessions, days]) => `${formatDaysOfWeek(days)}: ${sessions}`).join(' · ')
+}
+
+export const formatPackageReception = (pkg: any) => {
+  const schedules: ReceptionDay[] = pkg.receptionSchedules || []
+  const branchIds = [...new Set(schedules.map((day) => day.branchId))]
+  if (!branchIds.length) return 'Chưa mở lịch tiếp nhận'
+  const links = [pkg.branchBookingMethod, ...(pkg.branchBookingMethods || []).map((link: any) => link.branchBookingMethod)].filter(Boolean)
+  return branchIds.map((branchId) => {
+    const branchName = links.find((link: any) => link.branchId === branchId)?.branch?.name || 'Chi nhánh'
+    return `${branchName}: ${formatReceptionSchedule(schedules.filter((day) => day.branchId === branchId))}`
+  }).join(' • ')
 }
 
 export const formatDaysOfWeek = (days: any) => {

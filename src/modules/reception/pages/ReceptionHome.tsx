@@ -5,14 +5,12 @@ import RoleSidebar, { StaffMobileHeader } from '@/modules/portal/components/Role
 import { useLocation, useNavigate } from '@/common/hooks/useNextNavigation'
 import { useStaffLogout } from '@/common/hooks/useStaffLogout'
 import {
-  getNextVisitQueueNumber,
   listReceptionAppointments,
   lookupAppointmentByTicket,
   updateAppointmentStatus,
 } from '@/modules/admin/services/appointments'
 import { isPendingAppointmentPastSlot } from '@/modules/admin/utils/appointmentExpiry'
 import { getStaffSession, staffRole } from '@/modules/admin/utils/staffSession'
-import { listClinicRooms } from '@/modules/admin/services/clinicRooms'
 import { recordAppointmentPayment } from '@/modules/admin/services/payments'
 import { Html5Qrcode } from 'html5-qrcode'
 import { resolveConsultationFee } from '@/modules/admin/utils/consultationFee'
@@ -36,14 +34,12 @@ import {
   normalizeLookup,
   normalizeStatus,
   readReceptionNavState,
-  ymd,
 } from '../components/receptionHelpers'
 import ReceptionStatsBar from '../components/ReceptionStatsBar'
 import ReceptionAppointmentTable from '../components/ReceptionAppointmentTable'
 import ReceptionDetailModal from '../components/ReceptionDetailModal'
 import ReceptionQrScannerModal from '../components/ReceptionQrScannerModal'
 import { X, Loader2, CheckCircle2 } from 'lucide-react'
-
 
 export default function ReceptionHome() {
   const { performLogout } = useStaffLogout()
@@ -78,9 +74,6 @@ export default function ReceptionHome() {
   const [saving, setSaving] = useState(false)
 
   const [visitQueueDraft, setVisitQueueDraft] = useState('')
-  const [clinicRoomDraft, setClinicRoomDraft] = useState('')
-  const [clinicRooms, setClinicRooms] = useState<any[]>([])
-  const [clinicRoomsErr, setClinicRoomsErr] = useState('')
   const [visitErr, setVisitErr] = useState('')
 
   const [paymentMethod, setPaymentMethod] = useState('cash')
@@ -96,7 +89,6 @@ export default function ReceptionHome() {
   const [, setQrListFocusTicket] = useState('')
   const qrDecodeHandlerRef = useRef<any>(null)
   const [qrImageLoading, setQrImageLoading] = useState(false)
-  const roomSttReqRef = useRef(0)
 
   const [flashOk, setFlashOk] = useState('')
   const [flashErr, setFlashErr] = useState('')
@@ -173,20 +165,6 @@ export default function ReceptionHome() {
     }, [loadList]),
   })
 
-  useEffect(() => {
-    if (!token) return
-    let active = true
-    setClinicRoomsErr('')
-    listClinicRooms({ token })
-      .then((rows) => {
-        if (active) setClinicRooms(Array.isArray(rows) ? rows : [])
-      })
-      .catch((e: any) => {
-        if (active) setClinicRoomsErr(e?.message || 'Không tải được danh sách phòng khám.')
-      })
-    return () => { active = false }
-  }, [token])
-
   const activeRow = useMemo(() => {
     if (!selectedId) return null
     return list.find((r) => String(r.id) === String(selectedId)) ?? null
@@ -201,20 +179,18 @@ export default function ReceptionHome() {
   useEffect(() => {
     if (!activeDetail) return
     setDetailStatus(normalizeStatus(activeDetail.status))
-    setClinicRoomDraft(String(activeDetail.clinicRoom || '').trim())
     const q = activeDetail.visitQueueNumber
     setVisitQueueDraft(q != null && q !== '' ? String(q) : '')
-  }, [activeDetail?.id, activeDetail?.status, activeDetail?.clinicRoom, activeDetail?.visitQueueNumber])
+  }, [activeDetail?.id, activeDetail?.status, activeDetail?.visitQueueNumber])
 
   const consultationFee = useMemo(() => activeDetail ? resolveConsultationFee(activeDetail) : 0, [activeDetail])
   const isPaid = useMemo(() => String(activeDetail?.payment?.status || '').toLowerCase() === 'paid', [activeDetail?.payment?.status])
   const currentStatus = normalizeStatus(activeDetail?.status || detailStatus)
   const canEditStatus = currentStatus === 'pending'
   const pastSlotDetail = useMemo(() => isPendingAppointmentPastSlot(activeDetail), [activeDetail])
-  const hasClinicRoom = Boolean(String(clinicRoomDraft || activeDetail?.clinicRoom || '').trim())
-  const canFinishConfirm = canEditStatus && isPaid && hasClinicRoom
+  const canFinishConfirm = canEditStatus && isPaid
   const printInvoiceDisabled = !activeDetail || !isPaid
-  const printSlipDisabled = !activeDetail || currentStatus !== 'confirmed' || !activeDetail.clinicRoom
+  const printSlipDisabled = !activeDetail || currentStatus !== 'confirmed'
   const printBothDisabled = printInvoiceDisabled || printSlipDisabled
 
   const applyPaymentToCaches = useCallback((id: string, payment: any, norm: any = null) => {
@@ -262,9 +238,6 @@ export default function ReceptionHome() {
 
     const visitExtra: any = {}
     if (status === 'confirmed') {
-      const room = String(clinicRoomDraft || '').trim()
-      if (!room) throw new Error('Vui lòng chọn phòng khám trước khi xác nhận.')
-      visitExtra.clinicRoom = room
       const qStr = String(visitQueueDraft || '').trim()
       if (qStr) {
         const n = parseInt(qStr, 10)
@@ -288,7 +261,6 @@ export default function ReceptionHome() {
         confirmedAt: null,
         confirmedBy: null,
         visitQueueNumber: null,
-        clinicRoom: '',
       }
     } else if (status === 'confirmed') {
       patch = {
@@ -298,7 +270,8 @@ export default function ReceptionHome() {
         confirmedAt: ap?.confirmedAt ?? nowIso,
         confirmedBy: ap?.confirmedBy ?? { displayName: displayName(user), email: String(user?.email || '').trim() },
         visitQueueNumber: ap?.visitQueueNumber ?? (visitQueueDraft ? parseInt(visitQueueDraft, 10) : activeDetail.visitQueueNumber),
-        clinicRoom: ap?.clinicRoom ?? clinicRoomDraft ?? activeDetail.clinicRoom,
+        clinicRoom: ap?.clinicRoom ?? activeDetail.clinicRoom,
+        clinicRoomName: ap?.clinicRoomName ?? activeDetail.clinicRoomName,
       }
     }
 
@@ -316,9 +289,9 @@ export default function ReceptionHome() {
 
     if (status !== 'confirmed') return null
     const merged = { ...activeDetail, status, ...paymentPatch, ...patch }
-    const slipOverrides = { clinicRoom: patch.clinicRoom, visitQueueNumber: patch.visitQueueNumber }
+    const slipOverrides = { visitQueueNumber: patch.visitQueueNumber }
     return {
-      visitSlip: buildVisitSlipView(merged, clinicRooms, slipOverrides),
+      visitSlip: buildVisitSlipView(merged, slipOverrides),
       invoice: buildPaymentInvoiceView(merged, slipOverrides),
     }
   }
@@ -330,10 +303,6 @@ export default function ReceptionHome() {
 
   async function handleRecordPayment() {
     if (!activeDetail?.id || !canEditStatus || isPaid) return
-    if (!hasClinicRoom) {
-      setPaymentErr('Vui lòng chọn phòng khám trước khi thu phí.')
-      return
-    }
     setPaymentErr('')
     setSaveErr('')
     setSaveMsg('')
@@ -428,7 +397,6 @@ export default function ReceptionHome() {
       await updateAppointmentStatus({
         appointmentId: activeDetail.id,
         status: 'checked_in',
-        clinicRoom: clinicRoomDraft || undefined,
         visitQueueNumber: visitQueueDraft ? Number(visitQueueDraft) : undefined,
       })
       setSaveMsg('Đã xác nhận Check-in thành công cho bệnh nhân!')
@@ -447,7 +415,7 @@ export default function ReceptionHome() {
     } finally {
       setSaving(false)
     }
-  }, [activeDetail, token, clinicRoomDraft, visitQueueDraft, loadList])
+  }, [activeDetail, token, visitQueueDraft, loadList])
 
   const handlePatientProfileUpdated = useCallback((updatedPatient: any) => {
     if (!activeDetail?.id) return
@@ -499,6 +467,12 @@ export default function ReceptionHome() {
 
   const handleQrDecode = useCallback(async (payload: string) => {
     const raw = String(payload || '').trim()
+    if (raw.includes('|') && /^\d{9,12}$/.test(raw.split('|')[0])) {
+      setListSearch(raw.split('|')[0])
+      setQrErr('')
+      setQrOpen(false)
+      return
+    }
     const cleanTicket = ticketFromQrPayload(raw) || raw
     setQrErr('')
     try {
@@ -516,7 +490,6 @@ export default function ReceptionHome() {
       setQrErr(e?.message || 'Mã QR không đúng định dạng hoặc không tìm thấy lịch hẹn.')
     }
   }, [token])
-
 
   useEffect(() => {
     qrDecodeHandlerRef.current = handleQrDecode
@@ -593,55 +566,28 @@ export default function ReceptionHome() {
     })
   }
 
-  const handleClinicRoomChange = useCallback(
-    async (newRoomId: string) => {
-      setClinicRoomDraft(newRoomId)
-      setVisitErr('')
-      const reqId = ++roomSttReqRef.current
-      if (!newRoomId || !token || !activeDetail?.appointmentDate) {
-        setVisitQueueDraft('')
-        return
-      }
-      try {
-        const nextQ = await getNextVisitQueueNumber({
-          token,
-          clinicRoom: newRoomId,
-          appointmentDate: ymd(new Date(activeDetail.appointmentDate)),
-        })
-        if (reqId === roomSttReqRef.current) {
-          setVisitQueueDraft(String(nextQ))
-        }
-      } catch {
-        /* giữ nguyên draft */
-      }
-    },
-    [token, activeDetail?.appointmentDate],
-  )
-
   const printSlipOnly = useCallback(() => {
     if (!activeDetail) return
-    const slip = buildVisitSlipView(activeDetail, clinicRooms, {
-      clinicRoom: clinicRoomDraft,
+    const slip = buildVisitSlipView(activeDetail, {
       visitQueueNumber: visitQueueDraft,
     })
     if (slip) printVisitSlip(slip)
-  }, [activeDetail, clinicRooms, clinicRoomDraft, visitQueueDraft])
+  }, [activeDetail, visitQueueDraft])
 
   const printInvoiceOnly = useCallback(() => {
     if (!activeDetail) return
     const invoice = buildPaymentInvoiceView(activeDetail, {
-      clinicRoom: clinicRoomDraft,
       visitQueueNumber: visitQueueDraft,
     })
     if (invoice) printPaymentInvoice(invoice)
-  }, [activeDetail, clinicRoomDraft, visitQueueDraft])
+  }, [activeDetail, visitQueueDraft])
 
   const printBothFromDetail = useCallback(() => {
     if (!activeDetail) return
-    const invoice = buildPaymentInvoiceView(activeDetail, { clinicRoom: clinicRoomDraft, visitQueueNumber: visitQueueDraft })
-    const visitSlip = buildVisitSlipView(activeDetail, clinicRooms, { clinicRoom: clinicRoomDraft, visitQueueNumber: visitQueueDraft })
+    const invoice = buildPaymentInvoiceView(activeDetail, { visitQueueNumber: visitQueueDraft })
+    const visitSlip = buildVisitSlipView(activeDetail, { visitQueueNumber: visitQueueDraft })
     if (invoice && visitSlip) printPaymentThenVisitSlip({ invoice, visitSlip })
-  }, [activeDetail, clinicRooms, clinicRoomDraft, visitQueueDraft])
+  }, [activeDetail, visitQueueDraft])
 
   const filteredList = useMemo(() => {
     return list.filter((row) => {
@@ -747,7 +693,7 @@ export default function ReceptionHome() {
           <div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">Tiếp nhận & Điều phối lịch khám</h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Danh sách lịch hẹn, kiểm tra thanh toán và phân phòng khám · {!fromDate && !toDate ? 'Toàn bộ thời gian' : fromDate === toDate ? `Ngày ${formatDateVi(fromDate)}` : `Từ ${formatDateVi(fromDate)} đến ${formatDateVi(toDate)}`}
+              Danh sách lịch hẹn, kiểm tra thanh toán và tiếp nhận bệnh nhân · {!fromDate && !toDate ? 'Toàn bộ thời gian' : fromDate === toDate ? `Ngày ${formatDateVi(fromDate)}` : `Từ ${formatDateVi(fromDate)} đến ${formatDateVi(toDate)}`}
             </p>
           </div>
         </div>
@@ -806,7 +752,6 @@ export default function ReceptionHome() {
         canEditStatus={canEditStatus}
         pastSlotDetail={pastSlotDetail}
         canFinishConfirm={canFinishConfirm}
-        hasClinicRoom={hasClinicRoom}
         isPaid={isPaid}
         consultationFee={consultationFee}
         paymentMethod={paymentMethod}
@@ -814,11 +759,6 @@ export default function ReceptionHome() {
         paymentSaving={paymentSaving}
         handleRecordPayment={handleRecordPayment}
         paymentErr={paymentErr}
-        clinicRoomDraft={clinicRoomDraft}
-        setClinicRoomDraft={setClinicRoomDraft}
-        handleClinicRoomChange={handleClinicRoomChange}
-        clinicRooms={clinicRooms}
-        clinicRoomsErr={clinicRoomsErr}
         visitQueueDraft={visitQueueDraft}
         setVisitQueueDraft={setVisitQueueDraft}
         saving={saving}
@@ -849,7 +789,6 @@ export default function ReceptionHome() {
         handleQrFileInput={handleQrFileInput}
         onScan={handleQrDecode}
       />
-
 
     </div>
   )

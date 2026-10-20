@@ -11,7 +11,7 @@ export async function listDoctorAppointments() {
 }
 
 export async function lookupPatientByCode({ code }) {
-  return appointmentRequest({ method: 'GET', url: '/appointments/patient-by-code', params: { code: String(code || '').trim() } }, 'Không tìm thấy bệnh nhân.')
+  return appointmentRequest({ method: 'GET', url: '/patients/lookup', params: { code: String(code || '').trim() } }, 'Không tìm thấy bệnh nhân.')
 }
 
 export async function listPatientsReception({ page = 1, pageSize = 50, q, patientCode, name, phone, account }: any = {}) {
@@ -19,7 +19,7 @@ export async function listPatientsReception({ page = 1, pageSize = 50, q, patien
   const searchTerm = q || patientCode || name || phone || account
   if (searchTerm) params.q = searchTerm
 
-  const data = await appointmentRequest({ method: 'GET', url: '/appointments/patients', params }, 'Không lấy được danh sách bệnh nhân.')
+  const data = await appointmentRequest({ method: 'GET', url: '/patients', params }, 'Không lấy được danh sách bệnh nhân.')
   const patients = Array.isArray(data?.patients) ? data.patients : Array.isArray(data?.rows) ? data.rows : []
   return {
     ...data,
@@ -31,7 +31,7 @@ export async function listPatientsReception({ page = 1, pageSize = 50, q, patien
   }
 }
 
-export async function listPatientHistoryReception({ patientId }) {
+export async function listPatientHistoryReception({ patientId }: { patientId: string; token?: string }) {
   const data = await appointmentRequest({ method: 'GET', url: '/appointments/patient-history', params: { patientId: String(patientId || '').trim() } }, 'Không lấy được lịch sử khám.')
   return data?.appointments || []
 }
@@ -44,8 +44,8 @@ export async function lookupAppointmentByTicket({ ticket }) {
   return appointmentRequest({ method: 'GET', url: '/appointments/lookup-ticket', params: { ticket: String(ticket || '').trim() } }, 'Không tra cứu được mã vé.')
 }
 
-export async function getAvailability({ doctorId, date }) {
-  return appointmentRequest({ method: 'GET', url: '/appointments/availability', params: { doctorId: String(doctorId || '').trim(), date: String(date || '').trim() } }, 'Không lấy được khung giờ.')
+export async function getAvailability({ doctorId, date, specialtyId, servicePackageId, branchId }: { doctorId?: string; date: string; specialtyId?: string | number; servicePackageId?: string; branchId?: string }) {
+  return appointmentRequest({ method: 'GET', url: '/schedules/availability', params: { doctorId: doctorId || undefined, date, specialtyId: specialtyId || undefined, servicePackageId: servicePackageId || undefined, branchId: branchId || undefined } }, 'Không lấy được khung giờ.')
 }
 
 export async function listReceptionAppointments({ from, to, status, q }) {
@@ -54,20 +54,13 @@ export async function listReceptionAppointments({ from, to, status, q }) {
   return data?.appointments || []
 }
 
-export async function getNextVisitQueueNumber({ appointmentDate, clinicRoom, excludeAppointmentId }) {
-  const data = await appointmentRequest({ method: 'GET', url: '/appointments/next-visit-queue', params: { appointmentDate: String(appointmentDate || '').trim().slice(0, 10), clinicRoom: String(clinicRoom ?? '').trim(), excludeAppointmentId } }, 'Không lấy được số thứ tự.')
-  const value = Number(data?.nextVisitQueueNumber)
-  return Number.isFinite(value) && value >= 1 ? value : 1
-}
-
-export async function updateAppointmentStatus({ appointmentId, status, cancelReason, cancelledBySystem, note, visitQueueNumber, clinicRoom }) {
+export async function updateAppointmentStatus({ appointmentId, status, cancelReason, cancelledBySystem, note, visitQueueNumber }: { appointmentId: string; status: string; cancelReason?: string; cancelledBySystem?: boolean; note?: string; visitQueueNumber?: number | string; token?: string }) {
   const id = String(appointmentId || '').trim()
-  const data = { status }
+  const data: Record<string, unknown> = { status }
   if (cancelReason != null && String(cancelReason).trim()) data.cancelReason = String(cancelReason).trim()
   if (cancelledBySystem === true) data.cancelledBySystem = true
   if (note !== undefined) data.note = String(note || '')
   if (visitQueueNumber !== undefined) data.visitQueueNumber = visitQueueNumber
-  if (clinicRoom !== undefined) data.clinicRoom = String(clinicRoom ?? '').trim()
   return appointmentRequest({ method: 'PATCH', url: `/appointments/${encodeURIComponent(id)}/status`, data }, 'Không cập nhật được trạng thái.')
 }
 
@@ -76,13 +69,13 @@ export async function finishExamAppointment({ appointmentId }) {
   return appointmentRequest({ method: 'PATCH', url: `/appointments/${encodeURIComponent(id)}/finish-visit` }, 'Không kết thúc khám được.')
 }
 
-export async function createAppointmentReception({ patientEmailOrPhone, patient, createdByStaff, doctorId, appointmentDate, startTime, note }: any) {
-  return appointmentRequest({ method: 'POST', url: '/appointments/reception', data: { source: 'clinic', bookingSource: 'clinic', createdByStaff: createdByStaff || null, patientEmailOrPhone: String(patientEmailOrPhone || '').trim(), patient: patient || null, doctorId, appointmentDate, startTime, note: note || '' } }, 'Đặt lịch thất bại.')
+export async function createAppointmentReception({ patientEmailOrPhone, patient, specialtyId, servicePackageId, doctorId, scheduleSlotId, branchId, appointmentDate, startTime, note }: any) {
+  return appointmentRequest({ method: 'POST', url: '/bookings/reception', data: { patientEmailOrPhone: String(patientEmailOrPhone || '').trim(), patient: patient || undefined, specialtyId: Number(specialtyId), servicePackageId, doctorId, scheduleSlotId, branchId: branchId || undefined, appointmentDate, startTime, note: note || '' } }, 'Đặt lịch thất bại.')
 }
 
 export async function rescheduleAppointment({ appointmentId, newSlotId, note }: { appointmentId: string; newSlotId: string; note?: string }) {
   return appointmentRequest(
-    { method: 'POST', url: `/appointments/${encodeURIComponent(appointmentId)}/reschedule`, data: { newSlotId, note } },
+    { method: 'POST', url: `/appointments/${encodeURIComponent(appointmentId)}/clinic-reschedule`, data: { newSlotId, note } },
     'Đổi lịch khám thất bại.',
   )
 }

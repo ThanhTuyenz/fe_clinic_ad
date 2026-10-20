@@ -1,5 +1,7 @@
 'use client'
 
+import { clinicPeriod } from '@/common/constants/clinic-sessions'
+
 import React from 'react'
 import {
   Building2,
@@ -126,8 +128,8 @@ export default function ScheduleMonthView({
                 <div className="space-y-1 flex-1 overflow-y-auto max-h-[105px] [scrollbar-width:none]">
                   {daySc.map((sc) => {
                     const isOpen = sc.status === 'OPEN'
-                    const isMorning = sc.startTime < '12:00'
-                    const isEvening = sc.startTime >= '17:30'
+                    const isMorning = clinicPeriod(sc.startTime) === 'MORNING'
+                    const isEvening = clinicPeriod(sc.startTime) === 'EVENING'
                     const shiftConfig = isMorning
                       ? {
                           tag: 'Sáng',

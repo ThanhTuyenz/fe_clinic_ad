@@ -2,8 +2,8 @@
 export function ticketFromQrPayload(text) {
   const raw = String(text || '').trim()
   if (!raw) return ''
-  // 1. Nếu là token check-in bảo mật hoặc mã CCCD có pipe (|) -> giữ nguyên
-  if (raw.startsWith('VITACARE_CHECKIN:') || raw.includes('|')) {
+  // 1. Giữ nguyên token check-in bảo mật.
+  if (raw.startsWith('VITACARE_CHECKIN:')) {
     return raw
   }
   // 2. Nếu là URL, trích xuất ticket/code/bookingCode từ query params

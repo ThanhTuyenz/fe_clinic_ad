@@ -33,7 +33,6 @@ interface ReceptionDetailModalProps {
   canEditStatus: boolean
   pastSlotDetail: boolean
   canFinishConfirm: boolean
-  hasClinicRoom: boolean
   isPaid: boolean
   consultationFee: number
   paymentMethod: string
@@ -41,11 +40,6 @@ interface ReceptionDetailModalProps {
   paymentSaving: boolean
   handleRecordPayment: () => void
   paymentErr: string
-  clinicRoomDraft: string
-  setClinicRoomDraft: (val: string) => void
-  handleClinicRoomChange: (newRoomId: string) => void
-  clinicRooms: any[]
-  clinicRoomsErr: string
   visitQueueDraft: string
   setVisitQueueDraft: (val: string) => void
   saving: boolean
@@ -85,7 +79,6 @@ export default function ReceptionDetailModal({
   canEditStatus,
   pastSlotDetail,
   canFinishConfirm,
-  hasClinicRoom,
   isPaid,
   consultationFee,
   paymentMethod,
@@ -93,10 +86,6 @@ export default function ReceptionDetailModal({
   paymentSaving,
   handleRecordPayment,
   paymentErr,
-  clinicRoomDraft,
-  handleClinicRoomChange,
-  clinicRooms,
-  clinicRoomsErr,
   visitQueueDraft,
   setVisitQueueDraft,
   saving,
@@ -476,7 +465,7 @@ export default function ReceptionDetailModal({
                   <button
                     type="button"
                     className="w-full py-2 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded text-xs transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
-                    disabled={!canEditStatus || !hasClinicRoom || paymentSaving}
+                    disabled={!canEditStatus || paymentSaving}
                     onClick={handleRecordPayment}
                   >
                     {paymentSaving ? (
@@ -488,35 +477,21 @@ export default function ReceptionDetailModal({
                     )}
                   </button>
 
-                  {!hasClinicRoom && canEditStatus && (
-                    <p className="text-[11px] text-amber-700 font-medium">⚠️ Vui lòng chọn phòng khám trước khi thu phí.</p>
-                  )}
                 </div>
               )}
             </div>
           </section>
 
           <section className="bg-slate-50 border border-slate-200/80 rounded p-4 space-y-3">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Điều phối phòng & Xác nhận</h3>
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Thông tin tiếp nhận</h3>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Phòng khám <span className="text-rose-600">*</span>
-              </label>
-              <select
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-600"
-                value={clinicRoomDraft}
-                disabled={!canEditStatus}
-                onChange={(e) => handleClinicRoomChange(e.target.value)}
-              >
-                <option value="">-- Chọn phòng khám --</option>
-                {clinicRooms.map((r) => (
-                  <option key={r.id || r.roomID} value={String(r.id || r.roomID)}>
-                    {r.name} {r.roomNumber ? `(${r.roomNumber})` : ''}
-                  </option>
-                ))}
-              </select>
-              {clinicRoomsErr && <span className="text-[11px] text-rose-700 font-medium">{clinicRoomsErr}</span>}
+              <span className="block text-[11px] font-bold text-slate-700 mb-1">Phòng khám theo ca bác sĩ</span>
+              <p className="text-xs font-medium text-slate-800">
+                {activeDetail?.isTelehealth || activeDetail?.bookingMethod?.code === 'ONLINE_CONSULTATION'
+                  ? 'Tư vấn trực tuyến'
+                  : activeDetail?.clinicRoomName || 'Chưa phân phòng'}
+              </p>
             </div>
 
             <div>

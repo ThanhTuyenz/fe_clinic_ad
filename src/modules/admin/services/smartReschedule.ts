@@ -29,7 +29,7 @@ export async function analyzeDoctorLeaveImpact(payload: {
   toDate: string
 }): Promise<DoctorLeaveImpactResponse> {
   try {
-    const res = await apiClient.post('/appointments/doctor-leave/impact-analysis', payload)
+    const res = await apiClient.post('/schedules/doctor-leave/impact-analysis', payload)
     return unwrapApiData<DoctorLeaveImpactResponse>(res.data)
   } catch (err) {
     throw new Error(apiErrorMessage(err, 'Không thể phân tích tác động lịch nghỉ của bác sĩ.'))

@@ -1,5 +1,7 @@
 'use client'
 
+import { clinicPeriod } from '@/common/constants/clinic-sessions'
+
 import React from 'react'
 import {
   Building2,
@@ -197,8 +199,8 @@ export default function ScheduleWeekGridView({
                           <div className="space-y-1.5">
                             {daySc.map((sc) => {
                               const isOpen = sc.status === 'OPEN'
-                              const isMorning = sc.startTime < '12:00'
-                              const isEvening = sc.startTime >= '17:30'
+                              const isMorning = clinicPeriod(sc.startTime) === 'MORNING'
+                              const isEvening = clinicPeriod(sc.startTime) === 'EVENING'
 
                               const shiftConfig = isMorning
                                 ? {
