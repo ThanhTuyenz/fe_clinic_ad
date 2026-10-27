@@ -5,6 +5,7 @@ import { CLINIC_SESSIONS } from '@/common/constants/clinic-sessions'
 import { Calendar, Clock, Layers, Check, AlertCircle } from 'lucide-react'
 import { createBatchSchedules } from '@/modules/admin/services/schedules'
 import { AdminButton, AdminInput, AdminModal, AdminSelect } from '@/common/components/ui'
+import { filterRoomsForDoctor } from './scheduleUtils'
 
 interface Props {
   isOpen: boolean
@@ -98,9 +99,9 @@ export default function BatchScheduleModal({
   }, [isOpen, initialDoctorId, initialBranchId, initialDate, doctors, branches, defaultEnd])
 
   const availableRooms = useMemo(() => {
-    if (!branchId) return rooms
-    return rooms.filter((rm) => rm.branchId === branchId || rm.branch?.id === branchId)
-  }, [rooms, branchId])
+    const doctor = doctors.find((d) => (d.doctor?.id || d.id) === doctorId)
+    return filterRoomsForDoctor(rooms, branchId, doctor)
+  }, [rooms, doctors, doctorId, branchId])
 
   const handleDoctorChange = (docId: string) => {
     setDoctorId(docId)

@@ -14,3 +14,7 @@ pnpm-debug.log*
 *.MD
 !README.md
 !readme.md
+
+# Generated TypeScript cache and development logs
+*.tsbuildinfo
+.next-dev.*.log

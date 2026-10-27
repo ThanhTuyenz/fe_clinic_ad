@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import { getSocketBaseUrl } from "@/config/backend";
 
 export interface ChatMessage {
   senderId: string;
@@ -212,7 +213,7 @@ export function useWebRTC({
     if (!localStream) return;
 
     setConnectionStatus("connecting");
-    const socketBase = serverUrl.replace(/\/api\/v\d+\/?$/, "");
+    const socketBase = getSocketBaseUrl(serverUrl);
     const socket = io(`${socketBase}/telehealth`, {
       transports: ["websocket"],
       withCredentials: true,

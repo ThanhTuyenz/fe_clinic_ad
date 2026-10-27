@@ -1,15 +1,10 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import { API_BASE_PATH } from '@/config/backend'
 
-export function resolveApiBase(): string {
-  const raw = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL
-  const configured = (raw && String(raw).trim().replace(/\/+$/, '')) || 'http://localhost:8011'
-  if (/\/api\/v\d+$/i.test(configured)) return configured
-  if (/\/api$/i.test(configured)) return `${configured}/v1`
-  return `${configured}/api/v1`
-}
+export { getApiBase as resolveApiBase } from '@/config/backend'
 
 export const apiClient = axios.create({
-  baseURL: resolveApiBase(),
+  baseURL: API_BASE_PATH,
   timeout: 15_000,
   withCredentials: true,
   headers: { Accept: 'application/json', 'Content-Type': 'application/json' },

@@ -4,7 +4,6 @@ import { clinicPeriod } from '@/common/constants/clinic-sessions'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  createSchedule,
   deleteSchedule,
   listSchedules,
   updateSchedule,
@@ -22,6 +21,7 @@ import {
   DoctorLeaveModal,
   EditShiftModal,
   EMPTY_FORM,
+  filterRoomsForDoctor,
   formatYMD,
   getMonday,
   ScheduleMonthView,
@@ -49,13 +49,14 @@ export default function DoctorWorkSchedulesPage({
   initialBranchId,
 }: DoctorWorkSchedulesPageProps = {}) {
   const { hasPermission } = usePermission()
-  const canCreate = !readOnly && hasPermission(AppPermission.SCHEDULE_CREATE)
-  const canUpdate = !readOnly && hasPermission(AppPermission.SCHEDULE_UPDATE)
-  const canDelete = !readOnly && hasPermission(AppPermission.SCHEDULE_DELETE)
   const session = getStaffSession()
   const currentRole = staffRole(session?.user)
   const isDoctor = Boolean(isDoctorRole || currentRole === 'doctor')
   const isBranchManager = currentRole === 'branch_manager'
+  const isChainManager = currentRole === 'chain_manager'
+  const canCreate = !readOnly && !isChainManager && hasPermission(AppPermission.SCHEDULE_CREATE)
+  const canUpdate = !readOnly && !isChainManager && hasPermission(AppPermission.SCHEDULE_UPDATE)
+  const canDelete = !readOnly && !isChainManager && hasPermission(AppPermission.SCHEDULE_DELETE)
 
   const assignedBranch = useMemo(() => {
     const user = session?.user
@@ -212,7 +213,7 @@ export default function DoctorWorkSchedulesPage({
           return []
         }),
         listBranches().catch(() => listCatalog('branches')).catch(() => []),
-        listClinicRooms().catch(() => []),
+        canCreate || canUpdate ? listClinicRooms().catch(() => []) : Promise.resolve([]),
         listSpecialties().catch(() => listCatalog('specialties')).catch(() => []),
       ])
 
@@ -244,7 +245,7 @@ export default function DoctorWorkSchedulesPage({
     } finally {
       setLoading(false)
     }
-  }, [targetDoctorId, effectiveBranch, viewMode, startDateStr, endDateStr, monthStartDateStr, monthEndDateStr, isDoctor])
+  }, [targetDoctorId, effectiveBranch, viewMode, startDateStr, endDateStr, monthStartDateStr, monthEndDateStr, isDoctor, canCreate, canUpdate])
 
   useEffect(() => {
     void loadData()
@@ -252,9 +253,9 @@ export default function DoctorWorkSchedulesPage({
 
   const availableRooms = useMemo(() => {
     const bId = form.branchId || effectiveBranch
-    if (!bId) return rooms
-    return rooms.filter((rm) => rm.branchId === bId || rm.branch?.id === bId)
-  }, [rooms, form.branchId, effectiveBranch])
+    const doctor = doctors.find((d) => (d.doctor?.id || d.id) === form.doctorId)
+    return filterRoomsForDoctor(rooms, bId, doctor)
+  }, [rooms, doctors, form.doctorId, form.branchId, effectiveBranch])
 
   const schedulesMap = useMemo(() => {
     const map: Record<string, any[]> = {}
@@ -440,6 +441,7 @@ export default function DoctorWorkSchedulesPage({
 
   const submitEdit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!canUpdate) return
     if (!form.doctorId || !form.branchId || !form.workDate)
       return setError('Vui lòng chọn bác sĩ, chi nhánh và ngày.')
     setSaving(true)
@@ -493,11 +495,13 @@ export default function DoctorWorkSchedulesPage({
       {/* Header chỉ hiển thị với vai trò Quản trị viên / Quản lý */}
       {!isDoctor && (
         <AdminPageHeader
-          eyebrow="Quản lý lịch làm việc"
-          title="Lịch làm việc & Ca trực Bác sĩ"
-          description="Phân ca trực định kỳ, điều phối phòng làm việc, theo dõi tiến độ đặt hẹn."
+          eyebrow={isChainManager ? 'Theo dõi lịch toàn chuỗi' : 'Quản lý lịch làm việc'}
+          title={isChainManager ? 'Theo dõi lịch làm việc bác sĩ toàn chuỗi' : 'Lịch làm việc & Ca trực Bác sĩ'}
+          description={isChainManager
+            ? 'Tra cứu ca làm việc và số lịch hẹn của bác sĩ tại các chi nhánh.'
+            : 'Phân ca trực định kỳ, điều phối phòng làm việc, theo dõi tiến độ đặt hẹn.'}
         >
-          <div className="flex flex-wrap items-center gap-2">
+          {(canCreate || canUpdate) && <div className="flex flex-wrap items-center gap-2">
             <AdminButton
               variant="outline"
               icon={Copy}
@@ -526,7 +530,7 @@ export default function DoctorWorkSchedulesPage({
             >
               Phân ca làm việc
             </AdminButton>
-          </div>
+          </div>}
         </AdminPageHeader>
       )}
 
@@ -593,6 +597,8 @@ export default function DoctorWorkSchedulesPage({
         />
       ) : viewMode === 'month' ? (
         <ScheduleMonthView
+          canUpdate={canUpdate}
+          canDelete={canDelete}
           monthDays={monthDays}
           todayStr={todayStr}
           currentMonthDate={currentMonthDate}
@@ -610,6 +616,8 @@ export default function DoctorWorkSchedulesPage({
         />
       ) : (
         <ScheduleTableView
+          canUpdate={canUpdate}
+          canDelete={canDelete}
           filteredSchedules={filteredSchedules}
           loading={loading}
           isDoctor={isDoctor}
@@ -628,51 +636,59 @@ export default function DoctorWorkSchedulesPage({
       />
 
       {/* MODAL CẬP NHẬT 1 CA TRỰC */}
-      <EditShiftModal
-        isOpen={editModal}
-        onClose={() => setEditModal(false)}
-        form={form}
-        setForm={setForm}
-        branches={branches}
-        availableRooms={availableRooms}
-        saving={saving}
-        onSubmit={submitEdit}
-      />
+      {canUpdate && (
+        <EditShiftModal
+          isOpen={editModal}
+          onClose={() => setEditModal(false)}
+          form={form}
+          setForm={setForm}
+          branches={branches}
+          availableRooms={availableRooms}
+          saving={saving}
+          onSubmit={submitEdit}
+        />
+      )}
 
       {/* PRIMARY SCHEDULE CREATION MODAL */}
-      <BatchScheduleModal
-        isOpen={scheduleModalOpen}
-        onClose={() => setScheduleModalOpen(false)}
-        doctors={doctors}
-        branches={isBranchManager && assignedBranch ? [assignedBranch] : branches}
-        rooms={
-          isBranchManager && assignedBranch
-            ? rooms.filter((r) => r.branchId === assignedBranch.id || r.branch?.id === assignedBranch.id)
-            : rooms
-        }
-        initialBranchId={effectiveBranch}
-        initialDoctorId={selectedDoctorId}
-        initialDate={selectedDate}
-        onSuccess={loadData}
-      />
+      {canCreate && (
+        <BatchScheduleModal
+          isOpen={scheduleModalOpen}
+          onClose={() => setScheduleModalOpen(false)}
+          doctors={doctors}
+          branches={isBranchManager && assignedBranch ? [assignedBranch] : branches}
+          rooms={
+            isBranchManager && assignedBranch
+              ? rooms.filter((r) => r.branchId === assignedBranch.id || r.branch?.id === assignedBranch.id)
+              : rooms
+          }
+          initialBranchId={effectiveBranch}
+          initialDoctorId={selectedDoctorId}
+          initialDate={selectedDate}
+          onSuccess={loadData}
+        />
+      )}
 
       {/* COPY WEEK MODAL */}
-      <CopyWeekModal
-        isOpen={copyWeekModalOpen}
-        onClose={() => setCopyWeekModalOpen(false)}
-        currentMonday={currentMonday}
-        branchId={effectiveBranch}
-        branches={isBranchManager && assignedBranch ? [assignedBranch] : branches}
-        onSuccess={loadData}
-      />
+      {canCreate && (
+        <CopyWeekModal
+          isOpen={copyWeekModalOpen}
+          onClose={() => setCopyWeekModalOpen(false)}
+          currentMonday={currentMonday}
+          branchId={effectiveBranch}
+          branches={isBranchManager && assignedBranch ? [assignedBranch] : branches}
+          onSuccess={loadData}
+        />
+      )}
 
       {/* DOCTOR LEAVE MODAL */}
-      <DoctorLeaveModal
-        isOpen={doctorLeaveOpen}
-        onClose={() => setDoctorLeaveOpen(false)}
-        doctors={doctors}
-        onSuccess={loadData}
-      />
+      {canUpdate && (
+        <DoctorLeaveModal
+          isOpen={doctorLeaveOpen}
+          onClose={() => setDoctorLeaveOpen(false)}
+          doctors={doctors}
+          onSuccess={loadData}
+        />
+      )}
     </>
   )
 }

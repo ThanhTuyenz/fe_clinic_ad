@@ -72,9 +72,9 @@ export default function AdminAnalyticsPage({ stats, loading, embedded = false }:
   }, [loadAnalytics])
 
   const handleExport = (format: string) => {
-    setExportNotice(`Đang xuất file báo cáo ${format}... Vui lòng đợi trong giây lát.`)
+    setExportNotice(`Đang xuất file thống kê ${format}... Vui lòng đợi trong giây lát.`)
     setTimeout(() => {
-      setExportNotice(`Xuất báo cáo ${format} thành công! File đã sẵn sàng tải xuống.`)
+      setExportNotice(`Xuất thống kê ${format} thành công! File đã sẵn sàng tải xuống.`)
       setTimeout(() => setExportNotice(null), 3000)
     }, 1200)
   }
@@ -85,6 +85,10 @@ export default function AdminAnalyticsPage({ stats, loading, embedded = false }:
       return analyticsData.financialSummary
     }
     return {
+      invoicePaymentStatus: {
+        paid: { count: 0, amount: 0 },
+        unpaid: { count: 0, amount: 0 },
+      },
       revenue: '0 đ',
       revenueGrowth: '0% so với kỳ trước',
       dailyAvg: '0 đ',
@@ -123,10 +127,10 @@ export default function AdminAnalyticsPage({ stats, loading, embedded = false }:
           <div>
             {!embedded && <>
             <p className="text-[11px] font-bold uppercase tracking-[.12em] text-slate-500">
-              Hệ thống Báo cáo & Điều hành
+              Hệ thống Thống kê & Điều hành
             </p>
             <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">
-              Báo cáo & Thống kê
+              Thống kê
             </h1>
             </>}
             <p className="mt-0.5 text-xs text-slate-500">
@@ -134,7 +138,7 @@ export default function AdminAnalyticsPage({ stats, loading, embedded = false }:
             </p>
           </div>
 
-          {/* Cụm Nút Xuất Báo Cáo & Nút Làm Mới */}
+          {/* Cụm Nút Xuất Thống Kê & Nút Làm Mới */}
           <div className={activeTab === 'branch_comparison' ? 'hidden' : 'flex items-center gap-2'}>
             <button
               type="button"
@@ -152,10 +156,10 @@ export default function AdminAnalyticsPage({ stats, loading, embedded = false }:
               <button
                 type="button"
                 className="flex items-center gap-2 rounded border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
-                title="Tải xuống dữ liệu báo cáo đa định dạng"
+                title="Tải xuống dữ liệu thống kê đa định dạng"
               >
                 <Download className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} />
-                <span>Xuất báo cáo ▾</span>
+                <span>Xuất thống kê ▾</span>
               </button>
               {/* Menu xuất file */}
               <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-150 absolute right-0 top-full mt-1 w-44 rounded border border-slate-200 bg-white p-1.5 shadow-lg z-50 text-xs">
@@ -169,7 +173,7 @@ export default function AdminAnalyticsPage({ stats, loading, embedded = false }:
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleExport('Báo cáo PDF')}
+                  onClick={() => handleExport('Thống kê PDF')}
                   className="w-full text-left px-2.5 py-1.5 rounded hover:bg-rose-50 hover:text-rose-800 font-medium flex items-center justify-between"
                 >
                   <span>Xuất file PDF</span>

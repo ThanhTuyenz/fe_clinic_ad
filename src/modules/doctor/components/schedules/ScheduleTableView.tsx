@@ -16,7 +16,6 @@ import { SCHEDULE_TABLE_COLUMNS } from './scheduleUtils'
 interface ScheduleTableViewProps {
   filteredSchedules: any[]
   loading: boolean
-  canCreate?: boolean
   canUpdate?: boolean
   canDelete?: boolean
   isDoctor: boolean
@@ -30,9 +29,8 @@ export default function ScheduleTableView({
   filteredSchedules,
   loading,
   isDoctor,
-  canCreate = true,
-  canUpdate = true,
-  canDelete = true,
+  canUpdate = false,
+  canDelete = false,
   onCardClick,
   onOpenEdit,
   onToggleStatus,
@@ -89,7 +87,7 @@ export default function ScheduleTableView({
                     />
                   </td>
                   <td className="px-5 py-3 text-right whitespace-nowrap">
-                    {isDoctor ? (
+                    {isDoctor || (!canUpdate && !canDelete) ? (
                       <AdminButton
                         variant="secondary"
                         size="xs"
@@ -112,6 +110,7 @@ export default function ScheduleTableView({
                               ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
                               : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
                           }
+                          disabled={!canUpdate}
                           onClick={() => void onToggleStatus(row)}
                         >
                           {row.status === 'OPEN' ? 'Đóng' : 'Mở'}
@@ -120,6 +119,7 @@ export default function ScheduleTableView({
                           variant="ghost"
                           size="xs"
                           className="text-rose-600 hover:bg-rose-50"
+                          disabled={!canDelete}
                           onClick={() => void onRemove(row)}
                         >
                           Xóa

@@ -52,7 +52,7 @@ export default function DoctorAppHeader({
         isOpen={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
       />
-      <header className="h-14 bg-white/95 backdrop-blur border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 sticky top-0 z-30 shadow-2xs lg:pl-[256px]">
+      {/* <header className="h-14 bg-white/95 backdrop-blur border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 sticky top-0 z-30 shadow-2xs lg:pl-[256px]">
         <div className="flex items-center gap-2 sm:gap-2.5">
           <button
             type="button"
@@ -62,17 +62,7 @@ export default function DoctorAppHeader({
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2" role="banner" aria-label="VitaCare Clinic">
-            <span
-              className="w-6 h-6 rounded bg-emerald-700 text-white flex items-center justify-center font-black text-sm shrink-0"
-              aria-hidden="true"
-            >
-              +
-            </span>
-            <span className="text-sm font-bold text-slate-900 tracking-tight hidden xs:inline-block sm:inline-block">
-              VitaCare Clinic
-            </span>
-          </div>
+
         </div>
 
 
@@ -90,7 +80,7 @@ export default function DoctorAppHeader({
             <span className="hidden sm:inline-block">Đăng xuất</span>
           </button>
         </div>
-      </header>
+      </header> */}
     </>
   )
 }

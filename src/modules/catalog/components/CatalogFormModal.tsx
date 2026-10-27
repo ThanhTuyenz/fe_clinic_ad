@@ -417,6 +417,13 @@ export default function CatalogFormModal({
                         )
                       })}
                     </div>
+                  ) : type === 'checkbox' ? (
+                    <input
+                      type="checkbox"
+                      checked={form[key] === true}
+                      onChange={(e) => setForm({ ...form, [key]: e.target.checked })}
+                      className="h-4 w-4 rounded accent-emerald-700 cursor-pointer"
+                    />
                   ) : key === 'code' ? (
                     <div className="flex gap-2">
                       <input

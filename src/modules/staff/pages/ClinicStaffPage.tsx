@@ -20,7 +20,7 @@ import {
   AdminSelect,
   AdminTextarea,
 } from '@/common/components/ui'
-import { createUser, deleteUser, listUsers, updateUser, listCatalog, listClinicRooms, resolveMediaUrl } from '../services/staffService'
+import { createUser, deleteUser, listUsers, updateUser, listCatalog, resolveMediaUrl } from '../services/staffService'
 import { useAuth } from '@/common/hooks/useAuth'
 import { usePermission } from '@/common/hooks/usePermission'
 import { AppPermission } from '@/common/constants/permissions.constant'
@@ -53,15 +53,20 @@ const EMPTY = {
   role: 'doctor',
   isBlocked: false,
   avatarUrl: '',
-  academicRank: 'BS. CKI',
+  academicRank: '',
   licenseNumber: '',
-  experienceYears: '5',
+  experienceYears: '',
   biography: '',
   branchId: '',
   branchIds: [] as string[],
   primaryBranchId: '',
-  specialtyId: '',
-  roomId: '',
+  specialtyIds: [] as string[],
+  primarySpecialtyId: '',
+  consultationFee: '',
+  onlineConsultationFee: '',
+  isOnlineConsultationEnabled: false,
+  doctorIsActive: true,
+  isFeatured: false,
 }
 
 const TABLE_COLUMNS = [
@@ -84,7 +89,6 @@ export default function ClinicStaffPage() {
   const [rows, setRows] = useState<any[]>([])
   const [branches, setBranches] = useState<any[]>([])
   const [specialties, setSpecialties] = useState<any[]>([])
-  const [rooms, setRooms] = useState<any[]>([])
   const [filter, setFilter] = useState('all')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
@@ -99,11 +103,10 @@ export default function ClinicStaffPage() {
     setLoading(true)
     setError('')
     try {
-      const [uRes, bRes, sRes, rRes] = await Promise.all([
+      const [uRes, bRes, sRes] = await Promise.all([
         listUsers(),
         listCatalog('branches').catch(() => []),
         listCatalog('specialties').catch(() => []),
-        listClinicRooms().catch(() => []),
       ])
       setRows(
         uRes.data.filter((u: any) =>
@@ -112,7 +115,6 @@ export default function ClinicStaffPage() {
       )
       setBranches(bRes)
       setSpecialties(sRes)
-      setRooms(rRes)
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || 'Không tải được nhân sự.')
     } finally {
@@ -131,15 +133,10 @@ export default function ClinicStaffPage() {
       if (!roleMatch) return false
       if (!q) return true
       const b = r.branchAssignments?.[0]?.branch?.name || r.branchName || ''
-      const spec = r.doctor?.specialties?.[0]?.specialty?.name || ''
+      const spec = (r.doctor?.specialties || []).map((s: any) => s.specialty?.name).join(' ')
       return [r.fullName, r.email, r.phoneNumber, b, spec].join(' ').toLowerCase().includes(q)
     })
   }, [rows, filter, query])
-
-  const availableRooms = useMemo(() => {
-    if (!form.branchId) return rooms
-    return rooms.filter((rm: any) => rm.branchId === form.branchId)
-  }, [rooms, form.branchId])
 
   const openCreate = () => {
     setSelected(null)
@@ -149,7 +146,6 @@ export default function ClinicStaffPage() {
       branchId: initialBranchId,
       branchIds: initialBranchId ? [initialBranchId] : [],
       primaryBranchId: initialBranchId,
-      specialtyId: specialties[0]?.id ? String(specialties[0].id) : '',
     })
     setError('')
     setModal('create')
@@ -171,19 +167,20 @@ export default function ClinicStaffPage() {
       role: String(row.role || row.userType).toLowerCase(),
       isBlocked: !!row.isBlocked,
       avatarUrl: row.avatarUrl || doc.avatarUrl || '',
-      academicRank: doc.academicRank || 'BS. CKI',
+      academicRank: doc.academicRank || '',
       licenseNumber: doc.licenseNumber || '',
-      experienceYears: doc.experienceYears != null ? String(doc.experienceYears) : '5',
+      experienceYears: doc.experienceYears != null ? String(doc.experienceYears) : '',
       biography: doc.biography || '',
       branchId: primaryId,
       branchIds: finalBranchIds,
       primaryBranchId: primaryId,
-      specialtyId: doc.specialties?.[0]?.specialtyId
-        ? String(doc.specialties[0].specialtyId)
-        : doc.specialtyId
-        ? String(doc.specialtyId)
-        : '',
-      roomId: doc.roomId || row.roomId || '',
+      specialtyIds: (doc.specialties || []).map((s: any) => String(s.specialtyId ?? s.specialty?.id)),
+      primarySpecialtyId: String((doc.specialties || []).find((s: any) => s.isPrimary)?.specialtyId ?? (doc.specialties || []).find((s: any) => s.isPrimary)?.specialty?.id ?? doc.specialties?.[0]?.specialtyId ?? doc.specialties?.[0]?.specialty?.id ?? ''),
+      consultationFee: doc.consultationFee != null ? String(doc.consultationFee) : '',
+      onlineConsultationFee: doc.onlineConsultationFee != null ? String(doc.onlineConsultationFee) : '',
+      isOnlineConsultationEnabled: doc.isOnlineConsultationEnabled ?? false,
+      doctorIsActive: doc.isActive ?? true,
+      isFeatured: doc.isFeatured ?? false,
     })
     setError('')
     setModal('edit')
@@ -191,7 +188,7 @@ export default function ClinicStaffPage() {
 
   const toggleBranch = (bId: string) => {
     if (form.role === 'doctor') {
-      setForm((prev: any) => ({ ...prev, branchIds: [bId], primaryBranchId: bId, branchId: bId, roomId: '' }))
+      setForm((prev: any) => ({ ...prev, branchIds: [bId], primaryBranchId: bId, branchId: bId }))
       return
     }
     const current: string[] = form.branchIds || []
@@ -213,6 +210,15 @@ export default function ClinicStaffPage() {
     }))
   }
 
+  const toggleSpecialty = (id: string) => {
+    setForm((prev: any) => {
+      const ids = prev.specialtyIds.includes(id)
+        ? prev.specialtyIds.filter((value: string) => value !== id)
+        : [...prev.specialtyIds, id]
+      return { ...prev, specialtyIds: ids, primarySpecialtyId: ids.includes(prev.primarySpecialtyId) ? prev.primarySpecialtyId : ids[0] || '' }
+    })
+  }
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.fullName.trim() || !form.email.trim()) return setError('Vui lòng nhập họ tên và email.')
@@ -221,6 +227,14 @@ export default function ClinicStaffPage() {
     if (!['admin', 'chain_manager'].includes(form.role) && (!form.branchIds || form.branchIds.length === 0))
       return setError('Vui lòng chọn ít nhất một cơ sở làm việc / quản lý.')
     if (form.role === 'doctor' && form.branchIds.length !== 1) return setError('Mỗi bác sĩ phải làm việc tại đúng một chi nhánh.')
+    if (form.role === 'doctor') {
+      if (!form.academicRank || !form.licenseNumber.trim()) return setError('Vui lòng nhập học hàm / học vị và số CCHN.')
+      if (!form.specialtyIds.length || !form.specialtyIds.includes(form.primarySpecialtyId)) return setError('Vui lòng chọn chuyên khoa và một chuyên khoa chính.')
+      if (form.consultationFee === '' || !Number.isFinite(Number(form.consultationFee)) || Number(form.consultationFee) < 0) return setError('Vui lòng nhập phí khám hợp lệ.')
+      if (form.isOnlineConsultationEnabled && form.onlineConsultationFee === '') return setError('Vui lòng nhập phí tư vấn trực tuyến.')
+      if (form.onlineConsultationFee !== '' && (!Number.isFinite(Number(form.onlineConsultationFee)) || Number(form.onlineConsultationFee) < 0)) return setError('Phí tư vấn phải là số không âm.')
+      if (form.experienceYears === '' || !Number.isInteger(Number(form.experienceYears)) || Number(form.experienceYears) < 0) return setError('Kinh nghiệm phải là số năm nguyên, không âm.')
+    }
 
     setSaving(true)
     setError('')
@@ -243,8 +257,13 @@ export default function ClinicStaffPage() {
         payload.licenseNumber = form.licenseNumber.trim()
         payload.experienceYears = Number(form.experienceYears) || 0
         payload.biography = form.biography.trim()
-        if (form.specialtyId) payload.specialtyId = Number(form.specialtyId)
-        if (form.roomId) payload.roomId = form.roomId
+        payload.specialtyIds = form.specialtyIds.map(Number)
+        payload.primarySpecialtyId = Number(form.primarySpecialtyId)
+        payload.consultationFee = Number(form.consultationFee)
+        payload.onlineConsultationFee = form.onlineConsultationFee === '' ? null : Number(form.onlineConsultationFee)
+        payload.isOnlineConsultationEnabled = form.isOnlineConsultationEnabled
+        payload.doctorIsActive = form.doctorIsActive
+        payload.isFeatured = form.isFeatured
       }
       if (modal === 'create') {
         await createUser({ ...payload, status: 'active' })
@@ -301,7 +320,7 @@ export default function ClinicStaffPage() {
       <AdminPageHeader
         eyebrow="Quản lý người dùng"
         title="Nhân sự phòng khám"
-        description="Quản lý tài khoản, ảnh đại diện, chi nhánh, chuyên khoa và phòng khám."
+        description="Quản lý tài khoản, ảnh đại diện, chi nhánh và chuyên khoa của nhân sự."
       >
         {currentRole !== 'admin' && <AdminButton
           variant="secondary"
@@ -369,7 +388,7 @@ export default function ClinicStaffPage() {
               filtered.map((row) => {
                 const bName =
                   (['chain_manager', 'admin'].includes(String(row.role).toLowerCase()) ? 'Toàn hệ thống' : row.branchAssignments?.[0]?.branch?.name || row.branchName || 'Chưa phân công')
-                const specName = row.doctor?.specialties?.[0]?.specialty?.name || '—'
+                const specName = [...(row.doctor?.specialties || [])].sort((a: any, b: any) => Number(b.isPrimary) - Number(a.isPrimary)).map((s: any) => s.specialty?.name).filter(Boolean).join(', ') || '—'
                 const avatar = row.avatarUrl || row.doctor?.avatarUrl
                 const roleKey = String(row.role || row.userType).toLowerCase()
                 return (
@@ -530,7 +549,7 @@ export default function ClinicStaffPage() {
               label="Vai trò hệ thống"
               disabled={modal === 'edit' && !canManageRoles}
               value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value, ...(e.target.value === 'doctor' ? { branchIds: form.primaryBranchId ? [form.primaryBranchId] : [], roomId: '' } : {}) })}
+              onChange={(e) => setForm({ ...form, role: e.target.value, ...(e.target.value === 'doctor' ? { branchIds: form.primaryBranchId ? [form.primaryBranchId] : [] } : {}) })}
               options={canManageRoles || modal === 'edit' ? ROLES.slice(1) : ROLES.slice(1).filter(([id]) => ['doctor', 'receptionist'].includes(id))}
             />
             <AdminInput
@@ -546,7 +565,29 @@ export default function ClinicStaffPage() {
           </div>
 
           {/* Bác sĩ làm việc tại một chi nhánh; các vai trò khác giữ phạm vi phân công. */}
-          {['admin', 'chain_manager'].includes(form.role) ? <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Vai trò này có phạm vi toàn hệ thống, không cần gán từng chi nhánh.</p> : (
+          {['admin', 'chain_manager'].includes(form.role) ? <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Vai trò này có phạm vi toàn hệ thống, không cần gán từng chi nhánh.</p> : form.role === 'doctor' ? (
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-bold text-slate-800">
+                Chi nhánh công tác & khám bệnh <span className="text-rose-500">*</span>
+              </legend>
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                {branches.map((b) => (
+                  <label key={b.id} className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+                    <input
+                      type="radio"
+                      name="doctor-branch"
+                      value={b.id}
+                      required
+                      checked={form.branchIds?.includes(b.id) ?? false}
+                      onChange={() => toggleBranch(b.id)}
+                      className="w-4 h-4 accent-emerald-700 cursor-pointer"
+                    />
+                    {b.name}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : (
           <div className="p-3 rounded border border-slate-200 bg-slate-50/60 space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
@@ -639,12 +680,15 @@ export default function ClinicStaffPage() {
               <div className="grid gap-3 sm:grid-cols-3">
                 <AdminSelect
                   label="Học hàm / Học vị"
+                  required
+                  placeholder="-- Chọn học hàm / học vị --"
                   value={form.academicRank}
                   onChange={(e) => setForm({ ...form, academicRank: e.target.value })}
                   options={ACADEMIC_RANKS.map((r) => ({ value: r, label: r }))}
                 />
                 <AdminInput
                   label="Số CCHN"
+                  required
                   name="licenseNumber"
                   value={form.licenseNumber}
                   onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })}
@@ -654,31 +698,52 @@ export default function ClinicStaffPage() {
                 />
                 <AdminInput
                   label="Kinh nghiệm (năm)"
+                  required
                   type="number"
                   min="0"
+                  step="1"
                   value={form.experienceYears}
                   onChange={(e) => setForm({ ...form, experienceYears: e.target.value })}
                 />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <AdminSelect
-                  label="Chuyên khoa"
-                  value={form.specialtyId}
-                  onChange={(e) => setForm({ ...form, specialtyId: e.target.value })}
-                  placeholder="-- Chọn chuyên khoa --"
-                  options={specialties.map((s) => ({ value: String(s.id), label: s.name }))}
-                />
-                <div className="sm:col-span-2">
-                  <AdminSelect
-                    label="Phòng khám phân công"
-                    value={form.roomId}
-                    onChange={(e) => setForm({ ...form, roomId: e.target.value })}
-                    placeholder="-- Chọn phòng khám --"
-                    options={availableRooms.map((r) => ({ value: r.id, label: `${r.name} (${r.code})` }))}
-                  />
+              <fieldset className="space-y-2">
+                <legend className="text-xs font-bold text-slate-800">Chuyên khoa <span className="text-rose-500">*</span></legend>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  {specialties.filter((s) => s.isActive !== false || form.specialtyIds.includes(String(s.id))).map((s) => (
+                    <label key={s.id} className="flex items-center gap-2 cursor-pointer text-xs text-slate-700">
+                      <input type="checkbox" checked={form.specialtyIds.includes(String(s.id))} onChange={() => toggleSpecialty(String(s.id))} className="w-4 h-4 accent-emerald-700" />
+                      {s.name}{s.isActive === false ? ' (Ngừng hoạt động)' : ''}
+                    </label>
+                  ))}
                 </div>
+              </fieldset>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <AdminSelect label="Chuyên khoa chính" required value={form.primarySpecialtyId}
+                  onChange={(e) => setForm({ ...form, primarySpecialtyId: e.target.value })}
+                  placeholder="-- Chọn chuyên khoa chính --"
+                  options={specialties.filter((s) => s.isActive !== false && form.specialtyIds.includes(String(s.id))).map((s) => ({ value: String(s.id), label: s.name }))} />
+                <AdminInput label="Phí khám (VNĐ)" type="number" required min="0" max="9999999999.99" step="0.01"
+                  value={form.consultationFee} onChange={(e) => setForm({ ...form, consultationFee: e.target.value })} placeholder="250000" />
+                <AdminInput label="Phí tư vấn trực tuyến (VNĐ)" type="number" required={form.isOnlineConsultationEnabled} min="0" max="9999999999.99" step="0.01"
+                  disabled={!form.isOnlineConsultationEnabled} value={form.onlineConsultationFee}
+                  onChange={(e) => setForm({ ...form, onlineConsultationFee: e.target.value })} placeholder="200000" />
               </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-700">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.isOnlineConsultationEnabled} onChange={(e) => setForm({ ...form, isOnlineConsultationEnabled: e.target.checked })} className="w-4 h-4 accent-emerald-700" />
+                  Nhận tư vấn trực tuyến
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.doctorIsActive} onChange={(e) => setForm({ ...form, doctorIsActive: e.target.checked })} className="w-4 h-4 accent-emerald-700" />
+                  Bác sĩ đang hoạt động
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} className="w-4 h-4 accent-emerald-700" />
+                  Bác sĩ nổi bật
+                </label>
+              </div>
+              <p className="text-xs text-slate-500">Phòng khám được phân công khi xếp lịch làm việc cho bác sĩ.</p>
 
               <div>
                 <AdminTextarea

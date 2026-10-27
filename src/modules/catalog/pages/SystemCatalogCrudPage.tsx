@@ -354,6 +354,7 @@ export default function SystemCatalogCrudPage({ resource }: { resource: keyof ty
     const payload: any = resource === 'service-packages' ? {
       name: form.name, code: form.code, price: form.price, specialtyId: form.specialtyId,
       imageUrl: form.imageUrl, description: form.description, durationMin: form.durationMin,
+      isFeatured: form.isFeatured === true,
       isActive: form.isActive,
     } : { ...form }
     if (resource === 'specialties' || resource === 'service-packages') {

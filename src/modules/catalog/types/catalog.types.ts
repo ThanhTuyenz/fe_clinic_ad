@@ -1,6 +1,6 @@
 import { CLINIC_SESSIONS } from '@/common/constants/clinic-sessions'
 
-export type Field = [string, string, 'text' | 'date' | 'number' | 'textarea' | 'select' | 'multiselect' | 'image', string?]
+export type Field = [string, string, 'text' | 'date' | 'number' | 'textarea' | 'select' | 'multiselect' | 'image' | 'checkbox', string?]
 export type Config = { title: string; singular: string; fields: Field[]; columns: [string, string][] }
 
 export const CONFIG: Record<string, Config> = {
@@ -101,6 +101,7 @@ export const CONFIG: Record<string, Config> = {
     fields: [
       ['name', 'Tên gói', 'text'],
       ['imageUrl', 'Ảnh minh họa gói khám', 'image'],
+      ['isFeatured', 'Gói khám nổi bật', 'checkbox'],
       ['specialtyId', 'Chuyên khoa (không bắt buộc)', 'select', 'specialties'],
       ['price', 'Giá gói (VNĐ)', 'number'],
       ['branchId', 'Chi nhánh', 'select', 'branches'],

@@ -190,6 +190,9 @@ export default function CatalogTable({
                   <tr key={row.id} className="hover:bg-slate-50/70 transition">
                     <td className="px-5 py-3.5 align-top">
                       <div className="font-semibold text-slate-900 text-xs">{row.name}</div>
+                      {row.isFeatured && (
+                        <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Nổi bật</span>
+                      )}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
                           {row.code}

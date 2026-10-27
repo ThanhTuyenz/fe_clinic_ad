@@ -69,15 +69,12 @@ const ROLE_LABELS: Record<string, string> = {
 const NAV: Record<string, [string, string, string][]> = {
   chain_manager: [
     ['dashboard', 'Tổng quan toàn chuỗi', '/dashboard'],
-    ['analytics', 'Báo cáo toàn chuỗi', '/analytics'],
+    ['analytics', 'Thống kê toàn chuỗi', '/analytics'],
     ['branches', 'Chi nhánh phòng khám', '/branches'],
     ['booking-methods', 'Hình thức đặt khám', '/booking-methods'],
     ['booking-packages', 'Danh mục gói khám', '/booking-packages'],
     ['specialties', 'Danh mục chuyên khoa', '/specialties'],
-    ['appointments', 'Danh sách lịch hẹn', '/appointments'],
-    ['patients', 'Hồ sơ bệnh nhân', '/patients'],
-    ['slots', 'Lịch làm việc bác sĩ', '/work-schedules'],
-    ['billing', 'Thanh toán & Doanh thu', '/billing'],
+    ['slots', 'Theo dõi lịch bác sĩ', '/work-schedules'],
     ['staff', 'Nhân sự toàn chuỗi', '/staff'],
   ],
   admin: [
@@ -91,7 +88,8 @@ const NAV: Record<string, [string, string, string][]> = {
     ['integrations', 'Cấu hình tích hợp', '/integrations'],
   ],
   branch_manager: [
-    ['dashboard', 'Tổng quan & Báo cáo', '/dashboard'],
+    ['dashboard', 'Tổng quan', '/dashboard'],
+    ['analytics', 'Thống kê', '/analytics'],
     ['appointments', 'Danh sách lịch hẹn', '/appointments'],
     ['booking-packages', 'Gói khám tại chi nhánh', '/booking-packages'],
     ['specialties', 'Chuyên khoa tại chi nhánh', '/specialties'],
@@ -536,7 +534,7 @@ function AdminDashboard({ stats, loading }: any) {
             className="flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
           >
             <BarChart3 className="w-3.5 h-3.5 text-slate-500" />
-            <span>Báo cáo chi tiết →</span>
+            <span>Thống kê chi tiết →</span>
           </button>
           <div className="inline-flex rounded border border-slate-200 bg-white p-0.5 text-xs shadow-xs">
             {(['today', 'week', 'month'] as const).map((t) => (
@@ -709,7 +707,7 @@ function AdminDashboard({ stats, loading }: any) {
 
 function ManagerDashboard({ stats, loading, user, section = 'dashboard' }: any) {
   const navigate = useNavigate()
-  const reportTab = section === 'analytics'
+  const isAnalytics = section === 'analytics'
   const t = stats?.appointments?.today || stats?.today || {}
   const rev = stats?.revenue?.today?.total != null
     ? `${Math.round(stats.revenue.today.total).toLocaleString('vi-VN')} đ`
@@ -740,7 +738,7 @@ function ManagerDashboard({ stats, loading, user, section = 'dashboard' }: any) 
               )}
             </div>
             <h1 className="text-2xl font-bold text-slate-900">
-              Tổng quan & Báo cáo
+              {isAnalytics ? 'Thống kê chi nhánh' : 'Tổng quan chi nhánh'}
             </h1>
             <p className="text-xs text-slate-500 flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -764,15 +762,7 @@ function ManagerDashboard({ stats, loading, user, section = 'dashboard' }: any) 
         </div>
       </div>
 
-      <div role="tablist" aria-label="Tổng quan và báo cáo chi nhánh" className="mt-5 flex gap-1 rounded-lg border border-slate-200 bg-white p-1 w-fit">
-        {[{ label: 'Tổng quan', href: '/dashboard', selected: !reportTab, Icon: LayoutDashboard }, { label: 'Báo cáo', href: '/analytics', selected: reportTab, Icon: BarChart3 }].map(({ label, href, selected, Icon }) => (
-          <button key={href} type="button" role="tab" aria-selected={selected} onClick={() => navigate(href)} className={`inline-flex items-center gap-2 rounded px-4 py-2 text-xs font-semibold transition-colors ${selected ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}>
-            <Icon className="h-4 w-4" />{label}
-          </button>
-        ))}
-      </div>
-
-      {reportTab ? <div className="mt-5"><AdminAnalyticsPage stats={stats} loading={loading} embedded /></div> : <>
+      {isAnalytics ? <div className="mt-5"><AdminAnalyticsPage stats={stats} loading={loading} embedded /></div> : <>
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiMetricCard label="Lịch hẹn hôm nay" value={loading ? '—' : `${t.total ?? 0} ca`} detail={`Đã khám: ${t.examined ?? 0} · Đang chờ: ${t.checkedIn ?? 0}`} tone="blue" />
         <KpiMetricCard label="Doanh thu hôm nay" value={loading ? '—' : rev} detail="Thu tiền mặt & chuyển khoản" tone="emerald" />
@@ -848,20 +838,15 @@ const TECHNICAL_NAV_SECTIONS = ADMIN_NAV_SECTIONS.map((group) => ({
 const CHAIN_NAV_SECTIONS = [
   { category: 'Điều hành toàn chuỗi', items: [
     { id: 'dashboard', label: 'Tổng quan toàn chuỗi', href: '/dashboard', icon: 'dashboard' },
-    { id: 'analytics', label: 'Báo cáo toàn chuỗi', href: '/analytics', icon: 'analytics' },
+    { id: 'analytics', label: 'Thống kê toàn chuỗi', href: '/analytics', icon: 'analytics' },
     { id: 'branches', label: 'Chi nhánh phòng khám', href: '/branches', icon: 'branches' },
     { id: 'staff', label: 'Nhân sự toàn chuỗi', href: '/staff', icon: 'staff' },
+    { id: 'slots', label: 'Theo dõi lịch bác sĩ', href: '/work-schedules', icon: 'schedule' },
   ] },
   { category: 'Danh mục & Dịch vụ', items: [
     { id: 'booking-methods', label: 'Hình thức đặt khám', href: '/booking-methods', icon: 'methods' },
     { id: 'booking-packages', label: 'Danh mục gói khám', href: '/booking-packages', icon: 'packages' },
     { id: 'specialties', label: 'Danh mục chuyên khoa', href: '/specialties', icon: 'specialties' },
-  ] },
-  { category: 'Vận hành khám chữa bệnh', items: [
-    { id: 'appointments', label: 'Danh sách lịch hẹn', href: '/appointments', icon: 'appointments' },
-    { id: 'slots', label: 'Lịch làm việc bác sĩ', href: '/work-schedules', icon: 'schedule' },
-    { id: 'patients', label: 'Hồ sơ bệnh nhân', href: '/patients', icon: 'patients' },
-    { id: 'billing', label: 'Thanh toán & Doanh thu', href: '/billing', icon: 'billing' },
   ] },
 ]
 
@@ -869,7 +854,8 @@ const MANAGER_NAV_SECTIONS = [
   {
     category: 'Giám sát & Doanh thu',
     items: [
-      { id: 'dashboard', label: 'Tổng quan & Báo cáo', href: '/dashboard', icon: 'dashboard' },
+      { id: 'dashboard', label: 'Tổng quan', href: '/dashboard', icon: 'dashboard' },
+      { id: 'analytics', label: 'Thống kê', href: '/analytics', icon: 'analytics' },
       { id: 'billing', label: 'Thanh toán & Doanh thu', href: '/billing', icon: 'billing' },
       { id: 'branches', label: 'Thông tin chi nhánh', href: '/branches', icon: 'branches' },
     ],
@@ -931,7 +917,7 @@ function GroupedPortal({ section, user, role, content, menu, setMenu, navigate, 
               <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{sec.category}</p>
               <div className="space-y-0.5">
                 {sec.items.map((item: any) => {
-                  const active = section === item.id || (role === 'branch_manager' && item.id === 'dashboard' && section === 'analytics') || (item.id === 'slots' && ['slots', 'work-schedules'].includes(section))
+                  const active = section === item.id || (item.id === 'slots' && ['slots', 'work-schedules'].includes(section))
                   return (
                     <button
                       key={item.id}
@@ -1049,7 +1035,7 @@ export default function RolePortal({ section = 'dashboard' }: { section?: string
                     section === 'specialties' && role === 'branch_manager' ? <BranchSpecialtiesPage /> :
                     ['branches', 'rooms', 'specialties', 'service-packages', 'services', 'inventory'].includes(section) && ['admin', 'chain_manager', 'branch_manager'].includes(role) ? <SystemCatalogCrudPage resource={section === 'inventory' ? 'medicines' : section} /> :
                       ['doctors', 'staff'].includes(section) ? (['admin', 'chain_manager', 'branch_manager'].includes(role) ? <ClinicStaffPage /> : <StaffCrudPage role="doctor" />) :
-                        ['schedule', 'slots', 'work-schedules'].includes(section) && ['admin', 'chain_manager', 'branch_manager'].includes(role) ? <DoctorWorkSchedulesPage initialBranchId={managerBranchId} /> :
+                        ['schedule', 'slots', 'work-schedules'].includes(section) && ['admin', 'chain_manager', 'branch_manager'].includes(role) ? <DoctorWorkSchedulesPage initialBranchId={managerBranchId} readOnly={role === 'chain_manager'} /> :
                           section === 'dashboard' ? (role === 'branch_manager' ? <ManagerDashboard stats={stats} loading={loading} user={user} /> : (role === 'admin' ? <SystemAdminDashboard /> : <AdminDashboard stats={stats} loading={loading} />)) :
                             <GenericPage section={section} role={role} />
 

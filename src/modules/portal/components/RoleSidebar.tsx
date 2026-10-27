@@ -198,18 +198,18 @@ export default function RoleSidebar({
 
         {/* Góc menu dưới: Thông tin phòng khám/nhân viên & nút Đăng xuất */}
         <div className="border-t border-slate-100 p-3 bg-white space-y-2">
-          <div className="flex items-center gap-3 rounded bg-slate-50 p-2.5 border border-slate-200/80">
+          <div className="flex items-start gap-3 rounded bg-slate-50 p-2.5 border border-slate-200/80">
             <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800 shrink-0">
               {avatar}
             </span>
             <div className="min-w-0 flex-1">
-              <b className="text-xs font-bold text-slate-800 truncate block" title={name}>
+              <b className="block whitespace-normal break-words text-xs font-bold leading-5 text-slate-800" title={name}>
                 {name}
               </b>
-              <p className="text-[11px] font-semibold text-emerald-700 truncate">
+              <p className="whitespace-normal break-words text-[11px] font-semibold leading-4 text-emerald-700">
                 Phòng khám Đa khoa VitaCare
               </p>
-              <p className="text-[10px] text-slate-400 font-medium truncate">
+              <p className="whitespace-normal break-words text-[10px] font-medium leading-4 text-slate-400">
                 Cơ sở chính · TP. Hồ Chí Minh
               </p>
             </div>

@@ -11,10 +11,14 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts'
-import { DonutChart, Sparkline, KpiMetricCard } from './Charts'
+import { DonutChart, KpiMetricCard } from './Charts'
 
 interface AnalyticsRevenueTimelineTabProps {
   data: {
+    invoicePaymentStatus?: {
+      paid: { count: number; amount: number }
+      unpaid: { count: number; amount: number }
+    }
     revenue: string
     revenueGrowth: string
     dailyAvg: string
@@ -33,6 +37,8 @@ export default function AnalyticsRevenueTimelineTab({ data }: AnalyticsRevenueTi
     setIsMounted(true)
   }, [])
 
+  const invoicePaymentStatus = data.invoicePaymentStatus
+  const formatAmount = (amount: number) => Number(amount || 0).toLocaleString('vi-VN') + ' đ'
   const revTrend = data.bars.map((b) => b.rev)
   const countTrend = data.bars.map((b) => b.count)
 
@@ -65,6 +71,32 @@ export default function AnalyticsRevenueTimelineTab({ data }: AnalyticsRevenueTi
           sparklineData={countTrend.length ? countTrend : [15, 25, 20, 35, 30, 45, 42]}
         />
       </div>
+
+      <section className="rounded border border-slate-200 bg-white p-5 shadow-2xs">
+        <h3 className="text-sm font-bold text-slate-900">Tình trạng thanh toán hóa đơn</h3>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          Trạng thái hiện tại của hóa đơn được tạo trong kỳ và chi nhánh đã chọn.
+          Không tính hóa đơn đã hủy hoặc hoàn tiền.
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <KpiMetricCard
+            label="Đã thanh toán"
+            value={invoicePaymentStatus ? formatAmount(invoicePaymentStatus.paid.amount) : '—'}
+            detail={invoicePaymentStatus ? invoicePaymentStatus.paid.count.toLocaleString('vi-VN') + ' hóa đơn' : 'Chưa có dữ liệu'}
+            tone="emerald"
+          />
+          <KpiMetricCard
+            label="Chưa thanh toán"
+            value={invoicePaymentStatus ? formatAmount(invoicePaymentStatus.unpaid.amount) : '—'}
+            detail={invoicePaymentStatus ? invoicePaymentStatus.unpaid.count.toLocaleString('vi-VN') + ' hóa đơn' : 'Chưa có dữ liệu'}
+            tone="amber"
+          />
+        </div>
+        <p className="mt-3 text-xs leading-5 text-slate-500">
+          Khoản chưa thanh toán chưa được tính vào doanh thu. Doanh thu phía trên tính theo ngày thanh toán,
+          nên có thể khác số tiền đã thanh toán của nhóm hóa đơn phát sinh trong kỳ.
+        </p>
+      </section>
 
       {/* Biểu đồ Combo Doanh Thu & Lượt Khám (Cột Doanh thu + Đường Line số ca khám) */}
       <div className="rounded border border-slate-200 bg-white p-5 shadow-2xs">

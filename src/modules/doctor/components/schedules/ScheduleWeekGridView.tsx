@@ -50,9 +50,9 @@ export default function ScheduleWeekGridView({
   filteredDoctors,
   schedulesMap,
   isDoctor,
-  canCreate = true,
-  canUpdate = true,
-  canDelete = true,
+  canCreate = false,
+  canUpdate = false,
+  canDelete = false,
   activeBranchName,
   weekStats,
   onCardClick,
@@ -248,7 +248,7 @@ export default function ScheduleWeekGridView({
                                     </div>
 
                                     {/* Action buttons cho quản trị viên/quản lý */}
-                                    {!isDoctor && (
+                                    {!isDoctor && (canUpdate || canDelete) && (
                                       <div
                                         onClick={(e) => e.stopPropagation()}
                                         className="opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center gap-0.5 bg-white shadow-2xs border border-slate-200 rounded px-0.5 py-0.2"
@@ -311,7 +311,7 @@ export default function ScheduleWeekGridView({
                         )}
 
                         {/* Nút thêm ca nhanh chỉ dành cho Quản trị viên / Quản lý */}
-                        {!isDoctor && (
+                        {!isDoctor && canCreate && (
                           <button
                             disabled={!canCreate}
                             onClick={() => onOpenScheduleModal(docId, dStr)}

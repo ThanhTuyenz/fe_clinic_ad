@@ -24,6 +24,8 @@ import {
   Info,
 } from "lucide-react";
 import { useWebRTC } from "../hooks/useWebRTC";
+import { apiClient } from "@/lib/api-client";
+import { getSocketBaseUrl } from "@/config/backend";
 
 interface DoctorTelehealthRoomProps {
   appointmentId: string;
@@ -39,7 +41,7 @@ export default function DoctorTelehealthRoom({
   doctorId,
   doctorName,
   doctorAvatar,
-  serverUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000",
+  serverUrl = getSocketBaseUrl(),
   onClose,
 }: DoctorTelehealthRoomProps) {
   const [activeTab, setActiveTab] = useState<"clinical" | "chat">("clinical");
@@ -82,8 +84,7 @@ export default function DoctorTelehealthRoom({
   useEffect(() => {
     async function fetchRoomDetails() {
       try {
-        const res = await fetch(`${serverUrl}/telehealth/room/${appointmentId}`, { credentials: "include" });
-        const json = await res.json();
+        const { data: json } = await apiClient.get(`/telehealth/room/${encodeURIComponent(appointmentId)}`);
         if (json.success) {
           const roomData = json.data?.data || json.data;
           setAppointmentInfo(roomData);
@@ -93,7 +94,7 @@ export default function DoctorTelehealthRoom({
       }
     }
     fetchRoomDetails();
-  }, [serverUrl, appointmentId]);
+  }, [appointmentId]);
 
   // Gắn stream vào thẻ video
   useEffect(() => {

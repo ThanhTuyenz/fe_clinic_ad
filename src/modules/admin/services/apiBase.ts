@@ -1,10 +1,7 @@
 import type { AxiosRequestConfig } from 'axios'
-import { apiClient, apiErrorMessage, resolveApiBase, unwrapApiData } from '../../../lib/api-client'
+import { apiClient, apiErrorMessage, unwrapApiData } from '../../../lib/api-client'
 
-/** Base URL của be_clinic — public env của Next.js. */
-export function getApiBase() {
-  return resolveApiBase()
-}
+export { getApiBase } from '@/config/backend'
 
 export { apiClient, apiErrorMessage, unwrapApiData }
 

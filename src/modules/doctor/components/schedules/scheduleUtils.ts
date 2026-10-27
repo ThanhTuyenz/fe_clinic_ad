@@ -2,6 +2,23 @@ import { CLINIC_SESSIONS } from '@/common/constants/clinic-sessions'
 
 export const SLOT_DURATIONS = [15, 20, 30, 45, 60]
 
+export const filterRoomsForDoctor = (rooms: any[], branchId: string, doctor: any) => {
+  const specialtyIds = new Set(
+    (doctor?.doctor?.specialties || doctor?.specialties || [])
+      .filter((link: any) => link.specialty?.isActive !== false)
+      .map((link: any) => String(link.specialtyId ?? link.specialty?.id ?? ''))
+      .filter(Boolean)
+  )
+  return rooms.filter((room) =>
+    room.isActive !== false &&
+    (room.branchId || room.branch?.id) === branchId &&
+    room.specialties?.some((link: any) =>
+      link.isActive !== false && link.specialty?.isActive !== false &&
+      specialtyIds.has(String(link.specialtyId ?? link.specialty?.id))
+    )
+  )
+}
+
 export const EMPTY_FORM = {
   doctorId: '',
   branchId: '',

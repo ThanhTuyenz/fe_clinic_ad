@@ -1,14 +1,9 @@
 import { io, Socket } from 'socket.io-client'
+import { getSocketBaseUrl } from '@/config/backend'
 
 let socketInstance: Socket | null = null
 
-export function getSocketBaseUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL
-  if (envUrl) {
-    return envUrl.replace(/\/api(\/v\d+)?\/?$/i, '')
-  }
-  return 'http://localhost:8011'
-}
+export { getSocketBaseUrl } from '@/config/backend'
 
 export function getRealtimeSocket(): Socket {
   if (!socketInstance) {

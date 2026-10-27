@@ -21,7 +21,6 @@ interface ScheduleMonthViewProps {
   currentMonthDate: Date
   schedules: any[]
   schedulesMap: Record<string, any[]>
-  canCreate?: boolean
   canUpdate?: boolean
   canDelete?: boolean
   isDoctor: boolean
@@ -49,9 +48,8 @@ export default function ScheduleMonthView({
   schedules,
   schedulesMap,
   isDoctor,
-  canCreate = true,
-  canUpdate = true,
-  canDelete = true,
+  canUpdate = false,
+  canDelete = false,
   targetDoctorId,
   filterDoctor,
   activeBranchName,
@@ -171,7 +169,7 @@ export default function ScheduleMonthView({
                             </span>
                           </div>
 
-                          {!isDoctor && (
+                          {!isDoctor && (canUpdate || canDelete) && (
                             <div
                               onClick={(e) => e.stopPropagation()}
                               className="opacity-0 group-hover/monthCard:opacity-100 transition-opacity flex items-center gap-0.5 bg-white border border-slate-200 rounded px-0.5 py-0.2 shadow-2xs shrink-0"

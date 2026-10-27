@@ -160,7 +160,7 @@ export default function BillingPage() {
     <>
       <AdminPageHeader
         eyebrow="Quản lý tài chính"
-        title="Thanh toán & Hóa đơn"
+        title={staffRole(user) === 'branch_manager' ? 'Thanh toán & Doanh thu' : 'Thanh toán & Hóa đơn'}
         description="Theo dõi doanh thu, thu tiền trực tiếp và đối soát viện phí."
       >
         <AdminButton
